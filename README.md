@@ -27,6 +27,45 @@ Get your API key from the [Supermodel Dashboard](https://dashboard.supermodeltoo
 | `SUPERMODEL_API_KEY` | Your Supermodel API key (required) |
 | `SUPERMODEL_BASE_URL` | Override API base URL (optional) |
 
+### Global Setup (Recommended)
+
+Instead of adding your API key to each MCP config file, you can set it globally in your shell profile. This keeps your key in one place and automatically makes it available to all MCP clients.
+
+**For Zsh (macOS default):**
+
+Add to `~/.zshrc`:
+
+```bash
+export SUPERMODEL_API_KEY="your-api-key"
+```
+
+**For Bash:**
+
+Add to `~/.bashrc` or `~/.bash_profile`:
+
+```bash
+export SUPERMODEL_API_KEY="your-api-key"
+```
+
+Then reload your shell:
+
+```bash
+source ~/.zshrc  # or ~/.bashrc
+```
+
+With the API key set globally, you can omit the `env` block from your MCP configs:
+
+```json
+{
+  "mcpServers": {
+    "supermodel": {
+      "command": "npx",
+      "args": ["-y", "@supermodeltools/mcp-server"]
+    }
+  }
+}
+```
+
 ## Usage
 
 ### Cursor
