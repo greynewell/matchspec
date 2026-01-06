@@ -106,8 +106,22 @@ Add to `claude_desktop_config.json`:
 
 ### Claude Code
 
+Add the MCP server with your API key:
+
+```bash
+claude mcp add supermodel --env SUPERMODEL_API_KEY=your-api-key -- npx -y @supermodeltools/mcp-server
+```
+
+Or if `SUPERMODEL_API_KEY` is already set in your shell environment:
+
 ```bash
 claude mcp add supermodel -- npx -y @supermodeltools/mcp-server
+```
+
+Verify installation:
+
+```bash
+claude mcp list
 ```
 
 ## Tools
