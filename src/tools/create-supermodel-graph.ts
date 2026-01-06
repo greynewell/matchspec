@@ -21,9 +21,9 @@ export const metadata: Metadata = {
 };
 
 export const tool: Tool = {
-  name: 'create_supermodel_graph_graphs',
+  name: 'analyze_codebase',
   description:
-    "When using this tool, always use the `jq_filter` parameter to reduce the response size and improve performance.\n\nOnly omit if you're sure you don't need the data.\n\nUpload a zipped repository snapshot to generate the Supermodel Intermediate Representation (SIR) artifact bundle.\n\n# Response Schema\n(Refer to the schema in the existing documentation)\n",
+    "Analyze code structure, dependencies, and relationships across a repository.\n\nUSE THIS TOOL WHEN:\n- Exploring an unfamiliar codebase to understand its architecture\n- Planning refactorings or assessing change impact across multiple files\n- Finding dependencies between modules, functions, or classes\n- Understanding call relationships and code flow patterns\n- Mapping domain models and system boundaries\n- Investigating how components interact before making changes\n\nPROVIDES:\nComprehensive code graphs including:\n- Module and package dependency relationships\n- Function-level call hierarchies\n- Domain classifications and architectural patterns\n- AST-level structural relationships\n- Summary statistics (file counts, languages, complexity)\n\nREQUIRES:\n- file: Path to a ZIP archive of the repository (use `git archive -o /tmp/repo.zip HEAD` for git repos)\n- Idempotency-Key: Cache key in format {repo}:{type}:{hash} (e.g., myproject:supermodel:abc123)\n- jq_filter (optional but recommended): Filter to extract specific data and reduce response size\n\nALWAYS use jq_filter to extract only the data you need. The full response can be very large.\n\nExample filters:\n- '.graph.nodes[] | select(.type==\"function\")' - Extract only function nodes\n- '.summary' - Get just the summary statistics\n- '.graph.relationships[] | select(.type==\"calls\")' - Extract call relationships",
   inputSchema: {
     type: 'object',
     properties: {
@@ -33,12 +33,13 @@ export const tool: Tool = {
       },
       'Idempotency-Key': {
         type: 'string',
+        description: 'Cache key in format {repo}:{type}:{hash}. Generate hash with: git rev-parse --short HEAD',
       },
       jq_filter: {
         type: 'string',
         title: 'jq Filter',
         description:
-          'A jq filter to apply to the response to include certain fields.',
+          'A jq filter to extract specific fields from the response. STRONGLY RECOMMENDED to reduce response size.',
       },
     },
     required: ['file', 'Idempotency-Key'],

@@ -4,7 +4,7 @@
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
 [![CI](https://github.com/supermodeltools/mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/supermodeltools/mcp/actions/workflows/ci.yml)
 
-MCP server that exposes [Supermodel API](https://docs.supermodeltools.com) graph generation to AI agents. Generates dependency graphs, call graphs, domain models, and full Supermodel IR from code repositories.
+MCP server that provides deep codebase analysis to AI agents via the [Supermodel API](https://docs.supermodeltools.com). Enables Claude to understand code structure, dependencies, and relationships by generating comprehensive graphs from any repository. Use this to help AI agents explore unfamiliar code, plan refactorings, assess change impact, and understand system architecture.
 
 ## Install
 
@@ -126,24 +126,50 @@ claude mcp list
 
 ## Tools
 
-### `create_supermodel_graph_graphs`
+### `analyze_codebase`
 
-Generates Supermodel IR from a zipped repository.
+Analyzes code structure, dependencies, and relationships across a repository. Use this to understand unfamiliar codebases, plan refactorings, assess change impact, or map system architecture.
 
-| Argument | Type | Description |
-|----------|------|-------------|
-| `file` | string | Path to repository ZIP file |
-| `Idempotency-Key` | string | Unique request key for caching |
-| `jq_filter` | string | Optional jq filter to reduce response size |
+**When to use:**
+- Exploring new codebases
+- Planning refactors or architectural changes
+- Understanding dependencies between modules
+- Mapping call relationships and code flow
+- Assessing the impact of proposed changes
 
-**Prepare your repo:**
+**What you get:**
+- Dependency graphs (module/package relationships)
+- Call graphs (function-level call hierarchies)
+- Domain classifications (architectural patterns)
+- AST relationships (structural analysis)
+- Summary statistics (languages, complexity, file counts)
+
+**Parameters:**
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `file` | string | Yes | Path to repository ZIP file |
+| `Idempotency-Key` | string | Yes | Cache key in format `{repo}:{type}:{hash}` |
+| `jq_filter` | string | No | jq filter to extract specific data (strongly recommended) |
+
+**Quick start:**
 
 ```bash
+# 1. Create ZIP from your git repo
 git archive -o /tmp/repo.zip HEAD
+
+# 2. Get commit hash for cache key
+git rev-parse --short HEAD
+# Output: abc123
+
+# 3. Ask Claude to analyze
+# "Analyze the codebase at /tmp/repo.zip using key myproject:supermodel:abc123"
 ```
 
-**Example prompt:**
-> Generate a supermodel graph for `/tmp/repo.zip`
+**Example prompts:**
+- "Analyze the codebase at /tmp/repo.zip to understand its architecture"
+- "Before I refactor the authentication module, analyze /tmp/repo.zip to show me what depends on it"
+- "What's the structure of the codebase in /tmp/repo.zip?"
 
 ## Troubleshooting
 
