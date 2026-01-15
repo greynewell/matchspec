@@ -126,7 +126,7 @@ claude mcp list
 
 ## Tools
 
-### `analyze_codebase`
+### `explore_codebase`
 
 Analyzes code structure, dependencies, and relationships across a repository. Use this to understand unfamiliar codebases, plan refactorings, assess change impact, or map system architecture.
 

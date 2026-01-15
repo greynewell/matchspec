@@ -97,7 +97,7 @@ export interface ZipResult {
 }
 
 export interface ZipOptions {
-  /** Maximum ZIP size in bytes (default: 50MB) */
+  /** Maximum ZIP size in bytes (default: 500MB) */
   maxSizeBytes?: number;
 
   /** Custom patterns to exclude (in addition to standard exclusions) */
@@ -111,7 +111,7 @@ export async function zipRepository(
   directoryPath: string,
   options: ZipOptions = {}
 ): Promise<ZipResult> {
-  const maxSizeBytes = options.maxSizeBytes || 50 * 1024 * 1024; // 50MB default
+  const maxSizeBytes = options.maxSizeBytes || 500 * 1024 * 1024; // 500MB default
 
   // Validate directory exists
   try {

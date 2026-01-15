@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'fs/promises';
+import { execSync } from 'child_process';
+import { randomUUID } from 'crypto';
+import { createHash } from 'crypto';
+import { basename } from 'path';
 import {
   Metadata,
   Endpoint,
@@ -10,7 +14,8 @@ import {
   ClientContext
 } from '../types';
 import { maybeFilter, isJqError } from '../filtering';
-import { executeQuery, getAvailableQueries, isQueryError, QueryType } from '../queries';
+import { executeQuery, getAvailableQueries, isQueryError, QueryType, graphCache } from '../queries';
+import { IndexedGraph } from '../cache/graph-cache';
 import { zipRepository } from '../utils/zip-repository';
 
 export const metadata: Metadata = {
@@ -23,58 +28,98 @@ export const metadata: Metadata = {
 };
 
 export const tool: Tool = {
-  name: 'analyze_codebase',
-  description:
-    `Analyze code structure, dependencies, and relationships across a repository.
+  name: 'explore_codebase',
+  description: `Analyzes code within the target directory to produce a graph that can be used to navigate the codebase when solving bugs, planning or analyzing code changes.
 
-USE THIS TOOL WHEN:
-- Exploring an unfamiliar codebase to understand its architecture
-- Planning refactorings or assessing change impact across multiple files
-- Finding dependencies between modules, functions, or classes
-- Understanding call relationships and code flow patterns
-- Mapping domain models and system boundaries
-- Investigating how components interact before making changes
+## Example Output
 
-QUERY TYPES (use 'query' param):
-- graph_status: Check cache status and get summary if available
-- summary: High-level stats (files, classes, functions, etc.)
-- get_node: Get full details for a node by ID (requires targetId)
-- search: Find nodes by name substring (requires searchText)
-- list_nodes: List nodes with filters (labels, namePattern, filePathPrefix)
-- function_calls_in: Find all callers of a function (requires targetId)
-- function_calls_out: Find all functions called by a function (requires targetId)
-- definitions_in_file: Get classes/functions/types in a file (targetId or filePathPrefix)
-- file_imports: Get imports for a file (requires targetId)
-- domain_map: List all domains with relationships
-- domain_membership: Get members of a domain (targetId or searchText)
-- neighborhood: Get ego graph around a node (requires targetId)
-- jq: Raw jq filter escape hatch (requires jq_filter)
+This is actual output from running explore_codebase on its own repository (19 TypeScript files, ~60KB).
 
-WORKFLOW:
-1. First call with query=graph_status to check cache
-2. If not cached, call with query=summary to load graph and get overview
-3. Use search/list_nodes to find specific nodes
-4. Use function_calls_in/out to trace call relationships
-5. Results include node IDs - use get_node for full details
+The graph structure shows 163 nodes (Functions, Classes, Types, Files, Domains) and 254 relationships between them. Below is an excerpt showing the data structure:
 
-REQUIRES:
-- directory: Path to repository directory (recommended - handles zipping automatically)
-  OR file: Path to pre-zipped archive (for backward compatibility)
-- Idempotency-Key: Cache key format {repo}:{type}:{hash}`,
+\`\`\`json
+{
+  "repo": "1c740c9c4f5c9528e244ab144488214341f959231f73009a46a74a1f11350c3c",
+  "version": "sir-2026-01-15",
+  "schemaVersion": "1.2.0",
+  "generatedAt": "2026-01-15T18:17:10.067Z",
+  "summary": {
+    "filesProcessed": 19,
+    "types": 28,
+    "functions": 52,
+    "repoSizeBytes": 61058,
+    "classes": 2,
+    "domains": 6,
+    "primaryLanguage": "json"
+  },
+  "graph": {
+    "nodeCount": 163,
+    "relationshipCount": 254,
+    "sampleNodes": [
+      {
+        "id": "0965aff4:42ff:df74:ae01:0d17d0886720",
+        "labels": ["ExternalModule"],
+        "properties": {
+          "name": "mcp.js"
+        }
+      },
+      {
+        "id": "ab32efae:3825:dada:a4b5:95e95dbb71cc",
+        "labels": ["Function"],
+        "properties": {
+          "name": "getNode",
+          "filePath": "src/queries/discovery.ts",
+          "language": "typescript",
+          "startLine": 25,
+          "endLine": 57,
+          "kind": "function"
+        }
+      },
+      {
+        "id": "8648e520:0be3:b754:77ce:c19dcebf6d6f",
+        "labels": ["File"],
+        "properties": {
+          "name": "test-full-graph.js",
+          "filePath": "test-full-graph.js",
+          "path": "test-full-graph.js",
+          "language": "javascript"
+        }
+      }
+    ],
+    "sampleRelationships": [
+      {
+        "id": "b161d717:5ee5:b827:cc26:f071f7a9648d->ff2a17f0:c2b6:f518:dcb8:91584b241c0f:CHILD_DIRECTORY",
+        "type": "CHILD_DIRECTORY",
+        "startNode": "b161d717:5ee5:b827:cc26:f071f7a9648d",
+        "endNode": "ff2a17f0:c2b6:f518:dcb8:91584b241c0f",
+        "properties": {}
+      },
+      {
+        "id": "ff2a17f0:c2b6:f518:dcb8:91584b241c0f->7f19b034:9fee:67c7:7b42:c7ba738d9ceb:CONTAINS_FILE",
+        "type": "CONTAINS_FILE",
+        "startNode": "ff2a17f0:c2b6:f518:dcb8:91584b241c0f",
+        "endNode": "7f19b034:9fee:67c7:7b42:c7ba738d9ceb",
+        "properties": {}
+      }
+    ]
+  }
+}
+\`\`\`
+
+The graph contains nodes with properties like filePath, startLine, endLine for functions, and relationships like CHILD_DIRECTORY, CONTAINS_FILE, calls, IMPORTS that connect code entities.
+
+Query types available: graph_status, summary, get_node, search, list_nodes, function_calls_in, function_calls_out, definitions_in_file, file_imports, domain_map, domain_membership, neighborhood, jq
+`,
   inputSchema: {
     type: 'object',
     properties: {
       directory: {
         type: 'string',
-        description: 'Path to the repository directory to analyze. The tool will automatically create a ZIP archive respecting .gitignore and excluding sensitive files.',
-      },
-      file: {
-        type: 'string',
-        description: '[DEPRECATED] Path to a pre-zipped repository archive. Use "directory" instead for automatic zipping with gitignore support.',
+        description: 'Path to the repository directory to analyze. Can be a subdirectory for faster analysis and smaller graph size (e.g., "/repo/src/core" instead of "/repo").',
       },
       'Idempotency-Key': {
         type: 'string',
-        description: 'Cache key in format {repo}:{type}:{hash}. Generate hash with: git rev-parse --short HEAD',
+        description: 'Optional cache key in format {repo}:{type}:{hash}. If not provided, will be auto-generated using git commit hash or random UUID. Provide a previously used idempotency key to fetch a cached response, for example with a different filter.',
       },
       query: {
         type: 'string',
@@ -129,9 +174,50 @@ REQUIRES:
         description: 'Raw jq filter for escape hatch queries or legacy mode (when query param not specified)',
       },
     },
-    required: ['Idempotency-Key'],
+    required: ['directory'],
   },
 };
+
+/**
+ * Generate an idempotency key in format {repo}:supermodel:{hash}
+ * Tries to use git commit hash, falls back to UUID-based hash
+ */
+function generateIdempotencyKey(directory: string): string {
+  const repoName = basename(directory);
+  let hash: string;
+  let statusHash = '';
+
+  try {
+    // Try to get git commit hash
+    hash = execSync('git rev-parse --short HEAD', {
+      cwd: directory,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim();
+
+    try {
+      // Get git status to detect uncommitted changes
+      const statusOutput = execSync('git status --porcelain', {
+        cwd: directory,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe']
+      }).trim();
+      statusHash = createHash('sha1').update(statusOutput || 'clean').digest('hex').substring(0, 7);
+      console.error('[DEBUG] Generated idempotency key using git hash:', hash, 'and status hash:', statusHash);
+    } catch (statusError) {
+      // If git status fails, just use commit hash
+      console.error('[DEBUG] Generated idempotency key using git hash:', hash, '(git status unavailable)');
+    }
+  } catch (error) {
+    // Git not available or not a git repo, use UUID-based hash
+    const uuid = randomUUID();
+    // Hash like git does (SHA-1) and take first 7 characters
+    hash = createHash('sha1').update(uuid).digest('hex').substring(0, 7);
+    console.error('[DEBUG] Generated idempotency key using random UUID hash:', hash);
+  }
+
+  return statusHash ? `${repoName}:supermodel:${hash}-${statusHash}` : `${repoName}:supermodel:${hash}`;
+}
 
 export const handler: HandlerFunction = async (client: ClientContext, args: Record<string, unknown> | undefined) => {
   if (!args) {
@@ -140,9 +226,8 @@ export const handler: HandlerFunction = async (client: ClientContext, args: Reco
 
   const {
     jq_filter,
-    file,
     directory,
-    'Idempotency-Key': idempotencyKey,
+    'Idempotency-Key': providedIdempotencyKey,
     query,
     targetId,
     searchText,
@@ -155,71 +240,110 @@ export const handler: HandlerFunction = async (client: ClientContext, args: Reco
     includeRaw,
   } = args as any;
 
-  // Validate idempotency key
-  if (!idempotencyKey || typeof idempotencyKey !== 'string') {
-    return asErrorResult('Idempotency-Key argument is required');
+  // Validate directory
+  if (!directory || typeof directory !== 'string') {
+    return asErrorResult('Directory argument is required and must be a string path');
   }
 
-  // Validate that either directory or file is provided
-  if (!directory && !file) {
-    return asErrorResult('Either "directory" or "file" parameter is required');
+  // Generate or validate idempotency key
+  let idempotencyKey: string;
+  let keyGenerated = false;
+
+  if (!providedIdempotencyKey || typeof providedIdempotencyKey !== 'string') {
+    idempotencyKey = generateIdempotencyKey(directory);
+    keyGenerated = true;
+    console.error('[DEBUG] Auto-generated idempotency key:', idempotencyKey);
+  } else {
+    idempotencyKey = providedIdempotencyKey;
+    console.error('[DEBUG] Using provided idempotency key:', idempotencyKey);
   }
 
-  if (directory && file) {
-    return asErrorResult('Provide either "directory" or "file", not both');
+  // Check if we can skip zipping (graph already cached)
+  // Use get() atomically to avoid TOCTOU race condition
+  const cachedGraph = graphCache.get(idempotencyKey);
+  if (cachedGraph && query) {
+    console.error('[DEBUG] Graph cached, skipping ZIP creation');
+
+    // Execute query directly from cache using the cached graph
+    // We pass the cached graph to executeQuery so it doesn't need to look it up again
+    const result = await handleQueryModeWithCache(client, {
+      query: query as QueryType,
+      idempotencyKey,
+      cachedGraph,
+      targetId,
+      searchText,
+      namePattern,
+      filePathPrefix,
+      labels,
+      depth,
+      relationshipTypes,
+      limit,
+      includeRaw,
+      jq_filter,
+    });
+
+    // Add metadata about cache hit
+    if (keyGenerated && result.content?.[0]?.type === 'text') {
+      const originalText = result.content[0].text;
+      let responseData;
+
+      try {
+        responseData = JSON.parse(originalText);
+        // Add metadata about auto-generated key
+        responseData._metadata = {
+          ...responseData._metadata,
+          idempotencyKey,
+          idempotencyKeyGenerated: true
+        };
+        result.content[0].text = JSON.stringify(responseData, null, 2);
+      } catch {
+        // Not JSON, prepend key info as text
+        result.content[0].text = `[Auto-generated Idempotency-Key: ${idempotencyKey}]\n\n${originalText}`;
+      }
+    }
+
+    return result;
   }
 
-  // Handle auto-zipping if directory is provided
+  console.error('[DEBUG] Auto-zipping directory:', directory);
+
+  // Handle auto-zipping
   let zipPath: string;
-  let shouldCleanup = false;
   let cleanup: (() => Promise<void>) | null = null;
 
-  if (directory) {
-    if (typeof directory !== 'string') {
-      return asErrorResult('Directory argument must be a string path');
+  try {
+    const zipResult = await zipRepository(directory);
+    zipPath = zipResult.path;
+    cleanup = zipResult.cleanup;
+
+    console.error('[DEBUG] Auto-zip complete:', zipResult.fileCount, 'files,', formatBytes(zipResult.sizeBytes));
+  } catch (error: any) {
+    console.error('[ERROR] Auto-zip failed:', error.message);
+
+    // Provide helpful error messages
+    if (error.message.includes('does not exist')) {
+      return asErrorResult(`Directory does not exist: ${directory}`);
+    }
+    if (error.message.includes('Permission denied')) {
+      return asErrorResult(`Permission denied accessing directory: ${directory}`);
+    }
+    if (error.message.includes('exceeds limit')) {
+      return asErrorResult(error.message);
+    }
+    if (error.message.includes('ENOSPC')) {
+      return asErrorResult('Insufficient disk space to create ZIP archive');
     }
 
-    console.error('[DEBUG] Auto-zipping directory:', directory);
-
-    try {
-      const zipResult = await zipRepository(directory);
-      zipPath = zipResult.path;
-      cleanup = zipResult.cleanup;
-      shouldCleanup = true;
-
-      console.error('[DEBUG] Auto-zip complete:', zipResult.fileCount, 'files,', formatBytes(zipResult.sizeBytes));
-    } catch (error: any) {
-      console.error('[ERROR] Auto-zip failed:', error.message);
-
-      // Provide helpful error messages
-      if (error.message.includes('does not exist')) {
-        return asErrorResult(`Directory does not exist: ${directory}`);
-      }
-      if (error.message.includes('Permission denied')) {
-        return asErrorResult(`Permission denied accessing directory: ${directory}`);
-      }
-      if (error.message.includes('exceeds limit')) {
-        return asErrorResult(error.message);
-      }
-      if (error.message.includes('ENOSPC')) {
-        return asErrorResult('Insufficient disk space to create ZIP archive');
-      }
-
-      return asErrorResult(`Failed to create ZIP archive: ${error.message}`);
-    }
-  } else {
-    // Use provided file path
-    if (typeof file !== 'string') {
-      return asErrorResult('File argument must be a string path');
-    }
-    zipPath = file;
+    return asErrorResult(`Failed to create ZIP archive: ${error.message}`);
   }
 
   // Execute query with cleanup handling
   try {
+    let result;
+
     // If query param is specified, use the new query engine
     if (query) {
-      return await handleQueryMode(client, {
+      result = await handleQueryMode(client, {
         query: query as QueryType,
         file: zipPath,
         idempotencyKey,
@@ -234,13 +358,35 @@ export const handler: HandlerFunction = async (client: ClientContext, args: Reco
         includeRaw,
         jq_filter,
       });
+    } else {
+      // Legacy mode: use jq_filter directly on API response
+      result = await handleLegacyMode(client, zipPath, idempotencyKey, jq_filter);
     }
 
-    // Legacy mode: use jq_filter directly on API response
-    return await handleLegacyMode(client, zipPath, idempotencyKey, jq_filter);
+    // If key was auto-generated, add it to the response
+    if (keyGenerated && result.content && result.content[0]?.type === 'text') {
+      const originalText = result.content[0].text;
+      let responseData;
+
+      try {
+        responseData = JSON.parse(originalText);
+        // Add metadata about auto-generated key
+        responseData._metadata = {
+          ...responseData._metadata,
+          idempotencyKey,
+          idempotencyKeyGenerated: true
+        };
+        result.content[0].text = JSON.stringify(responseData, null, 2);
+      } catch {
+        // Not JSON, prepend key info as text
+        result.content[0].text = `[Auto-generated Idempotency-Key: ${idempotencyKey}]\n\n${originalText}`;
+      }
+    }
+
+    return result;
   } finally {
     // Always cleanup temp ZIP files
-    if (shouldCleanup && cleanup) {
+    if (cleanup) {
       await cleanup();
     }
   }
@@ -254,6 +400,64 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+/**
+ * Handle query-based requests when graph is already cached
+ * Uses the cached graph directly to avoid TOCTOU issues
+ */
+async function handleQueryModeWithCache(
+  client: ClientContext,
+  params: {
+    query: QueryType;
+    idempotencyKey: string;
+    cachedGraph: IndexedGraph;
+    targetId?: string;
+    searchText?: string;
+    namePattern?: string;
+    filePathPrefix?: string;
+    labels?: string[];
+    depth?: number;
+    relationshipTypes?: string[];
+    limit?: number;
+    includeRaw?: boolean;
+    jq_filter?: string;
+  }
+): Promise<ReturnType<typeof asTextContentResult>> {
+  const queryParams = {
+    query: params.query,
+    file: '', // Not used when we have cached graph
+    idempotencyKey: params.idempotencyKey,
+    targetId: params.targetId,
+    searchText: params.searchText,
+    namePattern: params.namePattern,
+    filePathPrefix: params.filePathPrefix,
+    labels: params.labels,
+    depth: params.depth,
+    relationshipTypes: params.relationshipTypes,
+    limit: params.limit,
+    includeRaw: params.includeRaw,
+    jq_filter: params.jq_filter,
+  };
+
+  // Execute query with the cached graph's raw data
+  // This handles the edge case where cache is evicted between our check and query execution
+  // by passing the raw API response so executeQuery can rebuild indexes if needed
+  let result = await executeQuery(queryParams, params.cachedGraph.raw);
+
+  // Handle query errors
+  if (isQueryError(result)) {
+    const errorWithHints = {
+      ...result,
+      hints: getErrorHints(result.error.code, params.query),
+    };
+    return asTextContentResult(errorWithHints);
+  }
+
+  // Add breadcrumb hints to successful results
+  const resultWithHints = addBreadcrumbHints(result, params.query);
+
+  return asTextContentResult(resultWithHints);
 }
 
 /**

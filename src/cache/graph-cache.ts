@@ -291,8 +291,8 @@ export class GraphCache {
   private currentNodes = 0;
 
   constructor(options?: { maxGraphs?: number; maxNodes?: number }) {
-    this.maxGraphs = options?.maxGraphs || 3;
-    this.maxNodes = options?.maxNodes || 100000;
+    this.maxGraphs = options?.maxGraphs || 20;
+    this.maxNodes = options?.maxNodes || 1000000;
   }
 
   get(cacheKey: string): IndexedGraph | null {
