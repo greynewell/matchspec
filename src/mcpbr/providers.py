@@ -86,7 +86,7 @@ class AnthropicProvider:
         """Initialize Anthropic provider.
 
         Args:
-            model: Anthropic model ID (e.g., 'claude-sonnet-4-5-20250514').
+            model: Anthropic model ID or alias (e.g., 'sonnet' or 'claude-sonnet-4-5-20250929').
             api_key: API key. If None, uses ANTHROPIC_API_KEY env var.
         """
         self._model = model

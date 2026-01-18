@@ -92,7 +92,7 @@ mcp_server:
 
 provider: "anthropic"
 agent_harness: "claude-code"
-model: "claude-sonnet-4-5-20250514"
+model: "sonnet"
 dataset: "SWE-bench/SWE-bench_Lite"
 sample_size: 10
 timeout_seconds: 300

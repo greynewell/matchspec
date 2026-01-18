@@ -16,55 +16,54 @@ class ModelInfo:
 
 
 SUPPORTED_MODELS: dict[str, ModelInfo] = {
-    # Anthropic models (direct API)
-    # Claude 4.5 models
-    "claude-opus-4-5-20250514": ModelInfo(
-        id="claude-opus-4-5-20250514",
+    # Anthropic models via Claude Code CLI
+    # Claude 4.5 models (latest)
+    "claude-opus-4-5-20251101": ModelInfo(
+        id="claude-opus-4-5-20251101",
         provider="Anthropic",
         display_name="Claude Opus 4.5",
         context_window=200000,
+        notes="Alias: opus",
     ),
-    "claude-sonnet-4-5-20250514": ModelInfo(
-        id="claude-sonnet-4-5-20250514",
+    "claude-sonnet-4-5-20250929": ModelInfo(
+        id="claude-sonnet-4-5-20250929",
         provider="Anthropic",
         display_name="Claude Sonnet 4.5",
         context_window=200000,
+        notes="Alias: sonnet (default)",
     ),
-    "claude-haiku-4-5-20250514": ModelInfo(
-        id="claude-haiku-4-5-20250514",
+    "claude-haiku-4-5-20251001": ModelInfo(
+        id="claude-haiku-4-5-20251001",
         provider="Anthropic",
         display_name="Claude Haiku 4.5",
         context_window=200000,
+        notes="Alias: haiku",
     ),
-    # Claude 4 models
-    "claude-opus-4-20250514": ModelInfo(
-        id="claude-opus-4-20250514",
+    # Aliases (Claude Code CLI shortcuts)
+    "sonnet": ModelInfo(
+        id="sonnet",
         provider="Anthropic",
-        display_name="Claude Opus 4",
+        display_name="Claude Sonnet (alias)",
         context_window=200000,
+        notes="Resolves to latest Sonnet model",
     ),
-    "claude-sonnet-4-20250514": ModelInfo(
-        id="claude-sonnet-4-20250514",
+    "opus": ModelInfo(
+        id="opus",
         provider="Anthropic",
-        display_name="Claude Sonnet 4",
+        display_name="Claude Opus (alias)",
         context_window=200000,
+        notes="Resolves to latest Opus model",
     ),
-    "claude-haiku-4-20250514": ModelInfo(
-        id="claude-haiku-4-20250514",
+    "haiku": ModelInfo(
+        id="haiku",
         provider="Anthropic",
-        display_name="Claude Haiku 4",
+        display_name="Claude Haiku (alias)",
         context_window=200000,
-    ),
-    # Claude 3.5 models
-    "claude-3-5-sonnet-20241022": ModelInfo(
-        id="claude-3-5-sonnet-20241022",
-        provider="Anthropic",
-        display_name="Claude 3.5 Sonnet",
-        context_window=200000,
+        notes="Resolves to latest Haiku model",
     ),
 }
 
-DEFAULT_MODEL = "claude-sonnet-4-5-20250514"
+DEFAULT_MODEL = "sonnet"
 
 
 def is_model_supported(model_id: str) -> bool:

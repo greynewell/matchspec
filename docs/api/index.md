@@ -29,7 +29,7 @@ async def main():
             command="npx",
             args=["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"],
         ),
-        model="claude-sonnet-4-5-20250514",
+        model="sonnet",
         sample_size=5,
     )
 
@@ -234,7 +234,7 @@ asyncio.run(main())
 from mcpbr.models import DEFAULT_MODEL
 from mcpbr.config import VALID_PROVIDERS, VALID_HARNESSES
 
-print(DEFAULT_MODEL)       # "claude-sonnet-4-5-20250514"
+print(DEFAULT_MODEL)       # "sonnet"
 print(VALID_PROVIDERS)     # ("anthropic",)
 print(VALID_HARNESSES)     # ("claude-code",)
 ```

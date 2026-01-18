@@ -24,7 +24,7 @@ When running an evaluation, mcpbr displays real-time progress and a final summar
 mcpbr Evaluation
   Config: config.yaml
   Provider: anthropic
-  Model: claude-sonnet-4-5-20250514
+  Model: sonnet
   Agent Harness: claude-code
   Dataset: SWE-bench/SWE-bench_Lite
   Sample size: 10
@@ -99,7 +99,7 @@ mcpbr run -c config.yaml -o results.json
   "metadata": {
     "timestamp": "2026-01-17T07:23:39.871437+00:00",
     "config": {
-      "model": "claude-sonnet-4-5-20250514",
+      "model": "sonnet",
       "provider": "anthropic",
       "agent_harness": "claude-code",
       "dataset": "SWE-bench/SWE-bench_Lite",
@@ -239,7 +239,7 @@ logs/
       "subtype": "init",
       "cwd": "/workspace",
       "tools": ["Task", "Bash", "Glob", "Grep", "Read", "Edit", "Write"],
-      "model": "claude-sonnet-4-5-20250514"
+      "model": "claude-sonnet-4-5-20250929"
     },
     {
       "type": "assistant",

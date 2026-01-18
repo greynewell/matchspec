@@ -122,7 +122,7 @@ mcpbr cleanup
 
 3. Use a faster model for testing:
    ```yaml
-   model: "claude-haiku-4-5-20250514"
+   model: "haiku"
    ```
 
 ## API Issues

@@ -32,7 +32,7 @@ def integration_config() -> HarnessConfig:
         ),
         provider="anthropic",
         agent_harness="claude-code",
-        model="claude-sonnet-4-5-20250514",
+        model="sonnet",
         dataset="SWE-bench/SWE-bench_Lite",
         sample_size=1,
         timeout_seconds=300,
@@ -167,7 +167,7 @@ async def test_evaluation_with_anthropic_provider() -> None:
         ),
         provider="anthropic",
         agent_harness="claude-code",
-        model="claude-sonnet-4-5-20250514",
+        model="sonnet",
         dataset="SWE-bench/SWE-bench_Lite",
         sample_size=1,
         timeout_seconds=300,
@@ -189,8 +189,8 @@ async def test_evaluation_with_anthropic_provider() -> None:
 
 # Claude 4.5 model IDs for API validation
 CLAUDE_45_MODELS = [
-    "claude-sonnet-4-5-20250514",
-    "claude-haiku-4-5-20250514",
+    "claude-sonnet-4-5-20250929",
+    "claude-haiku-4-5-20251001",
 ]
 
 
@@ -240,7 +240,7 @@ async def test_claude_45_sonnet_streaming() -> None:
 
     chunks = []
     with client.messages.stream(
-        model="claude-sonnet-4-5-20250514",
+        model="claude-sonnet-4-5-20250929",
         max_tokens=20,
         messages=[{"role": "user", "content": "Count from 1 to 3."}],
     ) as stream:

@@ -124,9 +124,9 @@ mcpbr supports the following Claude models:
 
 | Model | ID | Context Window |
 |-------|-----|----------------|
-| Claude Opus 4.5 | `claude-opus-4-5-20250514` | 200,000 |
-| Claude Sonnet 4.5 | `claude-sonnet-4-5-20250514` | 200,000 |
-| Claude Haiku 4.5 | `claude-haiku-4-5-20250514` | 200,000 |
+| Claude Opus 4.5 | `opus` or `claude-opus-4-5-20251101` | 200,000 |
+| Claude Sonnet 4.5 | `sonnet` or `claude-sonnet-4-5-20250929` | 200,000 |
+| Claude Haiku 4.5 | `haiku` or `claude-haiku-4-5-20251001` | 200,000 |
 | Claude Opus 4 | `claude-opus-4-20250514` | 200,000 |
 | Claude Sonnet 4 | `claude-sonnet-4-20250514` | 200,000 |
 | Claude Haiku 4 | `claude-haiku-4-20250514` | 200,000 |

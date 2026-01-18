@@ -13,12 +13,15 @@ from mcpbr.models import (
     validate_model,
 )
 
-# Claude 4.5 model IDs
+# Claude 4.5 model IDs (full names)
 CLAUDE_45_MODELS = [
-    "claude-opus-4-5-20250514",
-    "claude-sonnet-4-5-20250514",
-    "claude-haiku-4-5-20250514",
+    "claude-opus-4-5-20251101",
+    "claude-sonnet-4-5-20250929",
+    "claude-haiku-4-5-20251001",
 ]
+
+# Model aliases
+MODEL_ALIASES = ["sonnet", "opus", "haiku"]
 
 
 class TestClaude45ModelsRegistered:
@@ -59,25 +62,35 @@ class TestClaude45ModelsRegistered:
     def test_model_display_names(self) -> None:
         """Verify display names include '4.5'."""
         expected_names = {
-            "claude-opus-4-5-20250514": "Claude Opus 4.5",
-            "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
-            "claude-haiku-4-5-20250514": "Claude Haiku 4.5",
+            "claude-opus-4-5-20251101": "Claude Opus 4.5",
+            "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
+            "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
         }
         for model_id, expected_name in expected_names.items():
             model = SUPPORTED_MODELS[model_id]
             assert model.display_name == expected_name, f"Model {model_id} has wrong display name"
 
 
+class TestModelAliases:
+    """Tests for model alias support."""
+
+    def test_all_aliases_registered(self) -> None:
+        """Verify all aliases are in the registry."""
+        for alias in MODEL_ALIASES:
+            assert alias in SUPPORTED_MODELS, f"Alias {alias} not in registry"
+
+    def test_aliases_are_valid(self) -> None:
+        """Verify aliases are recognized as supported models."""
+        for alias in MODEL_ALIASES:
+            assert is_model_supported(alias) is True
+
+
 class TestDefaultModel:
     """Tests for default model configuration."""
 
-    def test_default_model_is_45(self) -> None:
-        """Ensure default model is a 4.5 model."""
-        assert "4-5" in DEFAULT_MODEL, "Default model should be a 4.5 version"
-
-    def test_default_model_is_sonnet(self) -> None:
-        """Ensure default model is Sonnet (balanced choice)."""
-        assert "sonnet" in DEFAULT_MODEL, "Default model should be Sonnet"
+    def test_default_model_is_sonnet_alias(self) -> None:
+        """Ensure default model is the sonnet alias."""
+        assert DEFAULT_MODEL == "sonnet", "Default model should be 'sonnet' alias"
 
     def test_default_model_exists(self) -> None:
         """Ensure default model is in the registry."""
@@ -100,8 +113,9 @@ class TestIsModelSupported:
 
     def test_case_sensitive(self) -> None:
         """Model IDs should be case-sensitive."""
-        assert is_model_supported("CLAUDE-SONNET-4-5-20250514") is False
-        assert is_model_supported("Claude-Sonnet-4-5-20250514") is False
+        assert is_model_supported("CLAUDE-SONNET-4-5-20250929") is False
+        assert is_model_supported("Claude-Sonnet-4-5-20250929") is False
+        assert is_model_supported("SONNET") is False
 
 
 class TestGetModelInfo:
@@ -109,12 +123,19 @@ class TestGetModelInfo:
 
     def test_get_45_model_info(self) -> None:
         """Test retrieving info for a 4.5 model."""
-        info = get_model_info("claude-sonnet-4-5-20250514")
+        info = get_model_info("claude-sonnet-4-5-20250929")
         assert info is not None
-        assert info.id == "claude-sonnet-4-5-20250514"
+        assert info.id == "claude-sonnet-4-5-20250929"
         assert info.display_name == "Claude Sonnet 4.5"
         assert info.context_window == 200000
         assert info.provider == "Anthropic"
+
+    def test_get_alias_info(self) -> None:
+        """Test retrieving info for an alias."""
+        info = get_model_info("sonnet")
+        assert info is not None
+        assert info.id == "sonnet"
+        assert "Sonnet" in info.display_name
 
     def test_get_unknown_model_returns_none(self) -> None:
         """Test that unknown model returns None."""
@@ -123,7 +144,7 @@ class TestGetModelInfo:
 
     def test_returns_model_info_instance(self) -> None:
         """Test that returned value is a ModelInfo instance."""
-        info = get_model_info("claude-opus-4-5-20250514")
+        info = get_model_info("claude-opus-4-5-20251101")
         assert isinstance(info, ModelInfo)
 
 
@@ -183,7 +204,13 @@ class TestValidateModel:
 
     def test_valid_45_model(self) -> None:
         """Test validation of valid 4.5 model."""
-        is_valid, error = validate_model("claude-sonnet-4-5-20250514")
+        is_valid, error = validate_model("claude-sonnet-4-5-20250929")
+        assert is_valid is True
+        assert error == ""
+
+    def test_valid_alias(self) -> None:
+        """Test validation of model alias."""
+        is_valid, error = validate_model("sonnet")
         assert is_valid is True
         assert error == ""
 

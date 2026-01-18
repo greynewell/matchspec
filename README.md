@@ -102,10 +102,10 @@ By comparing these, you can measure the effectiveness of your MCP server for dif
 - Claude Code CLI (`claude`) installed
 - Network access (for pulling Docker images and API calls)
 
-**Supported Models:**
-- Claude Opus 4.5 (`claude-opus-4-5-20250514`)
-- Claude Sonnet 4.5 (`claude-sonnet-4-5-20250514`)
-- Claude Haiku 4.5 (`claude-haiku-4-5-20250514`)
+**Supported Models (aliases or full names):**
+- Claude Opus 4.5: `opus` or `claude-opus-4-5-20251101`
+- Claude Sonnet 4.5: `sonnet` or `claude-sonnet-4-5-20250929`
+- Claude Haiku 4.5: `haiku` or `claude-haiku-4-5-20251001`
 
 Run `mcpbr models` to see the full list.
 
@@ -154,7 +154,7 @@ mcp_server:
 provider: "anthropic"
 agent_harness: "claude-code"
 
-model: "claude-sonnet-4-5-20250514"
+model: "sonnet"  # or full name: "claude-sonnet-4-5-20250929"
 dataset: "SWE-bench/SWE-bench_Lite"
 sample_size: 10
 timeout_seconds: 300
@@ -235,7 +235,7 @@ Use `{problem_statement}` as a placeholder for the SWE-bench issue text. You can
 | `agent_harness` | `claude-code` | Agent backend |
 | `benchmark` | `swe-bench` | Benchmark to run (`swe-bench` or `cybergym`) |
 | `agent_prompt` | `null` | Custom prompt template (use `{problem_statement}` placeholder) |
-| `model` | `claude-sonnet-4-5-20250514` | Model ID |
+| `model` | `sonnet` | Model alias or full ID |
 | `dataset` | `null` | HuggingFace dataset (optional, benchmark provides default) |
 | `cybergym_level` | `1` | CyberGym difficulty level (0-3, only for CyberGym benchmark) |
 | `sample_size` | `null` | Number of tasks (null = full dataset) |
@@ -394,7 +394,7 @@ $ mcpbr run -c config.yaml -v -o results.json --log-dir my-logs
 mcpbr Evaluation
   Config: config.yaml
   Provider: anthropic
-  Model: claude-sonnet-4-5-20250514
+  Model: sonnet
   Agent Harness: claude-code
   Dataset: SWE-bench/SWE-bench_Lite
   Sample size: 10
@@ -458,7 +458,7 @@ Results saved to results.json
   "metadata": {
     "timestamp": "2026-01-17T07:23:39.871437+00:00",
     "config": {
-      "model": "claude-sonnet-4-5-20250514",
+      "model": "sonnet",
       "provider": "anthropic",
       "agent_harness": "claude-code",
       "dataset": "SWE-bench/SWE-bench_Lite",
@@ -542,8 +542,8 @@ Each log file contains the full stream of events from the agent CLI:
       "subtype": "init",
       "cwd": "/workspace",
       "tools": ["Task", "Bash", "Glob", "Grep", "Read", "Edit", "Write", "TodoWrite"],
-      "model": "claude-sonnet-4-5-20250514",
-      "claude_code_version": "2.1.11"
+      "model": "claude-sonnet-4-5-20250929",
+      "claude_code_version": "2.1.12"
     },
     {
       "type": "assistant",

@@ -40,7 +40,7 @@ agent_harness: "claude-code"
 
 # Model ID (Anthropic model identifier)
 # Run 'mcpbr models' to see available options
-model: "claude-sonnet-4-5-20250514"
+model: "sonnet"
 
 # Dataset configuration
 dataset: "SWE-bench/SWE-bench_Lite"

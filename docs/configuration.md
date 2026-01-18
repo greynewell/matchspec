@@ -52,8 +52,8 @@ agent_prompt: |
   Make the minimal changes necessary to fix the issue.
   Focus on the root cause, not symptoms.
 
-# Model Configuration
-model: "claude-sonnet-4-5-20250514"
+# Model Configuration (use alias or full name)
+model: "sonnet"  # or "claude-sonnet-4-5-20250929"
 
 # Dataset Configuration
 dataset: "SWE-bench/SWE-bench_Lite"
@@ -128,7 +128,10 @@ Use `{problem_statement}` as a placeholder for the SWE-bench issue text.
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `model` | `claude-sonnet-4-5-20250514` | Anthropic model ID |
+| `model` | `sonnet` | Model alias or full Anthropic model ID |
+
+You can use either aliases (`sonnet`, `opus`, `haiku`) or full model names (`claude-sonnet-4-5-20250929`).
+Aliases automatically resolve to the latest model version.
 
 See [Installation](installation.md#supported-models) for the full list of supported models.
 
@@ -219,7 +222,7 @@ mcp_server:
   command: "npx"
   args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
 
-model: "claude-haiku-4-5-20250514"  # Faster, cheaper
+model: "haiku"  # Faster, cheaper
 sample_size: 3
 max_concurrent: 1
 timeout_seconds: 180
@@ -235,7 +238,7 @@ mcp_server:
   command: "npx"
   args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
 
-model: "claude-sonnet-4-5-20250514"
+model: "sonnet"
 sample_size: null  # Full dataset
 max_concurrent: 8
 timeout_seconds: 600

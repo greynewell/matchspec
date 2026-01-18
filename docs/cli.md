@@ -100,8 +100,8 @@ mcpbr run -c config.yaml -t astropy__astropy-12907 -t django__django-11099
 #### Override Config Values
 
 ```bash
-# Override model
-mcpbr run -c config.yaml -m claude-opus-4-5-20250514
+# Override model (use alias or full name)
+mcpbr run -c config.yaml -m opus
 
 # Override sample size
 mcpbr run -c config.yaml -n 50
@@ -176,15 +176,17 @@ mcpbr models
 ### Output
 
 ```text
-        Supported Anthropic Models
-+----------------------------+------------------+---------+
-| Model ID                   | Display Name     | Context |
-+----------------------------+------------------+---------+
-| claude-opus-4-5-20250514   | Claude Opus 4.5  | 200,000 |
-| claude-sonnet-4-5-20250514 | Claude Sonnet 4.5| 200,000 |
-| claude-haiku-4-5-20250514  | Claude Haiku 4.5 | 200,000 |
-| ...                        | ...              | ...     |
-+----------------------------+------------------+---------+
+                   Supported Anthropic Models
++----------------------------+------------------------+---------+
+| Model ID                   | Display Name           | Context |
++----------------------------+------------------------+---------+
+| claude-opus-4-5-20251101   | Claude Opus 4.5        | 200,000 |
+| claude-sonnet-4-5-20250929 | Claude Sonnet 4.5      | 200,000 |
+| claude-haiku-4-5-20251001  | Claude Haiku 4.5       | 200,000 |
+| opus                       | Claude Opus (alias)    | 200,000 |
+| sonnet                     | Claude Sonnet (alias)  | 200,000 |
+| haiku                      | Claude Haiku (alias)   | 200,000 |
++----------------------------+------------------------+---------+
 ```
 
 ---
