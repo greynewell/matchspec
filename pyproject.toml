@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcpbr"
-version = "0.1.1"
-description = "Model Context Protocol Benchmark Runner - evaluate MCP servers against SWE-bench"
+version = "0.2.0"
+description = "Model Context Protocol Benchmark Runner - evaluate MCP servers against software engineering benchmarks"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
     { name = "mcpbr Contributors" }
 ]
-keywords = ["mcp", "model-context-protocol", "swe-bench", "benchmark", "llm", "agents", "evaluation"]
+keywords = ["mcp", "model-context-protocol", "swe-bench", "cybergym", "benchmark", "llm", "agents", "evaluation", "security"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

@@ -78,6 +78,7 @@ nav:
   - User Guide:
       - Configuration: configuration.md
       - CLI Reference: cli.md
+      - Benchmarks: benchmarks.md
       - MCP Integration: mcp-integration.md
       - Evaluation Results: evaluation-results.md
   - Reference:

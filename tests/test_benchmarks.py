@@ -131,7 +131,10 @@ class TestCyberGymBenchmark:
 
         normalized = benchmark.normalize_task(task)
         assert normalized.task_id == "libxml2_CVE-2021-1234"
-        assert "vulnerability" in normalized.problem_statement.lower() or "exploit" in normalized.problem_statement.lower()
+        assert (
+            "vulnerability" in normalized.problem_statement.lower()
+            or "exploit" in normalized.problem_statement.lower()
+        )
         assert "owner/repo" in normalized.repo
         assert normalized.commit == "abc123"
 

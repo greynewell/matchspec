@@ -12,7 +12,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn
 from .benchmarks import Benchmark, create_benchmark
 from .config import HarnessConfig
 from .docker_env import DockerEnvironmentManager, TaskEnvironment
-from .evaluation import EvaluationResult, evaluate_patch
+from .evaluation import EvaluationResult
 from .harnesses import AgentHarness, AgentResult, create_harness
 from .log_formatter import InstanceLogWriter
 
@@ -234,7 +234,9 @@ async def _run_mcp_evaluation(
 
         agent = _create_mcp_agent(config, benchmark, verbosity, log_file)
 
-        instance_id = task.get("instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}")
+        instance_id = task.get(
+            "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
+        )
         agent_result = await asyncio.wait_for(
             agent.solve(
                 task,
@@ -250,7 +252,7 @@ async def _run_mcp_evaluation(
         if agent_result.patch:
             eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
             # Convert benchmark result format to EvaluationResult-like dict
-            eval_result = type('EvalResult', (), eval_result_dict)()
+            eval_result = type("EvalResult", (), eval_result_dict)()
         else:
             eval_result = None
 
@@ -295,7 +297,9 @@ async def _run_baseline_evaluation(
 
         agent = _create_baseline_agent(config, benchmark, verbosity, log_file)
 
-        instance_id = task.get("instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}")
+        instance_id = task.get(
+            "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
+        )
         agent_result = await asyncio.wait_for(
             agent.solve(
                 task,
@@ -311,7 +315,7 @@ async def _run_baseline_evaluation(
         if agent_result.patch:
             eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
             # Convert benchmark result format to EvaluationResult-like dict
-            eval_result = type('EvalResult', (), eval_result_dict)()
+            eval_result = type("EvalResult", (), eval_result_dict)()
         else:
             eval_result = None
 

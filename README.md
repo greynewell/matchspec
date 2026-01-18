@@ -14,7 +14,7 @@
 
 > Stop guessing if your MCP server actually helps. Get hard numbers comparing tool-assisted vs. baseline agent performance on real GitHub issues.
 
-A benchmark runner for evaluating MCP (Model Context Protocol) servers against SWE-bench tasks.
+A benchmark runner for evaluating MCP (Model Context Protocol) servers against software engineering benchmarks including SWE-bench and CyberGym.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/greynewell/mcpbr/main/assets/mcpbr-demo.gif" alt="mcpbr in action" width="700">
@@ -46,14 +46,48 @@ mcpbr runs controlled experiments: same model, same tasks, same environment - th
 - **Real GitHub issues** from SWE-bench (not toy examples)
 - **Reproducible results** via Docker containers with pinned dependencies
 
+## Supported Benchmarks
+
+mcpbr supports multiple software engineering benchmarks through a flexible abstraction layer:
+
+### SWE-bench (Default)
+Real GitHub issues requiring bug fixes and patches. The agent generates unified diffs evaluated by running pytest test suites.
+
+- **Dataset**: [SWE-bench/SWE-bench_Lite](https://huggingface.co/datasets/SWE-bench/SWE-bench_Lite)
+- **Task**: Generate patches to fix bugs
+- **Evaluation**: Test suite pass/fail
+- **Pre-built images**: Available for most tasks
+
+### CyberGym
+Security vulnerabilities requiring Proof-of-Concept (PoC) exploits. The agent generates exploits that trigger crashes in vulnerable code.
+
+- **Dataset**: [sunblaze-ucb/cybergym](https://huggingface.co/datasets/sunblaze-ucb/cybergym)
+- **Task**: Generate PoC exploits
+- **Evaluation**: PoC crashes pre-patch, doesn't crash post-patch
+- **Difficulty levels**: 0-3 (controls context given to agent)
+- **Learn more**: [CyberGym Project](https://cybergym.cs.berkeley.edu/)
+
+```bash
+# Run SWE-bench (default)
+mcpbr run -c config.yaml
+
+# Run CyberGym at level 2
+mcpbr run -c config.yaml --benchmark cybergym --level 2
+
+# List available benchmarks
+mcpbr benchmarks
+```
+
+See the **[benchmarks guide](https://greynewell.github.io/mcpbr/benchmarks/)** for details on each benchmark and how to configure them.
+
 ## Overview
 
-This harness runs two parallel evaluations for each SWE-bench task:
+This harness runs two parallel evaluations for each task:
 
 1. **MCP Agent**: LLM with access to tools from your MCP server
-2. **Baseline Agent**: LLM without tools (single-shot patch generation)
+2. **Baseline Agent**: LLM without tools (single-shot generation)
 
-By comparing these, you can measure the effectiveness of your MCP server for code exploration and bug fixing. See the **[MCP integration guide](https://greynewell.github.io/mcpbr/mcp-integration/)** for tips on testing your server.
+By comparing these, you can measure the effectiveness of your MCP server for different software engineering tasks. See the **[MCP integration guide](https://greynewell.github.io/mcpbr/mcp-integration/)** for tips on testing your server.
 
 ## Installation
 
@@ -199,9 +233,11 @@ Use `{problem_statement}` as a placeholder for the SWE-bench issue text. You can
 |-----------|---------|-------------|
 | `provider` | `anthropic` | LLM provider |
 | `agent_harness` | `claude-code` | Agent backend |
+| `benchmark` | `swe-bench` | Benchmark to run (`swe-bench` or `cybergym`) |
 | `agent_prompt` | `null` | Custom prompt template (use `{problem_statement}` placeholder) |
 | `model` | `claude-sonnet-4-5-20250514` | Model ID |
-| `dataset` | `SWE-bench/SWE-bench_Lite` | HuggingFace dataset |
+| `dataset` | `null` | HuggingFace dataset (optional, benchmark provides default) |
+| `cybergym_level` | `1` | CyberGym difficulty level (0-3, only for CyberGym benchmark) |
 | `sample_size` | `null` | Number of tasks (null = full dataset) |
 | `timeout_seconds` | `300` | Timeout per task |
 | `max_concurrent` | `4` | Parallel task limit |
@@ -223,11 +259,12 @@ mcpbr init --help
 
 | Command | Description |
 |---------|-------------|
-| `mcpbr run` | Run SWE-bench evaluation with configured MCP server |
+| `mcpbr run` | Run benchmark evaluation with configured MCP server |
 | `mcpbr init` | Generate an example configuration file |
 | `mcpbr models` | List supported models for evaluation |
 | `mcpbr providers` | List available model providers |
 | `mcpbr harnesses` | List available agent harnesses |
+| `mcpbr benchmarks` | List available benchmarks (SWE-bench, CyberGym) |
 | `mcpbr cleanup` | Remove orphaned mcpbr Docker containers |
 
 ### `mcpbr run`
@@ -241,6 +278,8 @@ Run SWE-bench evaluation with the configured MCP server.
 |--------|-------|-------------|
 | `--config PATH` | `-c` | Path to YAML configuration file (required) |
 | `--model TEXT` | `-m` | Override model from config |
+| `--benchmark TEXT` | `-b` | Override benchmark from config (`swe-bench` or `cybergym`) |
+| `--level INTEGER` | | Override CyberGym difficulty level (0-3) |
 | `--sample INTEGER` | `-n` | Override sample size from config |
 | `--mcp-only` | `-M` | Run only MCP evaluation (skip baseline) |
 | `--baseline-only` | `-B` | Run only baseline evaluation (skip MCP) |
@@ -286,6 +325,12 @@ mcpbr run -c config.yaml -v --log-dir logs/
 
 # Very verbose output
 mcpbr run -c config.yaml -vv
+
+# Run CyberGym benchmark
+mcpbr run -c config.yaml --benchmark cybergym --level 2
+
+# Run CyberGym with specific tasks
+mcpbr run -c config.yaml --benchmark cybergym --level 3 -n 5
 ```
 
 </details>
@@ -527,11 +572,11 @@ This is useful for debugging failed runs or analyzing agent behavior in detail.
 
 > **[Architecture deep dive](https://greynewell.github.io/mcpbr/architecture/)** - learn how mcpbr works internally.
 
-1. **Load Tasks**: Fetches SWE-bench tasks from HuggingFace
-2. **Create Environment**: For each task, pulls a pre-built SWE-bench Docker image with the repository at the correct commit and all dependencies installed
-3. **Run MCP Agent**: Invokes Claude Code CLI **inside the Docker container**, letting it explore and generate a patch with full access to the project's dependencies
+1. **Load Tasks**: Fetches tasks from the selected benchmark (SWE-bench or CyberGym) via HuggingFace
+2. **Create Environment**: For each task, creates an isolated Docker environment with the repository and dependencies
+3. **Run MCP Agent**: Invokes Claude Code CLI **inside the Docker container**, letting it explore and generate a solution (patch or PoC)
 4. **Run Baseline**: Same as MCP agent but without the MCP server
-5. **Evaluate**: Applies each patch and runs the task's test suite inside the container
+5. **Evaluate**: Runs benchmark-specific evaluation (test suites for SWE-bench, crash detection for CyberGym)
 6. **Report**: Aggregates results and calculates improvement
 
 ### Pre-built Docker Images
@@ -559,6 +604,11 @@ mcpbr/
 │   ├── models.py        # Supported model registry
 │   ├── providers.py     # LLM provider abstractions (extensible)
 │   ├── harnesses.py     # Agent harness implementations (extensible)
+│   ├── benchmarks/      # Benchmark abstraction layer
+│   │   ├── __init__.py  # Registry and factory
+│   │   ├── base.py      # Benchmark protocol
+│   │   ├── swebench.py  # SWE-bench implementation
+│   │   └── cybergym.py  # CyberGym implementation
 │   ├── harness.py       # Main orchestrator
 │   ├── agent.py         # Baseline agent implementation
 │   ├── docker_env.py    # Docker environment management + in-container execution
@@ -567,13 +617,14 @@ mcpbr/
 │   └── reporting.py     # Output formatting
 ├── tests/
 │   ├── test_*.py        # Unit tests
+│   ├── test_benchmarks.py # Benchmark tests
 │   └── test_integration.py  # Integration tests
 ├── Dockerfile           # Fallback image for task environments
 └── config/
     └── example.yaml     # Example configuration
 ```
 
-The architecture uses Protocol-based abstractions for providers and harnesses, making it easy to add support for additional LLM providers or agent backends in the future. See the **[API reference](https://greynewell.github.io/mcpbr/api/)** for programmatic usage.
+The architecture uses Protocol-based abstractions for providers, harnesses, and **benchmarks**, making it easy to add support for additional LLM providers, agent backends, or software engineering benchmarks in the future. See the **[API reference](https://greynewell.github.io/mcpbr/api/)** and **[benchmarks guide](https://greynewell.github.io/mcpbr/benchmarks/)** for more details.
 
 ### Execution Flow
 

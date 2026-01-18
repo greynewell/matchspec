@@ -8,7 +8,6 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from .benchmarks import list_benchmarks
 from .config import VALID_BENCHMARKS, VALID_HARNESSES, VALID_PROVIDERS, load_config
 from .docker_env import cleanup_orphaned_containers, register_signal_handlers
 from .harness import run_evaluation

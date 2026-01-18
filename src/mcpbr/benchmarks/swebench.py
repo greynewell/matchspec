@@ -6,7 +6,7 @@ from datasets import load_dataset
 
 from ..docker_env import DockerEnvironmentManager, TaskEnvironment, get_swebench_image_name
 from ..evaluation import EvaluationResult, evaluate_patch
-from .base import Benchmark, BenchmarkTask
+from .base import BenchmarkTask
 
 
 class SWEBenchmark:

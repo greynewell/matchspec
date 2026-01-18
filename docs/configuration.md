@@ -132,12 +132,37 @@ Use `{problem_statement}` as a placeholder for the SWE-bench issue text.
 
 See [Installation](installation.md#supported-models) for the full list of supported models.
 
+### Benchmark Configuration
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `benchmark` | `swe-bench` | Benchmark to run (`swe-bench` or `cybergym`) |
+| `cybergym_level` | `1` | CyberGym difficulty level (0-3, only used for CyberGym) |
+
+!!! info "Benchmark Selection"
+    - **SWE-bench**: Bug fixing in Python repositories, evaluated with test suites
+    - **CyberGym**: Security exploit generation in C/C++ projects, evaluated by crash detection
+
+    See the [Benchmarks guide](benchmarks.md) for detailed information.
+
+!!! tip "CLI Override"
+    Override the benchmark at runtime:
+    ```bash
+    # Run CyberGym instead of SWE-bench
+    mcpbr run -c config.yaml --benchmark cybergym --level 2
+    ```
+
 ### Dataset Configuration
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `dataset` | `SWE-bench/SWE-bench_Lite` | HuggingFace dataset |
+| `dataset` | `null` | HuggingFace dataset (optional, benchmark provides default) |
 | `sample_size` | `null` | Number of tasks (`null` = full dataset) |
+
+The `dataset` field is optional. If not specified, each benchmark uses its default dataset:
+
+- **SWE-bench**: `SWE-bench/SWE-bench_Lite`
+- **CyberGym**: `sunblaze-ucb/cybergym`
 
 ### Execution Parameters
 

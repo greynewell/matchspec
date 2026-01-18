@@ -5,7 +5,7 @@ from typing import Any
 from datasets import load_dataset
 
 from ..docker_env import DockerEnvironmentManager, TaskEnvironment
-from .base import Benchmark, BenchmarkTask
+from .base import BenchmarkTask
 
 
 class CyberGymBenchmark:
@@ -179,7 +179,9 @@ class CyberGymBenchmark:
         # Temporarily modify task to have fields expected by DockerEnvironmentManager
         temp_task = {
             "instance_id": f"{task['project']}_{task['bug_id']}",
-            "repo": task.get("pre_patch_repo", "").replace("https://github.com/", "").replace(".git", ""),
+            "repo": task.get("pre_patch_repo", "")
+            .replace("https://github.com/", "")
+            .replace(".git", ""),
             "base_commit": task.get("pre_patch_commit", "HEAD"),
         }
 
@@ -321,9 +323,16 @@ class CyberGymBenchmark:
         """
         # Common PoC filenames
         candidates = [
-            "poc.c", "poc.cpp", "poc.py", "poc.sh",
-            "exploit.c", "exploit.cpp", "exploit.py",
-            "test_poc.c", "test_poc.cpp", "test_poc.py",
+            "poc.c",
+            "poc.cpp",
+            "poc.py",
+            "poc.sh",
+            "exploit.c",
+            "exploit.cpp",
+            "exploit.py",
+            "test_poc.c",
+            "test_poc.cpp",
+            "test_poc.py",
         ]
 
         for filename in candidates:
