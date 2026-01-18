@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TextIO
 
-from datasets import load_dataset
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 
+from .benchmarks import Benchmark, create_benchmark
 from .config import HarnessConfig
 from .docker_env import DockerEnvironmentManager, TaskEnvironment
 from .evaluation import EvaluationResult, evaluate_patch
@@ -87,6 +87,7 @@ def agent_result_to_dict(
 
 def _create_mcp_agent(
     config: HarnessConfig,
+    benchmark: Benchmark,
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
 ) -> AgentHarness:
@@ -94,17 +95,21 @@ def _create_mcp_agent(
 
     Args:
         config: Harness configuration.
+        benchmark: Benchmark instance for getting default prompt.
         verbosity: Verbosity level (0=silent, 1=summary, 2=detailed).
         log_file: Optional file handle for writing raw JSON logs.
 
     Returns:
         Configured AgentHarness.
     """
+    # Use custom prompt if provided, otherwise use benchmark's default prompt
+    prompt = config.agent_prompt if config.agent_prompt else benchmark.get_prompt_template()
+
     return create_harness(
         config.agent_harness,
         model=config.model,
         mcp_server=config.mcp_server,
-        prompt=config.agent_prompt,
+        prompt=prompt,
         max_iterations=config.max_iterations,
         verbosity=verbosity,
         log_file=log_file,
@@ -113,6 +118,7 @@ def _create_mcp_agent(
 
 def _create_baseline_agent(
     config: HarnessConfig,
+    benchmark: Benchmark,
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
 ) -> AgentHarness:
@@ -120,17 +126,21 @@ def _create_baseline_agent(
 
     Args:
         config: Harness configuration.
+        benchmark: Benchmark instance for getting default prompt.
         verbosity: Verbosity level (0=silent, 1=summary, 2=detailed).
         log_file: Optional file handle for writing raw JSON logs.
 
     Returns:
         Configured AgentHarness without MCP server.
     """
+    # Use custom prompt if provided, otherwise use benchmark's default prompt
+    prompt = config.agent_prompt if config.agent_prompt else benchmark.get_prompt_template()
+
     return create_harness(
         config.agent_harness,
         model=config.model,
         mcp_server=None,
-        prompt=config.agent_prompt,
+        prompt=prompt,
         max_iterations=config.max_iterations,
         verbosity=verbosity,
         log_file=log_file,
@@ -141,6 +151,7 @@ async def run_single_task(
     task: dict[str, Any],
     config: HarnessConfig,
     docker_manager: DockerEnvironmentManager,
+    benchmark: Benchmark,
     run_mcp: bool,
     run_baseline: bool,
     verbose: bool,
@@ -151,9 +162,10 @@ async def run_single_task(
     """Run evaluation for a single task.
 
     Args:
-        task: SWE-bench task dictionary.
+        task: Task dictionary from benchmark.
         config: Harness configuration.
         docker_manager: Docker environment manager.
+        benchmark: Benchmark instance for evaluation.
         run_mcp: Whether to run MCP evaluation.
         run_baseline: Whether to run baseline evaluation.
         verbose: Enable verbose output.
@@ -176,6 +188,7 @@ async def run_single_task(
                 task,
                 config,
                 docker_manager,
+                benchmark,
                 verbose,
                 verbosity,
                 mcp_log_writer if mcp_log_writer else log_file,
@@ -193,6 +206,7 @@ async def run_single_task(
                 task,
                 config,
                 docker_manager,
+                benchmark,
                 verbose,
                 verbosity,
                 baseline_log_writer if baseline_log_writer else log_file,
@@ -208,6 +222,7 @@ async def _run_mcp_evaluation(
     task: dict[str, Any],
     config: HarnessConfig,
     docker_manager: DockerEnvironmentManager,
+    benchmark: Benchmark,
     verbose: bool,
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
@@ -215,11 +230,11 @@ async def _run_mcp_evaluation(
     """Run MCP agent evaluation."""
     env: TaskEnvironment | None = None
     try:
-        env = await docker_manager.create_environment(task)
+        env = await benchmark.create_environment(task, docker_manager)
 
-        agent = _create_mcp_agent(config, verbosity, log_file)
+        agent = _create_mcp_agent(config, benchmark, verbosity, log_file)
 
-        instance_id = task.get("instance_id", "unknown")
+        instance_id = task.get("instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}")
         agent_result = await asyncio.wait_for(
             agent.solve(
                 task,
@@ -233,7 +248,9 @@ async def _run_mcp_evaluation(
         )
 
         if agent_result.patch:
-            eval_result = await evaluate_patch(env, task, agent_result.patch)
+            eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
+            # Convert benchmark result format to EvaluationResult-like dict
+            eval_result = type('EvalResult', (), eval_result_dict)()
         else:
             eval_result = None
 
@@ -266,6 +283,7 @@ async def _run_baseline_evaluation(
     task: dict[str, Any],
     config: HarnessConfig,
     docker_manager: DockerEnvironmentManager,
+    benchmark: Benchmark,
     verbose: bool,
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
@@ -273,11 +291,11 @@ async def _run_baseline_evaluation(
     """Run baseline agent evaluation (same harness as MCP, but without MCP server)."""
     env: TaskEnvironment | None = None
     try:
-        env = await docker_manager.create_environment(task)
+        env = await benchmark.create_environment(task, docker_manager)
 
-        agent = _create_baseline_agent(config, verbosity, log_file)
+        agent = _create_baseline_agent(config, benchmark, verbosity, log_file)
 
-        instance_id = task.get("instance_id", "unknown")
+        instance_id = task.get("instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}")
         agent_result = await asyncio.wait_for(
             agent.solve(
                 task,
@@ -291,7 +309,9 @@ async def _run_baseline_evaluation(
         )
 
         if agent_result.patch:
-            eval_result = await evaluate_patch(env, task, agent_result.patch)
+            eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
+            # Convert benchmark result format to EvaluationResult-like dict
+            eval_result = type('EvalResult', (), eval_result_dict)()
         else:
             eval_result = None
 
@@ -345,19 +365,24 @@ async def run_evaluation(
     Returns:
         EvaluationResults with all results.
     """
-    console.print(f"[dim]Loading dataset: {config.dataset}[/dim]")
-    dataset = load_dataset(config.dataset, split="test")
+    # Create benchmark instance
+    benchmark_kwargs: dict[str, Any] = {}
+    if config.dataset:
+        benchmark_kwargs["dataset"] = config.dataset
+    if config.benchmark == "cybergym":
+        benchmark_kwargs["level"] = config.cybergym_level
 
-    if task_ids:
-        tasks = []
-        for item in dataset:
-            if item["instance_id"] in task_ids:
-                tasks.append(item)
-    else:
-        tasks = list(dataset)
+    benchmark = create_benchmark(config.benchmark, **benchmark_kwargs)
 
-    if config.sample_size and len(tasks) > config.sample_size:
-        tasks = tasks[: config.sample_size]
+    # Determine which dataset we're using
+    dataset_name = config.dataset if config.dataset else getattr(benchmark, "dataset", "unknown")
+    console.print(f"[dim]Loading dataset: {dataset_name}[/dim]")
+
+    # Load tasks from benchmark
+    tasks = benchmark.load_tasks(
+        sample_size=config.sample_size,
+        task_ids=task_ids,
+    )
 
     console.print(f"[dim]Evaluating {len(tasks)} tasks[/dim]")
     console.print(f"[dim]Provider: {config.provider}, Harness: {config.agent_harness}[/dim]")
@@ -373,6 +398,7 @@ async def run_evaluation(
                 task,
                 config,
                 docker_manager,
+                benchmark,
                 run_mcp,
                 run_baseline,
                 verbose,
@@ -440,10 +466,12 @@ async def run_evaluation(
                 "model": config.model,
                 "provider": config.provider,
                 "agent_harness": config.agent_harness,
-                "dataset": config.dataset,
+                "benchmark": config.benchmark,
+                "dataset": dataset_name,
                 "sample_size": config.sample_size,
                 "timeout_seconds": config.timeout_seconds,
                 "max_iterations": config.max_iterations,
+                "cybergym_level": config.cybergym_level if config.benchmark == "cybergym" else None,
             },
             "mcp_server": {
                 "command": config.mcp_server.command,

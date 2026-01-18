@@ -12,6 +12,7 @@ from .models import DEFAULT_MODEL
 
 VALID_PROVIDERS = ("anthropic",)
 VALID_HARNESSES = ("claude-code",)
+VALID_BENCHMARKS = ("swe-bench", "cybergym")
 
 
 class MCPServerConfig(BaseModel):
@@ -80,9 +81,19 @@ class HarnessConfig(BaseModel):
         description="Model ID for the selected provider",
     )
 
-    dataset: str = Field(
-        default="SWE-bench/SWE-bench_Lite",
-        description="HuggingFace dataset to use",
+    benchmark: str = Field(
+        default="swe-bench",
+        description="Benchmark to run (swe-bench or cybergym)",
+    )
+
+    dataset: str | None = Field(
+        default=None,
+        description="HuggingFace dataset to use (optional, benchmark provides default)",
+    )
+
+    cybergym_level: int = Field(
+        default=1,
+        description="CyberGym difficulty level (0-3), controls context given to agent",
     )
 
     sample_size: int | None = Field(
@@ -126,6 +137,22 @@ class HarnessConfig(BaseModel):
             raise ValueError(
                 f"Invalid agent_harness: {v}. Valid harnesses: {', '.join(VALID_HARNESSES)}"
             )
+        return v
+
+    @field_validator("benchmark")
+    @classmethod
+    def validate_benchmark(cls, v: str) -> str:
+        if v not in VALID_BENCHMARKS:
+            raise ValueError(
+                f"Invalid benchmark: {v}. Valid benchmarks: {', '.join(VALID_BENCHMARKS)}"
+            )
+        return v
+
+    @field_validator("cybergym_level")
+    @classmethod
+    def validate_cybergym_level(cls, v: int) -> int:
+        if v < 0 or v > 3:
+            raise ValueError("cybergym_level must be between 0 and 3")
         return v
 
     @model_validator(mode="after")

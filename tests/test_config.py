@@ -51,8 +51,10 @@ class TestHarnessConfig:
         assert config.model == DEFAULT_MODEL
         assert config.provider == "anthropic"
         assert config.agent_harness == "claude-code"
+        assert config.benchmark == "swe-bench"
         assert config.agent_prompt is None
-        assert config.dataset == "SWE-bench/SWE-bench_Lite"
+        assert config.dataset is None
+        assert config.cybergym_level == 1
         assert config.sample_size is None
         assert config.timeout_seconds == 300
         assert config.max_concurrent == 4
@@ -90,6 +92,43 @@ class TestHarnessConfig:
         mcp = MCPServerConfig(command="echo", args=[])
         with pytest.raises(ValueError, match="Invalid agent_harness"):
             HarnessConfig(mcp_server=mcp, agent_harness="invalid")
+
+    def test_benchmark_validation(self) -> None:
+        """Test that benchmark must be valid."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        with pytest.raises(ValueError, match="Invalid benchmark"):
+            HarnessConfig(mcp_server=mcp, benchmark="invalid")
+
+    def test_benchmark_swebench(self) -> None:
+        """Test that benchmark can be set to swe-bench."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        config = HarnessConfig(mcp_server=mcp, benchmark="swe-bench")
+        assert config.benchmark == "swe-bench"
+
+    def test_benchmark_cybergym(self) -> None:
+        """Test that benchmark can be set to cybergym."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        config = HarnessConfig(mcp_server=mcp, benchmark="cybergym")
+        assert config.benchmark == "cybergym"
+
+    def test_cybergym_level_validation_min(self) -> None:
+        """Test that cybergym_level must be at least 0."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        with pytest.raises(ValueError, match="cybergym_level must be between 0 and 3"):
+            HarnessConfig(mcp_server=mcp, cybergym_level=-1)
+
+    def test_cybergym_level_validation_max(self) -> None:
+        """Test that cybergym_level must be at most 3."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        with pytest.raises(ValueError, match="cybergym_level must be between 0 and 3"):
+            HarnessConfig(mcp_server=mcp, cybergym_level=4)
+
+    def test_cybergym_level_valid(self) -> None:
+        """Test that cybergym_level can be set to valid values."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        for level in [0, 1, 2, 3]:
+            config = HarnessConfig(mcp_server=mcp, cybergym_level=level)
+            assert config.cybergym_level == level
 
 
 class TestLoadConfig:

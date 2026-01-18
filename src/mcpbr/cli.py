@@ -8,7 +8,8 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from .config import VALID_HARNESSES, VALID_PROVIDERS, load_config
+from .benchmarks import list_benchmarks
+from .config import VALID_BENCHMARKS, VALID_HARNESSES, VALID_PROVIDERS, load_config
 from .docker_env import cleanup_orphaned_containers, register_signal_handlers
 from .harness import run_evaluation
 from .harnesses import list_available_harnesses
@@ -46,11 +47,12 @@ def main() -> None:
 
     \b
     Commands:
-      run        Run SWE-bench evaluation (default command)
+      run        Run benchmark evaluation (default command)
       init       Generate an example configuration file
       models     List supported models for evaluation
       providers  List available model providers
       harnesses  List available agent harnesses
+      benchmarks List available benchmarks
       cleanup    Remove orphaned Docker containers
 
     \b
@@ -98,6 +100,21 @@ def main() -> None:
     type=click.Choice(VALID_HARNESSES),
     default=None,
     help="Override agent harness from config",
+)
+@click.option(
+    "--benchmark",
+    "-b",
+    "benchmark_override",
+    type=click.Choice(VALID_BENCHMARKS),
+    default=None,
+    help="Override benchmark from config (swe-bench or cybergym)",
+)
+@click.option(
+    "--level",
+    "level_override",
+    type=int,
+    default=None,
+    help="Override CyberGym difficulty level (0-3)",
 )
 @click.option(
     "--sample",
@@ -181,6 +198,8 @@ def run(
     model_override: str | None,
     provider_override: str | None,
     harness_override: str | None,
+    benchmark_override: str | None,
+    level_override: int | None,
     sample_size: int | None,
     mcp_only: bool,
     baseline_only: bool,
@@ -225,6 +244,12 @@ def run(
     if harness_override:
         config.agent_harness = harness_override
 
+    if benchmark_override:
+        config.benchmark = benchmark_override
+
+    if level_override is not None:
+        config.cybergym_level = level_override
+
     if sample_size is not None:
         config.sample_size = sample_size
 
@@ -243,7 +268,11 @@ def run(
     console.print(f"  Provider: {config.provider}")
     console.print(f"  Model: {config.model}")
     console.print(f"  Agent Harness: {config.agent_harness}")
-    console.print(f"  Dataset: {config.dataset}")
+    console.print(f"  Benchmark: {config.benchmark}")
+    if config.benchmark == "cybergym":
+        console.print(f"  CyberGym Level: {config.cybergym_level}")
+    dataset_display = config.dataset if config.dataset else "default"
+    console.print(f"  Dataset: {dataset_display}")
     console.print(f"  Sample size: {config.sample_size or 'full'}")
     console.print(f"  Run MCP: {run_mcp}, Run Baseline: {run_baseline}")
     console.print(f"  Pre-built images: {config.use_prebuilt_images}")
@@ -356,8 +385,15 @@ agent_harness: "claude-code"
 # Model ID (Anthropic model identifier)
 model: "{DEFAULT_MODEL}"
 
-# HuggingFace dataset
-dataset: "SWE-bench/SWE-bench_Lite"
+# Benchmark to run (swe-bench or cybergym)
+benchmark: "swe-bench"
+
+# HuggingFace dataset (optional, benchmark provides default)
+# dataset: "SWE-bench/SWE-bench_Lite"
+
+# CyberGym difficulty level (0-3, only used for cybergym benchmark)
+# Higher levels provide more context to the agent
+cybergym_level: 1
 
 # Number of tasks (null for full dataset)
 sample_size: 10
@@ -445,6 +481,35 @@ def providers() -> None:
 
     console.print(table)
     console.print("\n[dim]Set ANTHROPIC_API_KEY environment variable before running[/dim]")
+
+
+@main.command(context_settings={"help_option_names": ["-h", "--help"]})
+def benchmarks() -> None:
+    """List available benchmarks.
+
+    Shows all supported benchmarks and their characteristics.
+    """
+    console.print("[bold]Available Benchmarks[/bold]\n")
+
+    table = Table()
+    table.add_column("Benchmark", style="cyan")
+    table.add_column("Description")
+    table.add_column("Output Type")
+
+    table.add_row(
+        "swe-bench",
+        "Software bug fixes in GitHub repositories",
+        "Patch (unified diff)",
+    )
+    table.add_row(
+        "cybergym",
+        "Security vulnerability exploitation (PoC generation)",
+        "Exploit code",
+    )
+
+    console.print(table)
+    console.print("\n[dim]Use --benchmark flag with 'run' command to select a benchmark[/dim]")
+    console.print("[dim]Example: mcpbr run -c config.yaml --benchmark cybergym --level 2[/dim]")
 
 
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
