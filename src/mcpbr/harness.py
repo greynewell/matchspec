@@ -397,14 +397,20 @@ async def run_evaluation(
     # Create benchmark instance
     benchmark_kwargs: dict[str, Any] = {}
     if config.dataset:
-        benchmark_kwargs["dataset"] = config.dataset
+        # Only pass dataset if it's compatible with the benchmark
+        # Don't pass SWE-bench datasets to CyberGym (it has its own default)
+        if config.benchmark == "cybergym":
+            if "cybergym" in config.dataset.lower():
+                benchmark_kwargs["dataset"] = config.dataset
+        else:
+            benchmark_kwargs["dataset"] = config.dataset
     if config.benchmark == "cybergym":
         benchmark_kwargs["level"] = config.cybergym_level
 
     benchmark = create_benchmark(config.benchmark, **benchmark_kwargs)
 
-    # Determine which dataset we're using
-    dataset_name = config.dataset if config.dataset else getattr(benchmark, "dataset", "unknown")
+    # Determine which dataset we're actually using (benchmark's dataset, not config)
+    dataset_name = getattr(benchmark, "dataset", config.dataset or "unknown")
     console.print(f"[dim]Loading dataset: {dataset_name}[/dim]")
 
     # Load tasks from benchmark
