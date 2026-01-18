@@ -87,8 +87,17 @@ class CyberGymBenchmark:
 
         Returns:
             Normalized BenchmarkTask.
+
+        Raises:
+            ValueError: If task_id is missing from task.
         """
-        task_id = task["task_id"]
+        task_id = task.get("task_id")
+        if not task_id:
+            # Fallback to instance_id if available
+            task_id = task.get("instance_id")
+            if not task_id:
+                msg = f"Task missing required 'task_id' field: {task.keys()}"
+                raise ValueError(msg)
         problem_statement = self._generate_problem_statement(task)
 
         # Extract repo from project_main_repo (format: "https://github.com/owner/repo.git")
@@ -188,10 +197,15 @@ class CyberGymBenchmark:
         else:
             repo = task.get("project_name", "unknown")
 
+        # Get instance_id with fallback to task_id (sanitized)
+        instance_id = task.get("instance_id")
+        if not instance_id:
+            # Fallback to task_id with colon replaced by underscore
+            task_id = task.get("task_id", "unknown")
+            instance_id = task_id.replace(":", "_")
+
         temp_task = {
-            "instance_id": task[
-                "instance_id"
-            ],  # Use sanitized instance_id (colon replaced with underscore)
+            "instance_id": instance_id,
             "repo": repo,
             "base_commit": "HEAD",
         }
