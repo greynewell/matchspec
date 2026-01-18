@@ -45,9 +45,11 @@ class SWEBenchmark:
         dataset = load_dataset(self.dataset, split="test")
 
         if task_ids:
+            # Use set for O(1) lookup performance
+            task_id_set = set(task_ids)
             tasks = []
             for item in dataset:
-                if item["instance_id"] in task_ids:
+                if item["instance_id"] in task_id_set:
                     tasks.append(item)
         else:
             tasks = list(dataset)

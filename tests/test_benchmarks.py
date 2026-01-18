@@ -3,7 +3,6 @@
 import pytest
 
 from mcpbr.benchmarks import (
-    BENCHMARK_REGISTRY,
     Benchmark,
     CyberGymBenchmark,
     SWEBenchmark,

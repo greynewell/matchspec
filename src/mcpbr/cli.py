@@ -111,7 +111,7 @@ def main() -> None:
 @click.option(
     "--level",
     "level_override",
-    type=int,
+    type=click.IntRange(0, 3),
     default=None,
     help="Override CyberGym difficulty level (0-3)",
 )

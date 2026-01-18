@@ -2,14 +2,13 @@
 
 from typing import Any
 
-from .base import Benchmark, BenchmarkTask, EvaluationSpec
+from .base import Benchmark, BenchmarkTask
 from .cybergym import CyberGymBenchmark
 from .swebench import SWEBenchmark
 
 __all__ = [
     "Benchmark",
     "BenchmarkTask",
-    "EvaluationSpec",
     "SWEBenchmark",
     "CyberGymBenchmark",
     "BENCHMARK_REGISTRY",

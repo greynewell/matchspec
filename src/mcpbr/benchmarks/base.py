@@ -17,15 +17,6 @@ class BenchmarkTask:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class EvaluationSpec:
-    """Defines how to evaluate a solution for a task."""
-
-    test_type: str  # e.g., "pytest", "poc_crash", "custom"
-    success_criteria: dict[str, Any] = field(default_factory=dict)
-    timeout: int = 120
-
-
 @runtime_checkable
 class Benchmark(Protocol):
     """Protocol for benchmark implementations.

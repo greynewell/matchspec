@@ -1,5 +1,6 @@
 """CyberGym benchmark implementation."""
 
+import shlex
 from typing import Any
 
 from datasets import load_dataset
@@ -65,11 +66,14 @@ class CyberGymBenchmark:
         if sample_size and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
-        # Augment tasks with level information
+        # Augment tasks with level information (create copies to avoid mutating dataset)
+        augmented_tasks = []
         for task in tasks:
-            task["_cybergym_level"] = task_level
+            augmented = dict(task)
+            augmented["_cybergym_level"] = task_level
+            augmented_tasks.append(augmented)
 
-        return tasks
+        return augmented_tasks
 
     def normalize_task(self, task: dict[str, Any]) -> BenchmarkTask:
         """Convert CyberGym task to normalized format.
@@ -293,7 +297,9 @@ class CyberGymBenchmark:
         # Checkout post-patch version and rebuild
         post_patch_commit = task.get("post_patch_commit")
         if post_patch_commit:
-            await env.exec_command(f"git checkout {post_patch_commit}", timeout=30)
+            # Sanitize commit hash to prevent command injection
+            safe_commit = shlex.quote(str(post_patch_commit))
+            await env.exec_command(f"git checkout {safe_commit}", timeout=30)
             await self._build_project(env, task)
 
             # Run PoC against post-patch build (should NOT crash)

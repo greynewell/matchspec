@@ -19,6 +19,31 @@ from .log_formatter import InstanceLogWriter
 console = Console()
 
 
+class SimpleNamespace:
+    """Simple object to hold attributes from a dictionary."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize with keyword arguments as attributes."""
+        self.__dict__.update(kwargs)
+
+
+def dict_to_namespace(data: Any) -> Any:
+    """Recursively convert dict to SimpleNamespace for attribute access.
+
+    Args:
+        data: Data to convert (dict, list, or primitive).
+
+    Returns:
+        Converted data with dicts as SimpleNamespace objects.
+    """
+    if isinstance(data, dict):
+        return SimpleNamespace(**{k: dict_to_namespace(v) for k, v in data.items()})
+    elif isinstance(data, list):
+        return [dict_to_namespace(item) for item in data]
+    else:
+        return data
+
+
 @dataclass
 class TaskResult:
     """Result for a single task."""
@@ -251,8 +276,8 @@ async def _run_mcp_evaluation(
 
         if agent_result.patch:
             eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
-            # Convert benchmark result format to EvaluationResult-like dict
-            eval_result = type("EvalResult", (), eval_result_dict)()
+            # Convert benchmark result format to EvaluationResult-like object
+            eval_result = dict_to_namespace(eval_result_dict)
         else:
             eval_result = None
 
@@ -314,8 +339,8 @@ async def _run_baseline_evaluation(
 
         if agent_result.patch:
             eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
-            # Convert benchmark result format to EvaluationResult-like dict
-            eval_result = type("EvalResult", (), eval_result_dict)()
+            # Convert benchmark result format to EvaluationResult-like object
+            eval_result = dict_to_namespace(eval_result_dict)
         else:
             eval_result = None
 
