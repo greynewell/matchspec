@@ -13,7 +13,7 @@ from .docker_env import cleanup_orphaned_containers, register_signal_handlers
 from .harness import run_evaluation
 from .harnesses import list_available_harnesses
 from .models import DEFAULT_MODEL, list_supported_models
-from .reporting import print_summary, save_json_results, save_markdown_report
+from .reporting import print_summary, save_json_results, save_markdown_report, save_yaml_results
 
 console = Console()
 
@@ -192,6 +192,14 @@ def main() -> None:
     is_flag=True,
     help="Disable pre-built SWE-bench images (build from scratch)",
 )
+@click.option(
+    "--yaml",
+    "-y",
+    "yaml_output",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to save YAML results (alternative to --output for YAML format)",
+)
 def run(
     config_path: Path,
     model_override: str | None,
@@ -210,6 +218,7 @@ def run(
     task_ids: tuple[str, ...],
     prompt_override: str | None,
     no_prebuilt: bool,
+    yaml_output: Path | None,
 ) -> None:
     """Run SWE-bench evaluation with the configured MCP server.
 
@@ -221,6 +230,7 @@ def run(
       mcpbr run -c config.yaml -n 10     # Sample 10 tasks
       mcpbr run -c config.yaml -v        # Verbose output
       mcpbr run -c config.yaml -o out.json -r report.md
+      mcpbr run -c config.yaml --yaml out.yaml  # Save as YAML
     """
     register_signal_handlers()
 
@@ -319,6 +329,10 @@ def run(
     if output_path:
         save_json_results(results, output_path)
         console.print(f"\n[green]Results saved to {output_path}[/green]")
+
+    if yaml_output:
+        save_yaml_results(results, yaml_output)
+        console.print(f"[green]YAML results saved to {yaml_output}[/green]")
 
     if report_path:
         save_markdown_report(results, report_path)

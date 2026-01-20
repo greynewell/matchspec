@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -211,3 +212,31 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines))
+
+
+def save_yaml_results(results: "EvaluationResults", output_path: Path) -> None:
+    """Save evaluation results to a YAML file.
+
+    Args:
+        results: Evaluation results.
+        output_path: Path to save the YAML file.
+    """
+    data = {
+        "metadata": results.metadata,
+        "summary": results.summary,
+        "tasks": [],
+    }
+
+    for task in results.tasks:
+        task_data = {
+            "instance_id": task.instance_id,
+        }
+        if task.mcp:
+            task_data["mcp"] = task.mcp
+        if task.baseline:
+            task_data["baseline"] = task.baseline
+        data["tasks"].append(task_data)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
