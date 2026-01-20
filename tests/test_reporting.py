@@ -97,7 +97,6 @@ def sample_results() -> EvaluationResults:
     )
 
 
-
 class TestSaveYamlResults:
     """Tests for save_yaml_results function."""
 
@@ -221,7 +220,6 @@ class TestSaveYamlResults:
             # None values should be preserved
             assert data["tasks"][0]["mcp"]["error"] is None
             assert "baseline" not in data["tasks"][0]
-
 
 
 @pytest.fixture
@@ -478,9 +476,7 @@ class TestJSONExport:
 class TestMarkdownExport:
     """Tests for Markdown export functionality."""
 
-    def test_save_markdown_report(
-        self, sample_results: EvaluationResults, tmp_path: Path
-    ) -> None:
+    def test_save_markdown_report(self, sample_results: EvaluationResults, tmp_path: Path) -> None:
         """Test saving Markdown report."""
         md_path = tmp_path / "report.md"
         save_markdown_report(sample_results, md_path)
