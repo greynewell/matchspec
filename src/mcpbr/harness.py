@@ -610,7 +610,9 @@ async def run_evaluation(
             "improvement": improvement_str,
             "cost_comparison": {
                 "total_difference": mcp_cost - baseline_cost,
-                "cost_per_additional_resolution": cost_effectiveness["cost_per_additional_resolution"],
+                "cost_per_additional_resolution": cost_effectiveness[
+                    "cost_per_additional_resolution"
+                ],
             },
         },
         tasks=results,
