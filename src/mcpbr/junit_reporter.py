@@ -1,7 +1,6 @@
 """JUnit XML report generation for CI/CD integration."""
 
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -39,7 +38,6 @@ def save_junit_xml(results: "EvaluationResults", output_path: Path) -> None:
 
     mcp_resolved = results.summary["mcp"]["resolved"]
     baseline_resolved = results.summary["baseline"]["resolved"]
-    total_passed = mcp_resolved + baseline_resolved
 
     mcp_failed = mcp_total - mcp_resolved
     baseline_failed = baseline_total - baseline_resolved
@@ -178,9 +176,9 @@ def _create_test_case(instance_id: str, task_data: dict, suite_type: str) -> ET.
             output_lines.append(f"  {tool_name}: {count}")
 
     if task_data.get("patch_generated"):
-        output_lines.append(f"\nPatch Generated: Yes")
+        output_lines.append("\nPatch Generated: Yes")
     else:
-        output_lines.append(f"\nPatch Generated: No")
+        output_lines.append("\nPatch Generated: No")
 
     if task_data.get("patch_applied") is not None:
         output_lines.append(f"Patch Applied: {task_data['patch_applied']}")

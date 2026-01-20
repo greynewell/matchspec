@@ -1,11 +1,7 @@
 """Tests for JUnit XML report generation."""
 
-import tempfile
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
 from pathlib import Path
-
-import pytest
 
 from mcpbr.harness import EvaluationResults, TaskResult
 from mcpbr.junit_reporter import save_junit_xml
