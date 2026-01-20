@@ -132,11 +132,16 @@ class StreamEventFormatter:
             tool_use_result = {}
 
         is_error = block.get("is_error", False)
-        style = "red" if is_error else "dim"
 
-        summary = self._summarize_tool_result(result_content, tool_use_result)
+        # Extract detailed error information
+        error_context = self._extract_error_context(result_content, tool_use_result, block)
+
+        # Use bold red for errors to make them stand out
+        style = "bold red" if is_error else "dim"
+
+        summary = self._summarize_tool_result(result_content, tool_use_result, is_error, error_context)
         symbol = "!" if is_error else "<"
-        label = "error" if is_error else ""
+        label = "ERROR" if is_error else ""
         self._print_event(prefix, label, summary, style=style, symbol=symbol)
 
     def _format_result_event(self, event: dict[str, Any], prefix: str | None) -> None:
@@ -202,8 +207,131 @@ class StreamEventFormatter:
 
         return ", ".join(summaries) if summaries else ""
 
-    def _summarize_tool_result(self, content: str, tool_use_result: dict[str, Any]) -> str:
-        """Create a summary of tool result."""
+    def _extract_error_context(
+        self, content: str, tool_use_result: dict[str, Any], block: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Extract detailed error context from tool result.
+
+        Args:
+            content: Raw content string from tool result
+            tool_use_result: Structured tool result data
+            block: The tool_result block
+
+        Returns:
+            Dictionary with error details including HTTP status codes, error messages, etc.
+        """
+        error_context = {}
+
+        # Check for HTTP error codes in content
+        http_patterns = [
+            (r'\b401\b', 'http_401_unauthorized'),
+            (r'\b403\b', 'http_403_forbidden'),
+            (r'\b404\b', 'http_404_not_found'),
+            (r'\b500\b', 'http_500_server_error'),
+            (r'\b502\b', 'http_502_bad_gateway'),
+            (r'\b503\b', 'http_503_unavailable'),
+        ]
+
+        content_str = str(content).lower()
+        for pattern, error_type in http_patterns:
+            if re.search(pattern, content_str):
+                error_context['error_type'] = error_type
+                error_context['http_error'] = True
+                break
+
+        # Check for common error keywords
+        if 'unauthorized' in content_str or 'authentication' in content_str:
+            error_context['auth_error'] = True
+        if 'timeout' in content_str:
+            error_context['timeout_error'] = True
+        if 'connection' in content_str and ('refused' in content_str or 'failed' in content_str):
+            error_context['connection_error'] = True
+
+        # Extract error from tool_use_result
+        if isinstance(tool_use_result, dict):
+            if 'error' in tool_use_result:
+                error_context['tool_error'] = tool_use_result['error']
+            if 'stderr' in tool_use_result and tool_use_result['stderr']:
+                error_context['stderr'] = tool_use_result['stderr']
+
+        return error_context
+
+    def _summarize_tool_result(
+        self,
+        content: str,
+        tool_use_result: dict[str, Any],
+        is_error: bool = False,
+        error_context: dict[str, Any] | None = None,
+    ) -> str:
+        """Create a summary of tool result.
+
+        Args:
+            content: Raw content string
+            tool_use_result: Structured tool result data
+            is_error: Whether this is an error result
+            error_context: Error context information from _extract_error_context
+
+        Returns:
+            Human-readable summary string
+        """
+        if error_context is None:
+            error_context = {}
+
+        # For errors, prioritize showing detailed error information
+        if is_error:
+            error_parts = []
+
+            # Add HTTP error type if detected
+            if error_context.get('http_error'):
+                error_type = error_context.get('error_type', 'http_error')
+                if '401' in error_type:
+                    error_parts.append("HTTP 401 Unauthorized - Check API credentials")
+                elif '403' in error_type:
+                    error_parts.append("HTTP 403 Forbidden - Check API permissions")
+                elif '404' in error_type:
+                    error_parts.append("HTTP 404 Not Found")
+                elif '500' in error_type:
+                    error_parts.append("HTTP 500 Internal Server Error")
+                elif '502' in error_type:
+                    error_parts.append("HTTP 502 Bad Gateway")
+                elif '503' in error_type:
+                    error_parts.append("HTTP 503 Service Unavailable")
+
+            # Add authentication error context
+            if error_context.get('auth_error') and not error_context.get('http_error'):
+                error_parts.append("Authentication failed")
+
+            # Add timeout context
+            if error_context.get('timeout_error'):
+                error_parts.append("Request timed out")
+
+            # Add connection error context
+            if error_context.get('connection_error'):
+                error_parts.append("Connection failed")
+
+            # Add tool-specific error
+            if error_context.get('tool_error'):
+                error_parts.append(f"Tool error: {error_context['tool_error']}")
+
+            # Add stderr if available
+            if error_context.get('stderr'):
+                stderr = str(error_context['stderr'])[:200]
+                error_parts.append(f"stderr: {stderr}")
+
+            # Add content if we haven't found a specific error type
+            if not error_parts and content:
+                content_str = str(content)
+                if len(content_str) > 300:
+                    content_str = content_str[:300] + "..."
+                error_parts.append(content_str)
+
+            # If still no error details, flag it
+            if not error_parts:
+                error_parts.append("MCP tool returned error with no details (check MCP server logs)")
+
+            return "\n".join(error_parts)
+
+        # For non-errors, use original logic
         if not isinstance(tool_use_result, dict):
             return str(tool_use_result)[:200] if tool_use_result else ""
         mode = tool_use_result.get("mode", "")
@@ -230,7 +358,8 @@ class StreamEventFormatter:
                         + f"\n... ({len(lines) - self.config.max_file_lines} more lines)"
                     )
                 return stdout[: self.config.max_content_length]
-            return "(empty)"
+            # Flag empty stdout more clearly
+            return "(empty output - possible error)"
 
         if "file" in tool_use_result:
             file_info = tool_use_result.get("file", {})
@@ -243,9 +372,12 @@ class StreamEventFormatter:
             content = self._shorten_path(content)
             if len(content) > self.config.max_content_length:
                 return content[: self.config.max_content_length] + "..."
-            return content[:200] if content else "(empty)"
+            # Flag truly empty responses
+            if not content or not content.strip():
+                return "(empty response - check if MCP tool succeeded)"
+            return content[:200]
 
-        return ""
+        return "(no output)"
 
     def _shorten_path(self, text: str) -> str:
         """Replace long temp directory paths with $WORKDIR."""
