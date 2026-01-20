@@ -203,9 +203,7 @@ def test_regression_report_has_regressions():
     """Test RegressionReport.has_regressions method."""
     report = RegressionReport(
         total_tasks=10,
-        regressions=[
-            RegressionTask("task-1", baseline_resolved=True, current_resolved=False)
-        ],
+        regressions=[RegressionTask("task-1", baseline_resolved=True, current_resolved=False)],
         improvements=[],
         regression_count=1,
         improvement_count=0,
@@ -260,9 +258,7 @@ def test_format_regression_report():
                 current_error="A" * 100,  # Long error
             ),
         ],
-        improvements=[
-            RegressionTask("task-3", baseline_resolved=False, current_resolved=True)
-        ],
+        improvements=[RegressionTask("task-3", baseline_resolved=False, current_resolved=True)],
         regression_count=2,
         improvement_count=1,
         regression_rate=0.2,
@@ -290,9 +286,7 @@ def test_send_slack_notification(mock_post):
 
     report = RegressionReport(
         total_tasks=10,
-        regressions=[
-            RegressionTask("task-1", baseline_resolved=True, current_resolved=False)
-        ],
+        regressions=[RegressionTask("task-1", baseline_resolved=True, current_resolved=False)],
         improvements=[],
         regression_count=1,
         improvement_count=0,
@@ -315,9 +309,7 @@ def test_send_slack_notification_no_regressions(mock_post):
     report = RegressionReport(
         total_tasks=10,
         regressions=[],
-        improvements=[
-            RegressionTask("task-1", baseline_resolved=False, current_resolved=True)
-        ],
+        improvements=[RegressionTask("task-1", baseline_resolved=False, current_resolved=True)],
         regression_count=0,
         improvement_count=1,
         regression_rate=0.0,
@@ -338,9 +330,7 @@ def test_send_discord_notification(mock_post):
 
     report = RegressionReport(
         total_tasks=10,
-        regressions=[
-            RegressionTask("task-1", baseline_resolved=True, current_resolved=False)
-        ],
+        regressions=[RegressionTask("task-1", baseline_resolved=True, current_resolved=False)],
         improvements=[],
         regression_count=1,
         improvement_count=0,
@@ -363,9 +353,7 @@ def test_send_email_notification(mock_smtp):
 
     report = RegressionReport(
         total_tasks=10,
-        regressions=[
-            RegressionTask("task-1", baseline_resolved=True, current_resolved=False)
-        ],
+        regressions=[RegressionTask("task-1", baseline_resolved=True, current_resolved=False)],
         improvements=[],
         regression_count=1,
         improvement_count=0,
