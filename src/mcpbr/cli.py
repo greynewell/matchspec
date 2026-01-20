@@ -14,6 +14,7 @@ from .harness import run_evaluation
 from .harnesses import list_available_harnesses
 from .models import DEFAULT_MODEL, list_supported_models
 from .reporting import print_summary, save_json_results, save_markdown_report, save_yaml_results
+from .templates import apply_template, get_template, list_templates
 
 console = Console()
 
@@ -48,6 +49,7 @@ def main() -> None:
     Commands:
       run        Run benchmark evaluation (default command)
       init       Generate an example configuration file
+      config     Manage configuration templates
       models     List supported models for evaluation
       providers  List available model providers
       harnesses  List available agent harnesses
@@ -56,10 +58,11 @@ def main() -> None:
 
     \b
     Quick Start:
-      mcpbr init -o config.yaml    # Create config
-      mcpbr run -c config.yaml     # Run evaluation
-      mcpbr run -c config.yaml -M  # MCP only
-      mcpbr run -c config.yaml -B  # Baseline only
+      mcpbr config list               # List available templates
+      mcpbr config apply filesystem   # Create config from template
+      mcpbr run -c mcpbr.yaml         # Run evaluation
+      mcpbr run -c mcpbr.yaml -M      # MCP only
+      mcpbr run -c mcpbr.yaml -B      # Baseline only
 
     \b
     Environment Variables:
@@ -348,17 +351,91 @@ def run(
     default=Path("mcpbr.yaml"),
     help="Path to write example config (default: mcpbr.yaml)",
 )
-def init(output_path: Path) -> None:
+@click.option(
+    "--template",
+    "-t",
+    "template_id",
+    type=str,
+    default=None,
+    help="Template ID to use (see 'mcpbr config list')",
+)
+@click.option(
+    "--interactive",
+    "-i",
+    is_flag=True,
+    help="Interactive template selection wizard",
+)
+def init(output_path: Path, template_id: str | None, interactive: bool) -> None:
     """Generate an example configuration file.
+
+    Can use a template or create a basic example config.
 
     \b
     Examples:
-      mcpbr init                    # Creates mcpbr.yaml
-      mcpbr init -o my-config.yaml  # Custom filename
+      mcpbr init                              # Creates basic config
+      mcpbr init -t filesystem                # Use filesystem template
+      mcpbr init -i                           # Interactive selection
+      mcpbr init -o my-config.yaml            # Custom filename
     """
     if output_path.exists():
         console.print(f"[red]Error: {output_path} already exists[/red]")
         sys.exit(1)
+
+    # Interactive mode
+    if interactive:
+        templates = list_templates()
+        if not templates:
+            console.print("[yellow]No templates available, creating basic config[/yellow]")
+        else:
+            console.print("[bold]Available templates:[/bold]\n")
+            for i, template in enumerate(sorted(templates, key=lambda t: t.id), 1):
+                api_key = "[yellow](requires API key)[/yellow]" if template.requires_api_key else ""
+                console.print(f"  {i}. [cyan]{template.id}[/cyan] - {template.name} {api_key}")
+                console.print(f"     {template.description}")
+                console.print()
+
+            console.print("  0. Create basic example config\n")
+
+            try:
+                choice = click.prompt("Select a template", type=int, default=0)
+                if choice > 0 and choice <= len(templates):
+                    template_id = sorted(templates, key=lambda t: t.id)[choice - 1].id
+            except (click.exceptions.Abort, KeyboardInterrupt):
+                console.print("\n[yellow]Cancelled[/yellow]")
+                sys.exit(0)
+
+    # Use template if specified
+    if template_id:
+        template = get_template(template_id)
+        if not template:
+            console.print(f"[red]Error: Template '{template_id}' not found[/red]")
+            console.print("\nAvailable templates:")
+            templates = list_templates()
+            for t in sorted(templates, key=lambda x: x.id):
+                console.print(f"  [cyan]{t.id}[/cyan] - {t.name}")
+            sys.exit(1)
+
+        # Apply the template
+        try:
+            apply_template(template, output_path)
+        except Exception as e:
+            console.print(f"[red]Error applying template: {e}[/red]")
+            sys.exit(1)
+
+        console.print(f"[green]Created configuration file at {output_path}[/green]")
+        console.print(f"\nTemplate: [cyan]{template.name}[/cyan]")
+        console.print(f"Description: {template.description}")
+
+        # Show environment variable requirements
+        if template.env_vars:
+            console.print("\n[yellow]Required environment variables:[/yellow]")
+            for env_var in template.env_vars:
+                console.print(f"  [yellow]{env_var}[/yellow]")
+            console.print("\nSet these environment variables before running the evaluation.")
+
+        console.print(f"\nEdit the config file and run:")
+        console.print(f"  mcpbr run --config {output_path}")
+        return
 
     example_config = f"""\
 # mcpbr - Model Context Protocol Benchmark Runner
@@ -523,6 +600,126 @@ def benchmarks() -> None:
     console.print(table)
     console.print("\n[dim]Use --benchmark flag with 'run' command to select a benchmark[/dim]")
     console.print("[dim]Example: mcpbr run -c config.yaml --benchmark cybergym --level 2[/dim]")
+
+
+@main.group(context_settings={"help_option_names": ["-h", "--help"]})
+def config() -> None:
+    """Manage configuration files and templates.
+
+    \b
+    Commands:
+      list     List available configuration templates
+      apply    Apply a template to create a configuration file
+    """
+    pass
+
+
+@config.command(name="list", context_settings={"help_option_names": ["-h", "--help"]})
+def config_list() -> None:
+    """List available MCP server configuration templates.
+
+    Shows all built-in templates for popular MCP servers with their
+    descriptions and requirements.
+
+    \b
+    Examples:
+      mcpbr config list
+    """
+    templates = list_templates()
+
+    if not templates:
+        console.print("[yellow]No templates found[/yellow]")
+        return
+
+    table = Table(title="Available MCP Server Templates")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name", style="bold")
+    table.add_column("Package")
+    table.add_column("Requires API Key", justify="center")
+    table.add_column("Description")
+
+    for template in sorted(templates, key=lambda t: t.id):
+        api_key_indicator = "[yellow]Yes[/yellow]" if template.requires_api_key else "[green]No[/green]"
+        table.add_row(
+            template.id,
+            template.name,
+            template.package or "N/A",
+            api_key_indicator,
+            template.description,
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(templates)} templates[/dim]")
+    console.print("[dim]Use 'mcpbr config apply <template-id>' to generate a config file[/dim]")
+
+
+@config.command(name="apply", context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("template_id", type=str)
+@click.option(
+    "--output",
+    "-o",
+    "output_path",
+    type=click.Path(path_type=Path),
+    default=Path("mcpbr.yaml"),
+    help="Path to write configuration file (default: mcpbr.yaml)",
+)
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Overwrite existing configuration file",
+)
+def config_apply(template_id: str, output_path: Path, force: bool) -> None:
+    """Apply a template to create a configuration file.
+
+    \b
+    Arguments:
+      TEMPLATE_ID  ID of the template to apply (see 'mcpbr config list')
+
+    \b
+    Examples:
+      mcpbr config apply filesystem
+      mcpbr config apply brave-search -o brave.yaml
+      mcpbr config apply github --force
+    """
+    # Get the template
+    template = get_template(template_id)
+    if not template:
+        console.print(f"[red]Error: Template '{template_id}' not found[/red]")
+        console.print("\nAvailable templates:")
+        templates = list_templates()
+        for t in sorted(templates, key=lambda x: x.id):
+            console.print(f"  [cyan]{t.id}[/cyan] - {t.name}")
+        sys.exit(1)
+
+    # Check if file exists
+    if output_path.exists() and not force:
+        console.print(f"[red]Error: {output_path} already exists[/red]")
+        console.print("Use --force to overwrite")
+        sys.exit(1)
+
+    # Apply the template
+    try:
+        if force and output_path.exists():
+            output_path.unlink()
+        apply_template(template, output_path)
+    except Exception as e:
+        console.print(f"[red]Error applying template: {e}[/red]")
+        sys.exit(1)
+
+    console.print(f"[green]Created configuration file at {output_path}[/green]")
+    console.print(f"\nTemplate: [cyan]{template.name}[/cyan]")
+    console.print(f"Description: {template.description}")
+
+    # Show environment variable requirements
+    if template.env_vars:
+        console.print("\n[yellow]Required environment variables:[/yellow]")
+        for env_var in template.env_vars:
+            console.print(f"  [yellow]{env_var}[/yellow]")
+        console.print("\nSet these environment variables before running the evaluation.")
+
+    console.print(f"\nEdit the config file and run:")
+    console.print(f"  mcpbr run --config {output_path}")
 
 
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})

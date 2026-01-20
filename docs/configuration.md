@@ -16,7 +16,34 @@ mcpbr uses YAML configuration files to define your MCP server settings and evalu
 
 ## Generating a Config File
 
-Create a starter configuration:
+### Using Templates (Recommended)
+
+mcpbr includes pre-configured templates for popular MCP servers. This is the easiest way to get started:
+
+```bash
+# List available templates
+mcpbr config list
+
+# Apply a template
+mcpbr config apply filesystem
+
+# Or use the interactive wizard
+mcpbr init -i
+```
+
+Available templates include:
+
+- **filesystem** - File system access (no API key required)
+- **brave-search** - Web search using Brave Search API
+- **postgres** - PostgreSQL database access
+- **sqlite** - SQLite database access
+- **github** - GitHub API integration
+- **google-maps** - Google Maps APIs
+- **slack** - Slack workspace integration
+
+### Manual Configuration
+
+Create a basic starter configuration:
 
 ```bash
 mcpbr init

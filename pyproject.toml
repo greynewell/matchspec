@@ -61,6 +61,9 @@ Changelog = "https://github.com/greynewell/mcpbr/blob/main/CHANGELOG.md"
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcpbr"]
 
+[tool.hatch.build.targets.wheel.shared-data]
+"src/mcpbr/data" = "mcpbr/data"
+
 [tool.hatch.build.targets.sdist]
 exclude = [
     "docs/",
