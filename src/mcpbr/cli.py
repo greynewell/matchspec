@@ -13,6 +13,7 @@ from .docker_env import cleanup_orphaned_containers, register_signal_handlers
 from .harness import run_evaluation
 from .harnesses import list_available_harnesses
 from .models import DEFAULT_MODEL, list_supported_models
+from .junit_reporter import save_junit_xml
 from .reporting import print_summary, save_json_results, save_markdown_report, save_yaml_results
 
 console = Console()
@@ -152,6 +153,13 @@ def main() -> None:
     help="Path to save Markdown report",
 )
 @click.option(
+    "--output-junit",
+    "junit_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to save JUnit XML report (for CI/CD integration)",
+)
+@click.option(
     "--verbose",
     "-v",
     "verbosity",
@@ -212,6 +220,7 @@ def run(
     baseline_only: bool,
     output_path: Path | None,
     report_path: Path | None,
+    junit_path: Path | None,
     verbosity: int,
     log_file_path: Path | None,
     log_dir_path: Path | None,
@@ -337,6 +346,10 @@ def run(
     if report_path:
         save_markdown_report(results, report_path)
         console.print(f"[green]Report saved to {report_path}[/green]")
+
+    if junit_path:
+        save_junit_xml(results, junit_path)
+        console.print(f"[green]JUnit XML saved to {junit_path}[/green]")
 
 
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
