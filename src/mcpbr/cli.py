@@ -433,7 +433,7 @@ def init(output_path: Path, template_id: str | None, interactive: bool) -> None:
                 console.print(f"  [yellow]{env_var}[/yellow]")
             console.print("\nSet these environment variables before running the evaluation.")
 
-        console.print(f"\nEdit the config file and run:")
+        console.print("\nEdit the config file and run:")
         console.print(f"  mcpbr run --config {output_path}")
         return
 
@@ -720,7 +720,7 @@ def config_apply(template_id: str, output_path: Path, force: bool) -> None:
             console.print(f"  [yellow]{env_var}[/yellow]")
         console.print("\nSet these environment variables before running the evaluation.")
 
-    console.print(f"\nEdit the config file and run:")
+    console.print("\nEdit the config file and run:")
     console.print(f"  mcpbr run --config {output_path}")
 
 
