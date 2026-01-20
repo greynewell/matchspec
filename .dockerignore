@@ -1,0 +1,19 @@
+# Test .dockerignore file for issue #14
+# Docker-specific files to ignore
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Build artifacts
+*.log
+tmp/
+temp/
+
+# Documentation
+*.md
+docs/
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__/

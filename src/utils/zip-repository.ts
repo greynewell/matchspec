@@ -1,5 +1,5 @@
 /**
- * Automatic repository zipping with gitignore support
+ * Automatic repository zipping with gitignore and dockerignore support
  * Creates temporary ZIP files for codebase analysis
  */
 
@@ -13,7 +13,7 @@ import { MAX_ZIP_SIZE_BYTES, ZIP_CLEANUP_AGE_MS } from '../constants';
 
 /**
  * Standard exclusions for security and size optimization
- * These patterns are applied in addition to .gitignore
+ * These patterns are applied in addition to .gitignore and .dockerignore
  */
 const STANDARD_EXCLUSIONS = [
   // Version control
@@ -106,7 +106,7 @@ export interface ZipOptions {
 }
 
 /**
- * Create a ZIP archive of a directory with gitignore support
+ * Create a ZIP archive of a directory with gitignore and dockerignore support
  */
 export async function zipRepository(
   directoryPath: string,
@@ -339,7 +339,7 @@ async function estimateDirectorySize(
 }
 
 /**
- * Build ignore filter from .gitignore files and standard exclusions
+ * Build ignore filter from .gitignore, .dockerignore files and standard exclusions
  * Recursively finds and parses .gitignore files in subdirectories
  */
 async function buildIgnoreFilter(
@@ -404,6 +404,25 @@ async function buildIgnoreFilter(
       if (error.code !== 'ENOENT') {
         console.error('[WARN] Failed to read .gitignore at', gitignorePath, ':', error.message);
       }
+    }
+  }
+
+  // Parse .dockerignore in root
+  const dockerignorePath = join(rootDir, '.dockerignore');
+  try {
+    const dockerignoreContent = await fs.readFile(dockerignorePath, 'utf-8');
+    const patterns = dockerignoreContent
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'));
+
+    if (patterns.length > 0) {
+      ig.add(patterns);
+      console.error('[DEBUG] Loaded .dockerignore with', patterns.length, 'patterns');
+    }
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      console.error('[WARN] Failed to read .dockerignore:', error.message);
     }
   }
 
