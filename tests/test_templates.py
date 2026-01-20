@@ -1,6 +1,5 @@
 """Tests for configuration templates."""
 
-import pytest
 import yaml
 
 from mcpbr.templates import (

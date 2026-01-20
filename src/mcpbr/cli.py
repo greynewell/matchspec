@@ -385,7 +385,8 @@ def init(
       mcpbr init -i                     # Interactive mode
       mcpbr init -l                     # List available templates
     """
-    from .templates import generate_config_yaml, get_template, list_templates as get_all_templates
+    from .templates import generate_config_yaml, get_template
+    from .templates import list_templates as get_all_templates
 
     # Handle list templates flag
     if list_templates:
@@ -528,6 +529,8 @@ def templates(category: str | None, tag: str | None) -> None:
     from .templates import (
         get_templates_by_category,
         get_templates_by_tag,
+    )
+    from .templates import (
         list_templates as get_all_templates,
     )
 
