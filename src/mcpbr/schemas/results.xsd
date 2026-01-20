@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root element -->
+  <xs:element name="mcpbr-evaluation">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="metadata" type="MetadataType"/>
+        <xs:element name="summary" type="SummaryType"/>
+        <xs:element name="tasks" type="TasksType"/>
+      </xs:sequence>
+      <xs:attribute name="version" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Metadata section -->
+  <xs:complexType name="MetadataType">
+    <xs:sequence>
+      <xs:element name="timestamp" type="xs:string"/>
+      <xs:element name="config" type="ConfigType"/>
+      <xs:element name="mcp-server" type="McpServerType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Configuration section -->
+  <xs:complexType name="ConfigType">
+    <xs:sequence>
+      <xs:element name="model" type="xs:string" minOccurs="0"/>
+      <xs:element name="provider" type="xs:string" minOccurs="0"/>
+      <xs:element name="benchmark" type="xs:string" minOccurs="0"/>
+      <xs:element name="dataset" type="xs:string" minOccurs="0"/>
+      <xs:element name="sample_size" type="xs:string" minOccurs="0"/>
+      <xs:element name="timeout_seconds" type="xs:string" minOccurs="0"/>
+      <xs:element name="max_concurrent" type="xs:string" minOccurs="0"/>
+      <xs:element name="max_iterations" type="xs:string" minOccurs="0"/>
+      <xs:element name="agent_harness" type="xs:string" minOccurs="0"/>
+      <xs:element name="cybergym_level" type="xs:string" minOccurs="0"/>
+      <xs:element name="use_prebuilt_images" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- MCP Server configuration -->
+  <xs:complexType name="McpServerType">
+    <xs:sequence>
+      <xs:element name="name" type="xs:string" minOccurs="0"/>
+      <xs:element name="command" type="xs:string" minOccurs="0"/>
+      <xs:element name="args" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="item" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="env" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Summary section -->
+  <xs:complexType name="SummaryType">
+    <xs:sequence>
+      <xs:element name="mcp" type="ResultSummaryType"/>
+      <xs:element name="baseline" type="ResultSummaryType"/>
+      <xs:element name="improvement" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Result summary (mcp or baseline) -->
+  <xs:complexType name="ResultSummaryType">
+    <xs:sequence>
+      <xs:element name="resolved" type="xs:integer"/>
+      <xs:element name="total" type="xs:integer"/>
+      <xs:element name="rate" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Tasks section -->
+  <xs:complexType name="TasksType">
+    <xs:sequence>
+      <xs:element name="task" type="TaskType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Individual task -->
+  <xs:complexType name="TaskType">
+    <xs:sequence>
+      <xs:element name="mcp" type="TaskResultType" minOccurs="0"/>
+      <xs:element name="baseline" type="TaskResultType" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <!-- Task result (mcp or baseline) -->
+  <xs:complexType name="TaskResultType">
+    <xs:sequence>
+      <xs:element name="resolved" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="patch-generated" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="patch-applied" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="error" type="xs:string" minOccurs="0"/>
+      <xs:element name="iterations" type="xs:integer" minOccurs="0"/>
+      <xs:element name="tool-calls" type="xs:integer" minOccurs="0"/>
+      <xs:element name="tokens" type="TokensType" minOccurs="0"/>
+      <xs:element name="tool-usage" type="ToolUsageType" minOccurs="0"/>
+      <xs:element name="fail-to-pass" type="TestResultType" minOccurs="0"/>
+      <xs:element name="pass-to-pass" type="TestResultType" minOccurs="0"/>
+      <xs:element name="messages" type="MessagesType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Tokens used -->
+  <xs:complexType name="TokensType">
+    <xs:sequence>
+      <xs:element name="input" type="xs:integer"/>
+      <xs:element name="output" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Tool usage -->
+  <xs:complexType name="ToolUsageType">
+    <xs:sequence>
+      <xs:element name="tool" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:simpleContent>
+            <xs:extension base="xs:integer">
+              <xs:attribute name="name" type="xs:string" use="required"/>
+            </xs:extension>
+          </xs:simpleContent>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Test results (fail-to-pass, pass-to-pass) -->
+  <xs:complexType name="TestResultType">
+    <xs:sequence>
+      <xs:element name="passed" type="xs:integer"/>
+      <xs:element name="total" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Messages -->
+  <xs:complexType name="MessagesType">
+    <xs:sequence>
+      <xs:element name="message" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:any minOccurs="0" maxOccurs="unbounded" processContents="lax"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

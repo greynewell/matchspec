@@ -13,7 +13,7 @@ from .docker_env import cleanup_orphaned_containers, register_signal_handlers
 from .harness import run_evaluation
 from .harnesses import list_available_harnesses
 from .models import DEFAULT_MODEL, list_supported_models
-from .reporting import print_summary, save_json_results, save_markdown_report, save_yaml_results
+from .reporting import print_summary, save_json_results, save_markdown_report, save_xml_results, save_yaml_results
 
 console = Console()
 
@@ -152,6 +152,14 @@ def main() -> None:
     help="Path to save Markdown report",
 )
 @click.option(
+    "--output-xml",
+    "-x",
+    "xml_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to save XML results",
+)
+@click.option(
     "--verbose",
     "-v",
     "verbosity",
@@ -212,6 +220,7 @@ def run(
     baseline_only: bool,
     output_path: Path | None,
     report_path: Path | None,
+    xml_path: Path | None,
     verbosity: int,
     log_file_path: Path | None,
     log_dir_path: Path | None,
@@ -337,6 +346,10 @@ def run(
     if report_path:
         save_markdown_report(results, report_path)
         console.print(f"[green]Report saved to {report_path}[/green]")
+
+    if xml_path:
+        save_xml_results(results, xml_path)
+        console.print(f"[green]XML results saved to {xml_path}[/green]")
 
 
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
