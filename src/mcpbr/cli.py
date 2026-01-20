@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .config import VALID_BENCHMARKS, VALID_HARNESSES, VALID_PROVIDERS, load_config
+from .config_validator import validate_config
 from .docker_env import cleanup_orphaned_containers, register_signal_handlers
 from .harness import run_evaluation
 from .harnesses import list_available_harnesses
@@ -48,6 +49,7 @@ def main() -> None:
     Commands:
       run        Run benchmark evaluation (default command)
       init       Generate an example configuration file
+      config     Configuration management commands
       models     List supported models for evaluation
       providers  List available model providers
       harnesses  List available agent harnesses
@@ -583,6 +585,83 @@ def cleanup(dry_run: bool, force: bool) -> None:
 
     removed = cleanup_orphaned_containers(dry_run=False)
     console.print(f"[green]Removed {len(removed)} container(s).[/green]")
+
+
+@main.group(context_settings={"help_option_names": ["-h", "--help"]})
+def config() -> None:
+    """Configuration file management commands.
+
+    \b
+    Examples:
+      mcpbr config validate config.yaml  # Validate configuration
+    """
+    pass
+
+
+@config.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("config_path", type=click.Path(exists=False, path_type=Path))
+def validate(config_path: Path) -> None:
+    """Validate a configuration file.
+
+    Checks YAML/TOML syntax, validates required fields, checks API key format,
+    and provides detailed error messages with suggestions.
+
+    \b
+    Examples:
+      mcpbr config validate config.yaml        # Validate config
+      mcpbr config validate my-config.toml     # Validate TOML config
+
+    Exit codes:
+      0 - Configuration is valid
+      1 - Configuration has errors
+    """
+    console.print(f"[bold]Validating configuration:[/bold] {config_path}\n")
+
+    result = validate_config(config_path)
+
+    # Display errors
+    if result.has_errors:
+        console.print(f"[red bold]Found {len(result.errors)} error(s):[/red bold]\n")
+        for i, error in enumerate(result.errors, 1):
+            location = f"[cyan]{error.field}[/cyan]"
+            if error.line_number:
+                location += f" (line {error.line_number})"
+
+            console.print(f"  [red]{i}.[/red] {location}")
+            console.print(f"     [red]Error:[/red] {error.error}")
+            if error.suggestion:
+                console.print(f"     [yellow]Suggestion:[/yellow] {error.suggestion}")
+            console.print()
+
+    # Display warnings
+    if result.has_warnings:
+        console.print(f"[yellow bold]Found {len(result.warnings)} warning(s):[/yellow bold]\n")
+        for i, warning in enumerate(result.warnings, 1):
+            location = f"[cyan]{warning.field}[/cyan]"
+            if warning.line_number:
+                location += f" (line {warning.line_number})"
+
+            console.print(f"  [yellow]{i}.[/yellow] {location}")
+            console.print(f"     [yellow]Warning:[/yellow] {warning.error}")
+            if warning.suggestion:
+                console.print(f"     [dim]Suggestion:[/dim] {warning.suggestion}")
+            console.print()
+
+    # Summary
+    if result.valid:
+        if result.has_warnings:
+            console.print(
+                "[green]Configuration is valid[/green] but has warnings that should be addressed."
+            )
+        else:
+            console.print("[green bold]Configuration is valid![/green bold]")
+        sys.exit(0)
+    else:
+        console.print("[red bold]Configuration validation failed.[/red bold]")
+        console.print(
+            "[dim]Fix the errors above and run validation again.[/dim]"
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":
