@@ -84,7 +84,9 @@ class TestXMLExport:
             ],
         )
 
-    def test_save_xml_results_creates_file(self, tmp_path: Path, sample_results: EvaluationResults) -> None:
+    def test_save_xml_results_creates_file(
+        self, tmp_path: Path, sample_results: EvaluationResults
+    ) -> None:
         """Test that save_xml_results creates an XML file."""
         output_path = tmp_path / "results.xml"
         save_xml_results(sample_results, output_path)
@@ -258,7 +260,9 @@ class TestXMLExport:
         assert passed is not None
         assert passed.text == "5"
 
-    def test_xml_creates_parent_directories(self, tmp_path: Path, sample_results: EvaluationResults) -> None:
+    def test_xml_creates_parent_directories(
+        self, tmp_path: Path, sample_results: EvaluationResults
+    ) -> None:
         """Test that save_xml_results creates parent directories."""
         output_path = tmp_path / "subdir" / "nested" / "results.xml"
         save_xml_results(sample_results, output_path)
