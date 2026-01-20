@@ -658,9 +658,7 @@ def validate(config_path: Path) -> None:
         sys.exit(0)
     else:
         console.print("[red bold]Configuration validation failed.[/red bold]")
-        console.print(
-            "[dim]Fix the errors above and run validation again.[/dim]"
-        )
+        console.print("[dim]Fix the errors above and run validation again.[/dim]")
         sys.exit(1)
 
 
