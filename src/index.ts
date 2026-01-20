@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Server } from './server';
+import * as logger from './utils/logger';
 
 async function main() {
   const server = new Server();
@@ -7,7 +8,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Fatal error:', error);
+  logger.error('Fatal error:', error);
   process.exit(1);
 });
 

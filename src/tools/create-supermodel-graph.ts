@@ -15,6 +15,7 @@ import { maybeFilter, isJqError } from '../filtering';
 import { executeQuery, getAvailableQueries, isQueryError, QueryType, graphCache } from '../queries';
 import { IndexedGraph } from '../cache/graph-cache';
 import { zipRepository } from '../utils/zip-repository';
+import * as logger from '../utils/logger';
 
 export const metadata: Metadata = {
   resource: 'graphs',
@@ -216,7 +217,7 @@ function generateIdempotencyKey(directory: string): string {
 
 export const handler: HandlerFunction = async (client: ClientContext, args: Record<string, unknown> | undefined) => {
   if (!args) {
-    console.error('[ERROR] No arguments provided to handler');
+    logger.error('No arguments provided to handler');
     return asErrorResult('Missing required arguments. Provide a "directory" parameter.');
   }
 
@@ -237,19 +238,19 @@ export const handler: HandlerFunction = async (client: ClientContext, args: Reco
 
   // Validate directory
   if (!directory || typeof directory !== 'string') {
-    console.error('[ERROR] Invalid directory parameter:', directory);
+    logger.error('Invalid directory parameter:', directory);
     return asErrorResult('Invalid "directory" parameter. Provide a valid directory path as a string.');
   }
 
   // Generate idempotency key for API request
   const idempotencyKey = generateIdempotencyKey(directory);
-  console.error('[DEBUG] Auto-generated idempotency key:', idempotencyKey);
+  logger.debug('Auto-generated idempotency key:', idempotencyKey);
 
   // Check if we can skip zipping (graph already cached)
   // Use get() atomically to avoid TOCTOU race condition
   const cachedGraph = graphCache.get(idempotencyKey);
   if (cachedGraph && query) {
-    console.error('[DEBUG] Graph cached, skipping ZIP creation');
+    logger.debug('Graph cached, skipping ZIP creation');
 
     // Execute query directly from cache using the cached graph
     // We pass the cached graph to executeQuery so it doesn't need to look it up again
@@ -272,7 +273,7 @@ export const handler: HandlerFunction = async (client: ClientContext, args: Reco
     return result;
   }
 
-  console.error('[DEBUG] Auto-zipping directory:', directory);
+  logger.debug('Auto-zipping directory:', directory);
 
   // Handle auto-zipping
   let zipPath: string;
@@ -283,14 +284,14 @@ export const handler: HandlerFunction = async (client: ClientContext, args: Reco
     zipPath = zipResult.path;
     cleanup = zipResult.cleanup;
 
-    console.error('[DEBUG] Auto-zip complete:', zipResult.fileCount, 'files,', formatBytes(zipResult.sizeBytes));
+    logger.debug('Auto-zip complete:', zipResult.fileCount, 'files,', formatBytes(zipResult.sizeBytes));
   } catch (error: any) {
     // Log full error details for debugging
-    console.error('[ERROR] Auto-zip failed');
-    console.error('[ERROR] Error type:', error.name || 'Error');
-    console.error('[ERROR] Error message:', error.message);
+    logger.error('Auto-zip failed');
+    logger.error('Error type:', error.name || 'Error');
+    logger.error('Error message:', error.message);
     if (error.stack) {
-      console.error('[ERROR] Stack trace:', error.stack);
+      logger.error('Stack trace:', error.stack);
     }
 
     // Return user-friendly, actionable error messages
@@ -455,7 +456,7 @@ async function handleQueryMode(
 
   // If cache miss, fetch from API and retry
   if (isQueryError(result) && result.error.code === 'CACHE_MISS') {
-    console.error('[DEBUG] Cache miss, fetching from API...');
+    logger.debug('Cache miss, fetching from API...');
 
     try {
       const apiResponse = await fetchFromApi(client, params.file, params.idempotencyKey);
@@ -630,76 +631,76 @@ function getTimestamp(): string {
  * Log HTTP request details
  */
 function logRequest(url: string, method: string, bodySize: number, idempotencyKey: string): void {
-  console.error(`[${getTimestamp()}] [API REQUEST]`);
-  console.error(`  Method: ${method}`);
-  console.error(`  URL: ${url}`);
-  console.error(`  Idempotency-Key: ${idempotencyKey}`);
-  console.error(`  Body size: ${formatBytes(bodySize)}`);
-  console.error(`  Content-Type: multipart/form-data`);
+  logger.debug(`[${getTimestamp()}] [API REQUEST]`);
+  logger.debug(`  Method: ${method}`);
+  logger.debug(`  URL: ${url}`);
+  logger.debug(`  Idempotency-Key: ${idempotencyKey}`);
+  logger.debug(`  Body size: ${formatBytes(bodySize)}`);
+  logger.debug(`  Content-Type: multipart/form-data`);
 }
 
 /**
  * Log HTTP response details
  */
 function logResponse(status: number, statusText: string, responseSize: number, duration: number): void {
-  console.error(`[${getTimestamp()}] [API RESPONSE]`);
-  console.error(`  Status: ${status} ${statusText}`);
-  console.error(`  Response size: ${formatBytes(responseSize)}`);
-  console.error(`  Duration: ${duration}ms`);
+  logger.debug(`[${getTimestamp()}] [API RESPONSE]`);
+  logger.debug(`  Status: ${status} ${statusText}`);
+  logger.debug(`  Response size: ${formatBytes(responseSize)}`);
+  logger.debug(`  Duration: ${duration}ms`);
 }
 
 /**
  * Log HTTP error with full details
  */
 async function logErrorResponse(error: any): Promise<void> {
-  console.error(`[${getTimestamp()}] [API ERROR]`);
-  console.error(`  Error type: ${error.name || 'Unknown'}`);
-  console.error(`  Error message: ${error.message || 'No message'}`);
+  logger.error(`[${getTimestamp()}] [API ERROR]`);
+  logger.error(`  Error type: ${error.name || 'Unknown'}`);
+  logger.error(`  Error message: ${error.message || 'No message'}`);
 
   if (error.response) {
     const status = error.response.status;
     const statusText = error.response.statusText || '';
-    console.error(`  HTTP Status: ${status} ${statusText}`);
+    logger.error(`  HTTP Status: ${status} ${statusText}`);
 
     // Log specific error messages for common status codes
     switch (status) {
       case 401:
-        console.error(`  [ERROR] Unauthorized: Invalid or missing API key`);
-        console.error(`  [ERROR] Check SUPERMODEL_API_KEY environment variable`);
+        logger.error(`  Unauthorized: Invalid or missing API key`);
+        logger.error(`  Check SUPERMODEL_API_KEY environment variable`);
         break;
       case 403:
-        console.error(`  [ERROR] Forbidden: API key valid but lacks permission`);
+        logger.error(`  Forbidden: API key valid but lacks permission`);
         break;
       case 404:
-        console.error(`  [ERROR] Not Found: API endpoint does not exist`);
+        logger.error(`  Not Found: API endpoint does not exist`);
         break;
       case 429:
-        console.error(`  [ERROR] Rate Limited: Too many requests`);
+        logger.error(`  Rate Limited: Too many requests`);
         break;
       case 500:
       case 502:
       case 503:
       case 504:
-        console.error(`  [ERROR] Server Error: Supermodel API is experiencing issues`);
+        logger.error(`  Server Error: Supermodel API is experiencing issues`);
         break;
     }
 
     // Try to read and log the full error response body
     try {
       const responseText = await error.response.text();
-      console.error(`  Response body: ${responseText}`);
+      logger.error(`  Response body: ${responseText}`);
     } catch (e) {
-      console.error(`  [WARNING] Could not read response body: ${e}`);
+      logger.warn(`  Could not read response body: ${e}`);
     }
   } else if (error.request) {
-    console.error(`  [ERROR] No response received from server`);
-    console.error(`  [ERROR] Possible network issue or timeout`);
+    logger.error(`  No response received from server`);
+    logger.error(`  Possible network issue or timeout`);
   } else {
-    console.error(`  [ERROR] Request setup failed`);
+    logger.error(`  Request setup failed`);
   }
 
   if (error.stack) {
-    console.error(`  Stack trace: ${error.stack}`);
+    logger.error(`  Stack trace: ${error.stack}`);
   }
 }
 
@@ -709,12 +710,12 @@ async function logErrorResponse(error: any): Promise<void> {
 async function fetchFromApi(client: ClientContext, file: string, idempotencyKey: string): Promise<any> {
   const startTime = Date.now();
 
-  console.error('[DEBUG] Reading file:', file);
+  logger.debug('Reading file:', file);
   const fileBuffer = await readFile(file);
   const fileBlob = new Blob([fileBuffer], { type: 'application/zip' });
   const fileSize = fileBuffer.length;
 
-  console.error('[DEBUG] File size:', formatBytes(fileSize));
+  logger.debug('File size:', formatBytes(fileSize));
 
   // Get the base URL from environment or use default
   const baseUrl = process.env.SUPERMODEL_BASE_URL || 'https://api.supermodeltools.com';
@@ -736,12 +737,12 @@ async function fetchFromApi(client: ClientContext, file: string, idempotencyKey:
     const responseSize = JSON.stringify(response).length;
     logResponse(200, 'OK', responseSize, duration);
 
-    console.error(`[${getTimestamp()}] [API SUCCESS] Request completed successfully`);
+    logger.debug(`[${getTimestamp()}] [API SUCCESS] Request completed successfully`);
 
     return response;
   } catch (error: any) {
     const duration = Date.now() - startTime;
-    console.error(`[${getTimestamp()}] [API FAILURE] Request failed after ${duration}ms`);
+    logger.error(`[${getTimestamp()}] [API FAILURE] Request failed after ${duration}ms`);
 
     // Log detailed error information
     await logErrorResponse(error);
@@ -773,7 +774,7 @@ async function handleLegacyMode(
     return asTextContentResult(await maybeFilter(jq_filter, response));
   } catch (error: any) {
     if (isJqError(error)) {
-      console.error('[ERROR] jq filter error:', error.message);
+      logger.error('jq filter error:', error.message);
       return asErrorResult(`Invalid jq filter syntax. Check your filter and try again.`);
     }
 

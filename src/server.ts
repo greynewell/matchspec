@@ -7,6 +7,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { cleanupOldZips } from './utils/zip-repository';
 import { Agent } from 'undici';
 import { DEFAULT_API_TIMEOUT_MS, CONNECTION_TIMEOUT_MS, ZIP_CLEANUP_AGE_MS } from './constants';
+import * as logger from './utils/logger';
 
 // Configure HTTP timeout for API requests (default from constants)
 // Some complex repos can take 10+ minutes to process
@@ -86,9 +87,9 @@ Example:
       fetchApi: fetchWithTimeout,
     });
 
-    console.error('[DEBUG] Server configuration:');
-    console.error('[DEBUG] Base URL:', config.basePath);
-    console.error('[DEBUG] API Key set:', !!process.env.SUPERMODEL_API_KEY);
+    logger.debug('Server configuration:');
+    logger.debug('Base URL:', config.basePath);
+    logger.debug('API Key set:', !!process.env.SUPERMODEL_API_KEY);
 
     this.client = {
       graphs: new DefaultApi(config),
@@ -121,7 +122,7 @@ Example:
 
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('Supermodel MCP Server running on stdio');
+    logger.info('Supermodel MCP Server running on stdio');
   }
 }
 

@@ -10,6 +10,7 @@ import archiver from 'archiver';
 import ignore, { Ignore } from 'ignore';
 import { randomBytes } from 'crypto';
 import { MAX_ZIP_SIZE_BYTES, ZIP_CLEANUP_AGE_MS } from '../constants';
+import * as logger from './logger';
 
 /**
  * Standard exclusions for security and size optimization
@@ -119,23 +120,23 @@ export async function zipRepository(
     const stats = await fs.stat(directoryPath);
     if (!stats.isDirectory()) {
       const errorMsg = `Path is not a directory: ${directoryPath}`;
-      console.error('[ERROR]', errorMsg);
+      logger.error(errorMsg);
       throw new Error(errorMsg);
     }
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       const errorMsg = `Directory does not exist: ${directoryPath}`;
-      console.error('[ERROR]', errorMsg);
+      logger.error(errorMsg);
       throw new Error(errorMsg);
     }
     if (error.code === 'EACCES') {
       const errorMsg = `Permission denied accessing directory: ${directoryPath}`;
-      console.error('[ERROR]', errorMsg);
+      logger.error(errorMsg);
       throw new Error(errorMsg);
     }
     // Re-throw unknown errors with logging
-    console.error('[ERROR] Failed to validate directory:', directoryPath);
-    console.error('[ERROR] Error:', error.message);
+    logger.error('Failed to validate directory:', directoryPath);
+    logger.error('Error:', error.message);
     throw error;
   }
 
@@ -143,9 +144,9 @@ export async function zipRepository(
   const ignoreFilter = await buildIgnoreFilter(directoryPath, options.additionalExclusions);
 
   // Estimate directory size before starting ZIP creation
-  console.error('[DEBUG] Estimating directory size...');
+  logger.debug('Estimating directory size...');
   const estimatedSize = await estimateDirectorySize(directoryPath, ignoreFilter);
-  console.error('[DEBUG] Estimated size:', formatBytes(estimatedSize));
+  logger.debug('Estimated size:', formatBytes(estimatedSize));
 
   // Check if estimated size exceeds limit
   if (estimatedSize > maxSizeBytes) {
@@ -160,8 +161,8 @@ export async function zipRepository(
   const zipFileName = `supermodel-${randomBytes(8).toString('hex')}.zip`;
   const zipPath = join(tempDir, zipFileName);
 
-  console.error('[DEBUG] Creating ZIP:', zipPath);
-  console.error('[DEBUG] Source directory:', directoryPath);
+  logger.debug('Creating ZIP:', zipPath);
+  logger.debug('Source directory:', directoryPath);
 
   // Create ZIP archive
   let fileCount = 0;
@@ -176,15 +177,15 @@ export async function zipRepository(
   let archiveError: Error | null = null;
 
   archive.on('error', (err) => {
-    console.error('[ERROR] Archive error:', err.message);
+    logger.error('Archive error:', err.message);
     archiveError = err;
   });
 
   archive.on('warning', (err) => {
     if (err.code === 'ENOENT') {
-      console.error('[WARN] File not found (skipping):', err.message);
+      logger.warn('File not found (skipping):', err.message);
     } else {
-      console.error('[WARN] Archive warning:', err.message);
+      logger.warn('Archive warning:', err.message);
     }
   });
 
@@ -199,7 +200,7 @@ export async function zipRepository(
         `ZIP size exceeds limit (${formatBytes(maxSizeBytes)}). ` +
         `Current size: ${formatBytes(totalSize)}. ` +
         `Consider excluding more directories or analyzing a subdirectory.`;
-      console.error('[ERROR]', errorMsg);
+      logger.error(errorMsg);
       archive.abort();
       archiveError = new Error(errorMsg);
     }
@@ -224,14 +225,14 @@ export async function zipRepository(
       }
     });
     output.on('error', (err) => {
-      console.error('[ERROR] Output stream error:', err.message);
+      logger.error('Output stream error:', err.message);
       reject(err);
     });
   });
 
   // Check for errors during archiving
   if (archiveError) {
-    console.error('[ERROR] Archiving failed, cleaning up partial ZIP');
+    logger.error('Archiving failed, cleaning up partial ZIP');
     // Clean up partial ZIP
     await fs.unlink(zipPath).catch(() => {});
     throw archiveError;
@@ -241,18 +242,18 @@ export async function zipRepository(
   const zipStats = await fs.stat(zipPath);
   const zipSizeBytes = zipStats.size;
 
-  console.error('[DEBUG] ZIP created successfully');
-  console.error('[DEBUG] Files included:', fileCount);
-  console.error('[DEBUG] ZIP size:', formatBytes(zipSizeBytes));
+  logger.debug('ZIP created successfully');
+  logger.debug('Files included:', fileCount);
+  logger.debug('ZIP size:', formatBytes(zipSizeBytes));
 
   // Create cleanup function
   const cleanup = async () => {
     try {
       await fs.unlink(zipPath);
-      console.error('[DEBUG] Cleaned up ZIP:', zipPath);
+      logger.debug('Cleaned up ZIP:', zipPath);
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.error('[WARN] Failed to cleanup ZIP:', error.message);
+        logger.warn('Failed to cleanup ZIP:', error.message);
       }
     }
   };
@@ -282,7 +283,7 @@ async function estimateDirectorySize(
       entries = await fs.readdir(currentDir);
     } catch (error: any) {
       if (error.code === 'EACCES') {
-        console.error('[WARN] Permission denied:', currentDir);
+        logger.warn('Permission denied:', currentDir);
         return;
       }
       throw error;
@@ -308,7 +309,7 @@ async function estimateDirectorySize(
           // File disappeared, skip
           continue;
         }
-        console.error('[WARN] Failed to stat:', fullPath, error.message);
+        logger.warn('Failed to stat:', fullPath, error.message);
         continue;
       }
 
@@ -398,11 +399,11 @@ async function buildIgnoreFilter(
         ig.add(scopedPatterns);
 
         const location = relativeDir ? `in ${relativeDir}/` : 'in root';
-        console.error(`[DEBUG] Loaded .gitignore ${location} with ${patterns.length} patterns`);
+        logger.debug(`Loaded .gitignore ${location} with ${patterns.length} patterns`);
       }
     } catch (error: any) {
       if (error.code !== 'ENOENT') {
-        console.error('[WARN] Failed to read .gitignore at', gitignorePath, ':', error.message);
+        logger.warn('Failed to read .gitignore at', gitignorePath, ':', error.message);
       }
     }
   }
@@ -442,7 +443,7 @@ async function findGitignoreFiles(rootDir: string): Promise<string[]> {
       entries = await fs.readdir(dir);
     } catch (error: any) {
       if (error.code === 'EACCES') {
-        console.error('[WARN] Permission denied:', dir);
+        logger.warn('Permission denied:', dir);
         return;
       }
       return;
@@ -502,11 +503,11 @@ async function addFilesRecursively(
     entries = await fs.readdir(currentDir);
   } catch (error: any) {
     if (error.code === 'EACCES') {
-      console.error('[WARN] Permission denied:', currentDir);
+      logger.warn('Permission denied:', currentDir);
       return;
     }
-    console.error('[ERROR] Failed to read directory:', currentDir);
-    console.error('[ERROR] Error:', error.message);
+    logger.error('Failed to read directory:', currentDir);
+    logger.error('Error:', error.message);
     throw error;
   }
 
@@ -536,7 +537,7 @@ async function addFilesRecursively(
 
     // Skip symlinks to prevent following links outside the repository
     if (stats.isSymbolicLink()) {
-      console.error('[WARN] Skipping symlink:', fullPath);
+      logger.warn('Skipping symlink:', fullPath);
       continue;
     }
 
@@ -554,7 +555,7 @@ async function addFilesRecursively(
       try {
         archive.file(fullPath, { name: normalizedRelativePath });
       } catch (error: any) {
-        console.error('[WARN] Failed to add file:', fullPath, error.message);
+        logger.warn('Failed to add file:', fullPath, error.message);
       }
     }
     // Skip other special files (sockets, FIFOs, etc.)
@@ -602,15 +603,15 @@ export async function cleanupOldZips(maxAgeMs: number = ZIP_CLEANUP_AGE_MS): Pro
       } catch (error: any) {
         // File might have been deleted already, ignore
         if (error.code !== 'ENOENT') {
-          console.error('[WARN] Failed to cleanup:', fullPath, error.message);
+          logger.warn('Failed to cleanup:', fullPath, error.message);
         }
       }
     }
 
     if (removedCount > 0) {
-      console.error('[DEBUG] Cleaned up', removedCount, 'old ZIP files');
+      logger.debug('Cleaned up', removedCount, 'old ZIP files');
     }
   } catch (error: any) {
-    console.error('[WARN] Failed to cleanup temp directory:', error.message);
+    logger.warn('Failed to cleanup temp directory:', error.message);
   }
 }
