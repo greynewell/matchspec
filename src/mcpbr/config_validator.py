@@ -13,7 +13,7 @@ from .config import VALID_BENCHMARKS, VALID_HARNESSES, VALID_PROVIDERS, HarnessC
 
 
 @dataclass
-class ValidationError:
+class ConfigValidationError:
     """A validation error with context and suggestions."""
 
     field: str
@@ -27,8 +27,8 @@ class ValidationResult:
     """Result of configuration validation."""
 
     valid: bool
-    errors: list[ValidationError]
-    warnings: list[ValidationError]
+    errors: list[ConfigValidationError]
+    warnings: list[ConfigValidationError]
 
     @property
     def has_errors(self) -> bool:
@@ -46,8 +46,8 @@ class ConfigValidator:
 
     def __init__(self) -> None:
         """Initialize the validator."""
-        self.errors: list[ValidationError] = []
-        self.warnings: list[ValidationError] = []
+        self.errors: list[ConfigValidationError] = []
+        self.warnings: list[ConfigValidationError] = []
 
     def validate_file(self, config_path: str | Path) -> ValidationResult:
         """Validate a configuration file.
@@ -66,7 +66,7 @@ class ConfigValidator:
         # Check file exists
         if not path.exists():
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="file",
                     error=f"Configuration file not found: {path}",
                     suggestion="Check the file path and ensure the file exists.",
@@ -77,7 +77,7 @@ class ConfigValidator:
         # Check file extension
         if path.suffix not in [".yaml", ".yml", ".toml"]:
             self.warnings.append(
-                ValidationError(
+                ConfigValidationError(
                     field="file",
                     error=f"Unexpected file extension: {path.suffix}",
                     suggestion="Configuration files should use .yaml, .yml, or .toml extension.",
@@ -98,7 +98,7 @@ class ConfigValidator:
                 error_msg = f"YAML syntax error at line {line_num}: {e.problem}"
 
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="syntax",
                     error=error_msg,
                     line_number=line_num,
@@ -108,7 +108,7 @@ class ConfigValidator:
             return ValidationResult(valid=False, errors=self.errors, warnings=self.warnings)
         except Exception as e:
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="parsing",
                     error=f"Failed to parse configuration file: {e}",
                     suggestion="Ensure the file is valid YAML or TOML format.",
@@ -166,7 +166,7 @@ class ConfigValidator:
         # Check for mcp_server section
         if "mcp_server" not in config:
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="mcp_server",
                     error="Missing required field: mcp_server",
                     suggestion="Add an 'mcp_server' section with 'command' and 'args' fields.",
@@ -179,7 +179,7 @@ class ConfigValidator:
         provider = config.get("provider", "anthropic")
         if provider not in VALID_PROVIDERS:
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="provider",
                     error=f"Invalid provider: '{provider}'",
                     suggestion=f"Valid providers: {', '.join(VALID_PROVIDERS)}",
@@ -190,7 +190,7 @@ class ConfigValidator:
         harness = config.get("agent_harness", "claude-code")
         if harness not in VALID_HARNESSES:
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="agent_harness",
                     error=f"Invalid agent_harness: '{harness}'",
                     suggestion=f"Valid harnesses: {', '.join(VALID_HARNESSES)}",
@@ -201,7 +201,7 @@ class ConfigValidator:
         benchmark = config.get("benchmark", "swe-bench")
         if benchmark not in VALID_BENCHMARKS:
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="benchmark",
                     error=f"Invalid benchmark: '{benchmark}'",
                     suggestion=f"Valid benchmarks: {', '.join(VALID_BENCHMARKS)}",
@@ -212,7 +212,7 @@ class ConfigValidator:
         model = config.get("model")
         if model is not None and (not isinstance(model, str) or not model.strip()):
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="model",
                     error="Model must be a non-empty string",
                     suggestion="Use a valid Anthropic model ID like 'claude-sonnet-4-5-20250514' or 'sonnet'",
@@ -249,7 +249,7 @@ class ConfigValidator:
         if agent_prompt and isinstance(agent_prompt, str):
             if "{problem_statement}" not in agent_prompt:
                 self.warnings.append(
-                    ValidationError(
+                    ConfigValidationError(
                         field="agent_prompt",
                         error="agent_prompt doesn't contain {problem_statement} placeholder",
                         suggestion="Include {problem_statement} placeholder to inject the task description",
@@ -264,7 +264,7 @@ class ConfigValidator:
         """
         if not isinstance(mcp_server, dict):
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="mcp_server",
                     error="mcp_server must be a dictionary/object",
                     suggestion="Use 'mcp_server:' followed by indented fields like 'command:' and 'args:'",
@@ -275,7 +275,7 @@ class ConfigValidator:
         # Check required command field
         if "command" not in mcp_server:
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="mcp_server.command",
                     error="Missing required field: command",
                     suggestion="Add 'command' field (e.g., 'npx', 'python', 'uvx')",
@@ -283,7 +283,7 @@ class ConfigValidator:
             )
         elif not isinstance(mcp_server["command"], str) or not mcp_server["command"].strip():
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="mcp_server.command",
                     error="command must be a non-empty string",
                     suggestion="Provide the executable command like 'npx' or 'python'",
@@ -294,7 +294,7 @@ class ConfigValidator:
         args = mcp_server.get("args", [])
         if not isinstance(args, list):
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="mcp_server.args",
                     error="args must be a list/array",
                     suggestion="Use YAML list syntax with '-' prefix for each argument",
@@ -305,7 +305,7 @@ class ConfigValidator:
             has_workdir = any("{workdir}" in str(arg) for arg in args)
             if not has_workdir:
                 self.warnings.append(
-                    ValidationError(
+                    ConfigValidationError(
                         field="mcp_server.args",
                         error="args doesn't contain {workdir} placeholder",
                         suggestion="Include {workdir} placeholder to pass the task working directory to your MCP server",
@@ -317,7 +317,7 @@ class ConfigValidator:
         if env is not None:
             if not isinstance(env, dict):
                 self.errors.append(
-                    ValidationError(
+                    ConfigValidationError(
                         field="mcp_server.env",
                         error="env must be a dictionary/object",
                         suggestion="Use key-value pairs for environment variables",
@@ -332,7 +332,7 @@ class ConfigValidator:
                         for var in var_refs:
                             if var not in os.environ:
                                 self.warnings.append(
-                                    ValidationError(
+                                    ConfigValidationError(
                                         field=f"mcp_server.env.{key}",
                                         error=f"Environment variable ${{{var}}} is not set",
                                         suggestion=f"Set {var} environment variable before running",
@@ -343,7 +343,7 @@ class ConfigValidator:
         name = mcp_server.get("name")
         if name is not None and (not isinstance(name, str) or not name.strip()):
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field="mcp_server.name",
                     error="name must be a non-empty string if provided",
                     suggestion="Provide a descriptive name for the MCP server",
@@ -376,7 +376,7 @@ class ConfigValidator:
         if value is None:
             if required and not allow_null:
                 self.errors.append(
-                    ValidationError(
+                    ConfigValidationError(
                         field=field,
                         error=f"Missing required field: {field}",
                         suggestion=suggestion or f"Add '{field}' field with a numeric value",
@@ -386,7 +386,7 @@ class ConfigValidator:
 
         if not isinstance(value, (int, float)):
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field=field,
                     error=f"{field} must be a number, got {type(value).__name__}",
                     suggestion=suggestion or f"Use a numeric value for {field}",
@@ -396,7 +396,7 @@ class ConfigValidator:
 
         if min_value is not None and value < min_value:
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field=field,
                     error=f"{field} must be at least {min_value}, got {value}",
                     suggestion=suggestion or f"Set {field} to {min_value} or higher",
@@ -405,7 +405,7 @@ class ConfigValidator:
 
         if max_value is not None and value > max_value:
             self.errors.append(
-                ValidationError(
+                ConfigValidationError(
                     field=field,
                     error=f"{field} must be at most {max_value}, got {value}",
                     suggestion=suggestion or f"Set {field} to {max_value} or lower",
@@ -418,7 +418,7 @@ class ConfigValidator:
 
         if not api_key:
             self.warnings.append(
-                ValidationError(
+                ConfigValidationError(
                     field="environment",
                     error="ANTHROPIC_API_KEY environment variable is not set",
                     suggestion="Set ANTHROPIC_API_KEY before running evaluation",
@@ -429,7 +429,7 @@ class ConfigValidator:
         # Check basic format (Anthropic keys start with 'sk-ant-')
         if not api_key.startswith("sk-ant-"):
             self.warnings.append(
-                ValidationError(
+                ConfigValidationError(
                     field="environment",
                     error="ANTHROPIC_API_KEY doesn't match expected format",
                     suggestion="Anthropic API keys should start with 'sk-ant-'. Verify your API key.",
@@ -437,7 +437,7 @@ class ConfigValidator:
             )
         elif len(api_key) < 20:
             self.warnings.append(
-                ValidationError(
+                ConfigValidationError(
                     field="environment",
                     error="ANTHROPIC_API_KEY seems too short",
                     suggestion="Anthropic API keys are typically longer. Verify your API key.",
@@ -461,7 +461,7 @@ class ConfigValidator:
                 suggestion = self._get_pydantic_error_suggestion(error)
 
                 self.errors.append(
-                    ValidationError(
+                    ConfigValidationError(
                         field=field_path,
                         error=error_msg,
                         suggestion=suggestion,

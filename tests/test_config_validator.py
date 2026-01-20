@@ -4,9 +4,7 @@ import os
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from mcpbr.config_validator import ConfigValidator, validate_config
+from mcpbr.config_validator import validate_config
 
 
 class TestConfigValidator:
