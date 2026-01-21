@@ -1,11 +1,10 @@
 """Command-line interface for mcpbr."""
 
 import asyncio
+import csv
+import json
 import sys
 from pathlib import Path
-
-import json
-import csv
 
 import click
 from rich.console import Console
@@ -1581,6 +1580,7 @@ def smoke_test(config_path: Path | None) -> None:
     # Exit with appropriate code
     sys.exit(0 if success else 1)
 
+
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument(
     "input_path",
@@ -1603,6 +1603,13 @@ def smoke_test(config_path: Path | None) -> None:
     help="Output file path",
 )
 def export(input_path: Path, output_format: str, output_path: Path) -> None:
+    """Export evaluation results to different formats.
+
+    Args:
+        input_path: Path to the input JSON file containing results.
+        output_format: Export format (currently only 'csv' is supported).
+        output_path: Path to write the output file.
+    """
     if output_format != "csv":
         console.print(f"[red]Unsupported format: {output_format}[/red]")
         sys.exit(1)
@@ -1624,14 +1631,16 @@ def export(input_path: Path, output_format: str, output_path: Path) -> None:
         console.print("[yellow]No rows to export[/yellow]")
         return
 
+    fieldnames = sorted({key for row in rows for key in row.keys()})
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with output_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=sorted(rows[0].keys()))
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
     console.print(f"[green]Exported {len(rows)} rows to {output_path}[/green]")
+
 
 if __name__ == "__main__":
     main()
