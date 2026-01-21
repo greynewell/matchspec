@@ -33,8 +33,8 @@ def save_task_result_incremental(
         "baseline": task_result.baseline,
     }
 
-    # On first write, include metadata
-    is_new_file = not output_path.exists()
+    # Ensure parent directory exists for incremental writes
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Open file in append mode with exclusive lock
     with open(output_path, "a") as f:
@@ -42,6 +42,8 @@ def save_task_result_incremental(
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
 
         try:
+            # Determine new/empty file under lock to avoid races
+            is_new_file = f.tell() == 0
             # Write metadata header if this is a new file
             if is_new_file and metadata:
                 header = {"type": "metadata", "data": metadata}
