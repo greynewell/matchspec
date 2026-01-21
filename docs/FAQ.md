@@ -695,7 +695,7 @@ mcpbr cleanup
 mcpbr cleanup -f
 ```
 
-See [Orphaned Containers](troubleshooting.md#orphaned-containers).
+See [Orphaned Docker Resources](troubleshooting.md#orphaned-docker-resources).
 
 ### API key is not working - how do I check?
 
@@ -928,7 +928,7 @@ mcpbr run -c config.yaml \
   --slack-webhook https://hooks.slack.com/...
 ```
 
-See [JUnit XML Output](README.md#junit-xml-output) and [Regression Detection](README.md#regression-detection).
+See [CI/CD Integration](best-practices.md#cicd-integration-patterns) for more details.
 
 ### How do I compare two MCP servers?
 
@@ -975,7 +975,7 @@ mcpbr run -c config.yaml \
 
 This exits with code 1 if regression rate exceeds 10%, perfect for CI/CD.
 
-See [Regression Detection](README.md#regression-detection).
+See [Regression Detection](best-practices.md#regression-testing) for more details.
 
 ### Can I customize the task selection?
 
@@ -1033,7 +1033,7 @@ See [Getting Help](troubleshooting.md#getting-help).
 
 ### Where can I find examples?
 
-- **README**: [Quick examples](README.md#example-run)
+- **Examples**: Check the `examples/` directory for sample configurations
 - **Templates**: [Template guide](templates.md#examples)
 - **Documentation**: Each guide includes examples
 - **Tests**: Check `tests/` directory for code examples
