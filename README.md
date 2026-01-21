@@ -368,6 +368,7 @@ Run SWE-bench evaluation with the configured MCP server.
 | `--no-prebuilt` | | Disable pre-built SWE-bench images (build from scratch) |
 | `--output PATH` | `-o` | Path to save JSON results |
 | `--report PATH` | `-r` | Path to save Markdown report |
+| `--output-junit PATH` | | Path to save JUnit XML report (for CI/CD integration) |
 | `--verbose` | `-v` | Verbose output (`-v` summary, `-vv` detailed) |
 | `--log-file PATH` | `-l` | Path to write raw JSON log output (single file) |
 | `--log-dir PATH` | | Directory to write per-instance JSON log files |
@@ -408,6 +409,9 @@ mcpbr run -c config.yaml -n 50
 
 # Save results and report
 mcpbr run -c config.yaml -o results.json -r report.md
+
+# Save JUnit XML for CI/CD
+mcpbr run -c config.yaml --output-junit junit.xml
 
 # Run specific tasks
 mcpbr run -c config.yaml -t astropy__astropy-12907 -t django__django-11099
@@ -678,6 +682,96 @@ Each log file contains the full stream of events from the agent CLI:
 
 This is useful for debugging failed runs or analyzing agent behavior in detail.
 
+### JUnit XML Output (`--output-junit`)
+
+The harness can generate JUnit XML reports for integration with CI/CD systems like GitHub Actions, GitLab CI, and Jenkins. Each task is represented as a test case, with resolved/unresolved tasks mapped to pass/fail states.
+
+```bash
+mcpbr run -c config.yaml --output-junit junit.xml
+```
+
+The JUnit XML report includes:
+
+- **Test Suites**: Separate suites for MCP and baseline evaluations
+- **Test Cases**: Each task is a test case with timing information
+- **Failures**: Unresolved tasks with detailed error messages
+- **Properties**: Metadata about model, provider, benchmark configuration
+- **System Output**: Token usage, tool calls, and test results per task
+
+#### CI/CD Integration Examples
+
+**GitHub Actions:**
+
+```yaml
+name: MCP Benchmark
+
+on: [push, pull_request]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install mcpbr
+        run: pip install mcpbr
+
+      - name: Run benchmark
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          mcpbr run -c config.yaml --output-junit junit.xml
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: junit.xml
+```
+
+**GitLab CI:**
+
+```yaml
+benchmark:
+  image: python:3.11
+  services:
+    - docker:dind
+  script:
+    - pip install mcpbr
+    - mcpbr run -c config.yaml --output-junit junit.xml
+  artifacts:
+    reports:
+      junit: junit.xml
+```
+
+**Jenkins:**
+
+```groovy
+pipeline {
+    agent any
+    stages {
+        stage('Benchmark') {
+            steps {
+                sh 'pip install mcpbr'
+                sh 'mcpbr run -c config.yaml --output-junit junit.xml'
+            }
+        }
+    }
+    post {
+        always {
+            junit 'junit.xml'
+        }
+    }
+}
+```
+
+The JUnit XML format enables native test result visualization in your CI/CD dashboard, making it easy to track benchmark performance over time and identify regressions.
+
 ## How It Works
 
 > **[Architecture deep dive](https://greynewell.github.io/mcpbr/architecture/)** - learn how mcpbr works internally.
@@ -857,7 +951,8 @@ We're building the defacto standard for MCP server benchmarking! Our [v1.0 Roadm
 ### Roadmap Highlights
 
 **Phase 1: Foundation** (v0.3.0)
-- CSV, YAML, XML, JUnit output formats
+- ✅ JUnit XML output format for CI/CD integration
+- CSV, YAML, XML output formats
 - Config validation and templates
 - Results persistence and recovery
 - Cost analysis in reports
@@ -890,7 +985,7 @@ We're building the defacto standard for MCP server benchmarking! Our [v1.0 Roadm
 
 We welcome contributions! Check out our **30+ good first issues** perfect for newcomers:
 
-- **Output Formats**: CSV/YAML/XML export, JUnit XML
+- **Output Formats**: CSV/YAML/XML export
 - **Configuration**: Validation, templates, shell completion
 - **Platform**: Homebrew formula, Conda package
 - **Documentation**: Best practices, examples, guides

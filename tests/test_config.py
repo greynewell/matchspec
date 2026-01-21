@@ -130,6 +130,30 @@ class TestHarnessConfig:
             config = HarnessConfig(mcp_server=mcp, cybergym_level=level)
             assert config.cybergym_level == level
 
+    def test_budget_default(self) -> None:
+        """Test that budget defaults to None."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        config = HarnessConfig(mcp_server=mcp)
+        assert config.budget is None
+
+    def test_budget_valid(self) -> None:
+        """Test that budget can be set to valid values."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        config = HarnessConfig(mcp_server=mcp, budget=10.0)
+        assert config.budget == 10.0
+
+    def test_budget_validation_zero(self) -> None:
+        """Test that budget cannot be zero."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        with pytest.raises(ValueError, match="budget must be positive"):
+            HarnessConfig(mcp_server=mcp, budget=0.0)
+
+    def test_budget_validation_negative(self) -> None:
+        """Test that budget cannot be negative."""
+        mcp = MCPServerConfig(command="echo", args=[])
+        with pytest.raises(ValueError, match="budget must be positive"):
+            HarnessConfig(mcp_server=mcp, budget=-5.0)
+
 
 class TestLoadConfig:
     """Tests for load_config function."""

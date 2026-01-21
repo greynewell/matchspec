@@ -121,6 +121,11 @@ class HarnessConfig(BaseModel):
         description="Use pre-built SWE-bench Docker images when available",
     )
 
+    budget: float | None = Field(
+        default=None,
+        description="Maximum budget in USD for the evaluation (halts when reached)",
+    )
+
     @field_validator("provider")
     @classmethod
     def validate_provider(cls, v: str) -> str:
@@ -175,6 +180,13 @@ class HarnessConfig(BaseModel):
     def validate_timeout(cls, v: int) -> int:
         if v < 30:
             raise ValueError("timeout_seconds must be at least 30")
+        return v
+
+    @field_validator("budget")
+    @classmethod
+    def validate_budget(cls, v: float | None) -> float | None:
+        if v is not None and v <= 0:
+            raise ValueError("budget must be positive")
         return v
 
 

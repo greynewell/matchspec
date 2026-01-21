@@ -1,0 +1,52 @@
+# Template metadata
+id: postgres
+name: PostgreSQL Database
+description: Query and manage PostgreSQL databases with SQL execution and schema introspection
+package: "@modelcontextprotocol/server-postgres"
+requires_api_key: false
+env_vars:
+  - POSTGRES_CONNECTION_STRING
+
+# Configuration
+config:
+  mcp_server:
+    # Name to register the MCP server as (appears in tool names)
+    name: postgres
+
+    # Command to start the MCP server
+    command: npx
+
+    # Arguments for the command
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-postgres"
+      - "${POSTGRES_CONNECTION_STRING}"
+
+    # Environment variables
+    # Example: postgresql://user:password@localhost:5432/dbname
+    env:
+      POSTGRES_CONNECTION_STRING: "${POSTGRES_CONNECTION_STRING}"
+
+  # Model provider
+  provider: anthropic
+
+  # Agent harness
+  agent_harness: claude-code
+
+  # Model ID
+  model: sonnet
+
+  # Benchmark to run
+  benchmark: swe-bench
+
+  # Number of tasks to evaluate (null for full dataset)
+  sample_size: 10
+
+  # Timeout per task in seconds
+  timeout_seconds: 300
+
+  # Maximum parallel evaluations
+  max_concurrent: 4
+
+  # Maximum agent iterations per task
+  max_iterations: 10

@@ -1,0 +1,50 @@
+# Template metadata
+id: sqlite
+name: SQLite Database
+description: Query and manage SQLite databases with SQL execution and schema introspection
+package: "@modelcontextprotocol/server-sqlite"
+requires_api_key: false
+env_vars: []
+
+# Configuration
+config:
+  mcp_server:
+    # Name to register the MCP server as (appears in tool names)
+    name: sqlite
+
+    # Command to start the MCP server
+    command: npx
+
+    # Arguments for the command
+    # Use {workdir} to reference task directory for database location
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-sqlite"
+      - "{workdir}/database.db"
+
+    # Environment variables (optional)
+    env: {}
+
+  # Model provider
+  provider: anthropic
+
+  # Agent harness
+  agent_harness: claude-code
+
+  # Model ID
+  model: sonnet
+
+  # Benchmark to run
+  benchmark: swe-bench
+
+  # Number of tasks to evaluate (null for full dataset)
+  sample_size: 10
+
+  # Timeout per task in seconds
+  timeout_seconds: 300
+
+  # Maximum parallel evaluations
+  max_concurrent: 4
+
+  # Maximum agent iterations per task
+  max_iterations: 10

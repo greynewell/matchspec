@@ -8,6 +8,8 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from .pricing import format_cost
+
 if TYPE_CHECKING:
     from .harness import EvaluationResults
 
@@ -45,6 +47,67 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
     console.print(table)
     console.print()
     console.print(f"[bold]Improvement:[/bold] {results.summary['improvement']}")
+
+    # Print cost analysis
+    console.print()
+    console.print("[bold]Cost Analysis[/bold]")
+    console.print()
+
+    cost_table = Table(title="Cost Breakdown")
+    cost_table.add_column("Metric", style="cyan")
+    cost_table.add_column("MCP Agent", style="green")
+    cost_table.add_column("Baseline", style="yellow")
+
+    cost_table.add_row(
+        "Total Cost",
+        format_cost(mcp.get("total_cost")),
+        format_cost(baseline.get("total_cost")),
+    )
+    cost_table.add_row(
+        "Cost per Task",
+        format_cost(mcp.get("cost_per_task")),
+        format_cost(baseline.get("cost_per_task")),
+    )
+    cost_table.add_row(
+        "Cost per Resolved",
+        format_cost(mcp.get("cost_per_resolved")),
+        format_cost(baseline.get("cost_per_resolved")),
+    )
+
+    console.print(cost_table)
+
+    # Print cost comparison
+    cost_comparison = results.summary.get("cost_comparison", {})
+    total_diff = cost_comparison.get("total_difference")
+    cost_per_additional = cost_comparison.get("cost_per_additional_resolution")
+
+    if total_diff is not None:
+        console.print()
+        if total_diff > 0:
+            console.print(
+                f"[bold]MCP Additional Cost:[/bold] {format_cost(total_diff)} "
+                f"({abs(total_diff) / baseline.get('total_cost', 1) * 100:+.1f}%)"
+            )
+        else:
+            console.print(
+                f"[bold]MCP Cost Savings:[/bold] {format_cost(abs(total_diff))} "
+                f"({abs(total_diff) / baseline.get('total_cost', 1) * 100:.1f}%)"
+            )
+
+    if cost_per_additional is not None:
+        console.print(
+            f"[bold]Cost per Additional Resolution:[/bold] {format_cost(cost_per_additional)}"
+        )
+
+    # Check if budget was specified
+    budget = results.metadata["config"].get("budget")
+    if budget is not None:
+        total_spent = mcp.get("total_cost", 0) + baseline.get("total_cost", 0)
+        console.print()
+        console.print(f"[bold]Budget:[/bold] {format_cost(budget)}")
+        console.print(f"[bold]Total Spent:[/bold] {format_cost(total_spent)}")
+        if results.metadata["config"].get("budget_exceeded"):
+            console.print("[yellow]Budget limit reached - evaluation halted early[/yellow]")
 
     console.print()
     console.print("[bold]Per-Task Results[/bold]")
@@ -112,6 +175,34 @@ def save_json_results(results: "EvaluationResults", output_path: Path) -> None:
         json.dump(data, f, indent=2)
 
 
+def save_yaml_results(results: "EvaluationResults", output_path: Path) -> None:
+    """Save evaluation results to a YAML file.
+
+    Args:
+        results: Evaluation results.
+        output_path: Path to save the YAML file.
+    """
+    data = {
+        "metadata": results.metadata,
+        "summary": results.summary,
+        "tasks": [],
+    }
+
+    for task in results.tasks:
+        task_data = {
+            "instance_id": task.instance_id,
+        }
+        if task.mcp:
+            task_data["mcp"] = task.mcp
+        if task.baseline:
+            task_data["baseline"] = task.baseline
+        data["tasks"].append(task_data)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+
 def save_markdown_report(results: "EvaluationResults", output_path: Path) -> None:
     """Save evaluation results as a Markdown report.
 
@@ -142,6 +233,52 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
     lines.append(f"| Resolution Rate | {mcp['rate']:.1%} | {baseline['rate']:.1%} |")
     lines.append("")
     lines.append(f"**Improvement:** {results.summary['improvement']}")
+    lines.append("")
+
+    # Add cost analysis
+    lines.append("## Cost Analysis")
+    lines.append("")
+    lines.append("| Metric | MCP Agent | Baseline |")
+    lines.append("|--------|-----------|----------|")
+    lines.append(
+        f"| Total Cost | {format_cost(mcp.get('total_cost'))} | {format_cost(baseline.get('total_cost'))} |"
+    )
+    lines.append(
+        f"| Cost per Task | {format_cost(mcp.get('cost_per_task'))} | {format_cost(baseline.get('cost_per_task'))} |"
+    )
+    lines.append(
+        f"| Cost per Resolved | {format_cost(mcp.get('cost_per_resolved'))} | {format_cost(baseline.get('cost_per_resolved'))} |"
+    )
+    lines.append("")
+
+    cost_comparison = results.summary.get("cost_comparison", {})
+    total_diff = cost_comparison.get("total_difference")
+    cost_per_additional = cost_comparison.get("cost_per_additional_resolution")
+
+    if total_diff is not None:
+        if total_diff > 0:
+            lines.append(
+                f"**MCP Additional Cost:** {format_cost(total_diff)} "
+                f"({abs(total_diff) / baseline.get('total_cost', 1) * 100:+.1f}%)"
+            )
+        else:
+            lines.append(
+                f"**MCP Cost Savings:** {format_cost(abs(total_diff))} "
+                f"({abs(total_diff) / baseline.get('total_cost', 1) * 100:.1f}%)"
+            )
+
+    if cost_per_additional is not None:
+        lines.append(f"**Cost per Additional Resolution:** {format_cost(cost_per_additional)}")
+
+    budget = results.metadata["config"].get("budget")
+    if budget is not None:
+        total_spent = mcp.get("total_cost", 0) + baseline.get("total_cost", 0)
+        lines.append("")
+        lines.append(f"**Budget:** {format_cost(budget)}")
+        lines.append(f"**Total Spent:** {format_cost(total_spent)}")
+        if results.metadata["config"].get("budget_exceeded"):
+            lines.append("**Note:** Budget limit reached - evaluation halted early")
+
     lines.append("")
 
     lines.append("## MCP Server Configuration")
@@ -212,31 +349,3 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines))
-
-
-def save_yaml_results(results: "EvaluationResults", output_path: Path) -> None:
-    """Save evaluation results to a YAML file.
-
-    Args:
-        results: Evaluation results.
-        output_path: Path to save the YAML file.
-    """
-    data = {
-        "metadata": results.metadata,
-        "summary": results.summary,
-        "tasks": [],
-    }
-
-    for task in results.tasks:
-        task_data = {
-            "instance_id": task.instance_id,
-        }
-        if task.mcp:
-            task_data["mcp"] = task.mcp
-        if task.baseline:
-            task_data["baseline"] = task.baseline
-        data["tasks"].append(task_data)
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)

@@ -15,6 +15,7 @@ from .docker_env import DockerEnvironmentManager, TaskEnvironment
 from .evaluation import EvaluationResult
 from .harnesses import AgentHarness, AgentResult, create_harness
 from .log_formatter import InstanceLogWriter
+from .pricing import calculate_cost
 
 console = Console()
 
@@ -63,9 +64,18 @@ class EvaluationResults:
 
 
 def agent_result_to_dict(
-    result: AgentResult, eval_result: EvaluationResult | None
+    result: AgentResult, eval_result: EvaluationResult | None, model_id: str
 ) -> dict[str, Any]:
-    """Convert agent and evaluation results to dictionary."""
+    """Convert agent and evaluation results to dictionary.
+
+    Args:
+        result: Agent result with token usage.
+        eval_result: Evaluation result (if patch was generated).
+        model_id: Model ID for cost calculation.
+
+    Returns:
+        Dictionary with agent results including cost information.
+    """
     data: dict[str, Any] = {
         "patch_generated": bool(result.patch),
         "tokens": {
@@ -75,6 +85,15 @@ def agent_result_to_dict(
         "iterations": result.iterations,
         "tool_calls": result.tool_calls,
     }
+
+    # Calculate cost
+    cost = calculate_cost(
+        model_id=model_id,
+        input_tokens=result.tokens_input,
+        output_tokens=result.tokens_output,
+    )
+    if cost is not None:
+        data["cost"] = cost
 
     if result.tool_usage:
         data["tool_usage"] = result.tool_usage
@@ -281,9 +300,10 @@ async def _run_mcp_evaluation(
         else:
             eval_result = None
 
-        return agent_result_to_dict(agent_result, eval_result)
+        return agent_result_to_dict(agent_result, eval_result, config.model)
 
     except asyncio.TimeoutError:
+        cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
             "patch_applied": False,
@@ -291,8 +311,10 @@ async def _run_mcp_evaluation(
             "tokens": {"input": 0, "output": 0},
             "iterations": 0,
             "tool_calls": 0,
+            "cost": cost if cost is not None else 0.0,
         }
     except Exception as e:
+        cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
             "patch_applied": False,
@@ -300,6 +322,7 @@ async def _run_mcp_evaluation(
             "tokens": {"input": 0, "output": 0},
             "iterations": 0,
             "tool_calls": 0,
+            "cost": cost if cost is not None else 0.0,
         }
     finally:
         if env:
@@ -344,9 +367,10 @@ async def _run_baseline_evaluation(
         else:
             eval_result = None
 
-        return agent_result_to_dict(agent_result, eval_result)
+        return agent_result_to_dict(agent_result, eval_result, config.model)
 
     except asyncio.TimeoutError:
+        cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
             "patch_applied": False,
@@ -354,8 +378,10 @@ async def _run_baseline_evaluation(
             "tokens": {"input": 0, "output": 0},
             "iterations": 0,
             "tool_calls": 0,
+            "cost": cost if cost is not None else 0.0,
         }
     except Exception as e:
+        cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
             "patch_applied": False,
@@ -363,6 +389,7 @@ async def _run_baseline_evaluation(
             "tokens": {"input": 0, "output": 0},
             "iterations": 0,
             "tool_calls": 0,
+            "cost": cost if cost is not None else 0.0,
         }
     finally:
         if env:
@@ -425,10 +452,19 @@ async def run_evaluation(
 
     results: list[TaskResult] = []
     semaphore = asyncio.Semaphore(config.max_concurrent)
+    budget_exceeded = False
+    current_cost = 0.0
 
-    async def run_with_semaphore(task: dict[str, Any]) -> TaskResult:
+    async def run_with_semaphore(task: dict[str, Any]) -> TaskResult | None:
+        nonlocal current_cost, budget_exceeded
+
+        # Check budget before running task
+        if config.budget and current_cost >= config.budget:
+            budget_exceeded = True
+            return None
+
         async with semaphore:
-            return await run_single_task(
+            result = await run_single_task(
                 task,
                 config,
                 docker_manager,
@@ -441,6 +477,14 @@ async def run_evaluation(
                 log_dir,
             )
 
+            # Update current cost
+            if result.mcp and result.mcp.get("cost"):
+                current_cost += result.mcp.get("cost", 0.0)
+            if result.baseline and result.baseline.get("cost"):
+                current_cost += result.baseline.get("cost", 0.0)
+
+            return result
+
     progress_console = Console(force_terminal=True)
 
     async_tasks = []
@@ -451,7 +495,14 @@ async def run_evaluation(
         if verbose:
             for coro in asyncio.as_completed(async_tasks):
                 result = await coro
-                results.append(result)
+                if result is not None:
+                    results.append(result)
+                if budget_exceeded:
+                    console.print(
+                        f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
+                        f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
+                    )
+                    break
         else:
             with Progress(
                 SpinnerColumn(),
@@ -464,8 +515,16 @@ async def run_evaluation(
 
                 for coro in asyncio.as_completed(async_tasks):
                     result = await coro
-                    results.append(result)
-                    progress.update(main_task, advance=1)
+                    if result is not None:
+                        results.append(result)
+                        progress.update(main_task, advance=1)
+                    if budget_exceeded:
+                        progress.stop()
+                        console.print(
+                            f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
+                            f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
+                        )
+                        break
     finally:
         await docker_manager.cleanup_all()
 
@@ -473,16 +532,22 @@ async def run_evaluation(
     baseline_resolved = 0
     mcp_total = 0
     baseline_total = 0
+    mcp_cost = 0.0
+    baseline_cost = 0.0
 
     for r in results:
         if r.mcp:
             mcp_total += 1
             if r.mcp.get("resolved"):
                 mcp_resolved += 1
+            if r.mcp.get("cost"):
+                mcp_cost += r.mcp.get("cost", 0.0)
         if r.baseline:
             baseline_total += 1
             if r.baseline.get("resolved"):
                 baseline_resolved += 1
+            if r.baseline.get("cost"):
+                baseline_cost += r.baseline.get("cost", 0.0)
 
     mcp_rate = mcp_resolved / mcp_total if mcp_total > 0 else 0
     baseline_rate = baseline_resolved / baseline_total if baseline_total > 0 else 0
@@ -492,6 +557,16 @@ async def run_evaluation(
         improvement_str = f"{improvement:+.1f}%"
     else:
         improvement_str = "N/A"
+
+    # Calculate cost-effectiveness metrics
+    from .pricing import calculate_cost_effectiveness
+
+    cost_effectiveness = calculate_cost_effectiveness(
+        mcp_cost=mcp_cost,
+        baseline_cost=baseline_cost,
+        mcp_resolved=mcp_resolved,
+        baseline_resolved=baseline_resolved,
+    )
 
     return EvaluationResults(
         metadata={
@@ -506,6 +581,8 @@ async def run_evaluation(
                 "timeout_seconds": config.timeout_seconds,
                 "max_iterations": config.max_iterations,
                 "cybergym_level": config.cybergym_level if config.benchmark == "cybergym" else None,
+                "budget": config.budget,
+                "budget_exceeded": budget_exceeded,
             },
             "mcp_server": {
                 "command": config.mcp_server.command,
@@ -518,13 +595,25 @@ async def run_evaluation(
                 "resolved": mcp_resolved,
                 "total": mcp_total,
                 "rate": mcp_rate,
+                "total_cost": mcp_cost,
+                "cost_per_task": mcp_cost / mcp_total if mcp_total > 0 else 0.0,
+                "cost_per_resolved": cost_effectiveness["mcp_cost_per_resolved"],
             },
             "baseline": {
                 "resolved": baseline_resolved,
                 "total": baseline_total,
                 "rate": baseline_rate,
+                "total_cost": baseline_cost,
+                "cost_per_task": baseline_cost / baseline_total if baseline_total > 0 else 0.0,
+                "cost_per_resolved": cost_effectiveness["baseline_cost_per_resolved"],
             },
             "improvement": improvement_str,
+            "cost_comparison": {
+                "total_difference": mcp_cost - baseline_cost,
+                "cost_per_additional_resolution": cost_effectiveness[
+                    "cost_per_additional_resolution"
+                ],
+            },
         },
         tasks=results,
     )
