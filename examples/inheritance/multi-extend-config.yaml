@@ -1,0 +1,10 @@
+# Example of extending from multiple configs
+# This demonstrates the multiple inheritance feature
+
+extends:
+  - ./base-config.yaml
+  - ./shared-mcp-settings.yaml
+
+# Override specific settings
+model: "sonnet"
+sample_size: 10

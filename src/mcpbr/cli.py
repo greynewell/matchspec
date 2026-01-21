@@ -1194,5 +1194,219 @@ def annotate(config_path: Path, add_schema: bool) -> None:
         sys.exit(1)
 
 
+
+@main.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cache() -> None:
+    """Cache management commands.
+
+    Manage the benchmark result cache to avoid re-running identical evaluations.
+
+    \b
+    Examples:
+      mcpbr cache stats    # Show cache statistics
+      mcpbr cache clear    # Clear all cached results
+      mcpbr cache prune    # Remove old cache entries
+    """
+    pass
+
+
+@cache.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Cache directory (default: ~/.cache/mcpbr)",
+)
+def stats(cache_dir: Path | None) -> None:
+    """Show cache statistics.
+
+    Displays information about cached results including total entries,
+    disk usage, and oldest/newest cache entries.
+
+    \b
+    Examples:
+      mcpbr cache stats                        # Default cache directory
+      mcpbr cache stats --cache-dir ./cache    # Custom cache directory
+    """
+    from .cache import ResultCache
+
+    result_cache = ResultCache(cache_dir=cache_dir, enabled=True)
+    cache_stats = result_cache.get_stats()
+
+    console.print("[bold]Cache Statistics[/bold]\n")
+    console.print(f"  Cache directory: {cache_stats.cache_dir}")
+    console.print(f"  Total entries:   {cache_stats.total_entries}")
+    console.print(f"  Total size:      {cache_stats.format_size()}")
+
+    if cache_stats.oldest_entry:
+        console.print(
+            f"  Oldest entry:    {cache_stats.oldest_entry.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+    if cache_stats.newest_entry:
+        console.print(
+            f"  Newest entry:    {cache_stats.newest_entry.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+
+    if cache_stats.total_entries == 0:
+        console.print("\n[dim]Cache is empty[/dim]")
+
+
+@cache.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Cache directory (default: ~/.cache/mcpbr)",
+)
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Skip confirmation prompt",
+)
+def clear(cache_dir: Path | None, force: bool) -> None:
+    """Clear all cached results.
+
+    Removes all entries from the cache. This operation cannot be undone.
+
+    \b
+    Examples:
+      mcpbr cache clear           # Clear with confirmation
+      mcpbr cache clear -f        # Clear without confirmation
+    """
+    from .cache import ResultCache
+
+    result_cache = ResultCache(cache_dir=cache_dir, enabled=True)
+    cache_stats = result_cache.get_stats()
+
+    if cache_stats.total_entries == 0:
+        console.print("[yellow]Cache is already empty[/yellow]")
+        return
+
+    console.print(f"[yellow]About to clear {cache_stats.total_entries} cached result(s)[/yellow]")
+    console.print(f"[yellow]Total size: {cache_stats.format_size()}[/yellow]")
+
+    if not force:
+        confirm = click.confirm("Are you sure you want to clear the cache?", default=False)
+        if not confirm:
+            console.print("[dim]Aborted[/dim]")
+            return
+
+    removed = result_cache.clear()
+    console.print(f"[green]Cleared {removed} cached result(s)[/green]")
+
+
+@cache.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Cache directory (default: ~/.cache/mcpbr)",
+)
+@click.option(
+    "--max-age-days",
+    type=int,
+    default=None,
+    help="Remove entries older than this many days",
+)
+@click.option(
+    "--max-size-mb",
+    type=int,
+    default=None,
+    help="Remove oldest entries if cache exceeds this size in MB",
+)
+def prune(cache_dir: Path | None, max_age_days: int | None, max_size_mb: int | None) -> None:
+    """Remove old cache entries based on age or size limits.
+
+    Prunes the cache by removing entries older than a specified age or
+    keeping only the most recent entries within a size limit.
+
+    \b
+    Examples:
+      mcpbr cache prune --max-age-days 30      # Remove entries older than 30 days
+      mcpbr cache prune --max-size-mb 100      # Keep only 100 MB of newest entries
+      mcpbr cache prune --max-age-days 7 --max-size-mb 50  # Combine both limits
+    """
+    from .cache import ResultCache
+
+    if max_age_days is None and max_size_mb is None:
+        console.print(
+            "[red]Error: Must specify at least one of --max-age-days or --max-size-mb[/red]"
+        )
+        sys.exit(1)
+
+    result_cache = ResultCache(cache_dir=cache_dir, enabled=True)
+    cache_stats_before = result_cache.get_stats()
+
+    if cache_stats_before.total_entries == 0:
+        console.print("[yellow]Cache is empty[/yellow]")
+        return
+
+    console.print(
+        f"[dim]Current cache: {cache_stats_before.total_entries} entries, "
+        f"{cache_stats_before.format_size()}[/dim]"
+    )
+
+    removed = result_cache.prune(max_age_days=max_age_days, max_size_mb=max_size_mb)
+
+    if removed > 0:
+        cache_stats_after = result_cache.get_stats()
+        console.print(f"[green]Removed {removed} cached result(s)[/green]")
+        console.print(
+            f"[dim]Remaining: {cache_stats_after.total_entries} entries, "
+            f"{cache_stats_after.format_size()}[/dim]"
+        )
+    else:
+        console.print("[dim]No entries removed[/dim]")
+
+
+@main.command(name="smoke-test", context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--config",
+    "-c",
+    "config_path",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Path to configuration file (default: mcpbr.yaml)",
+)
+def smoke_test(config_path: Path | None) -> None:
+    """Run smoke tests to validate setup before running evaluations.
+
+    Validates configuration, checks Docker availability, tests API connectivity,
+    and verifies MCP server configuration. This is useful for quickly checking
+    that your environment is properly configured before running a full evaluation.
+
+    \b
+    Tests performed:
+      ✓ Configuration validation
+      ✓ Docker daemon connectivity
+      ✓ Anthropic API authentication
+      ✓ MCP server configuration
+
+    \b
+    Examples:
+      mcpbr smoke-test                    # Use mcpbr.yaml in current directory
+      mcpbr smoke-test -c config.yaml     # Use specific config file
+    """
+    from .smoke_test import run_smoke_test
+
+    # Default to mcpbr.yaml if no config provided
+    if config_path is None:
+        config_path = Path("mcpbr.yaml")
+        if not config_path.exists():
+            console.print(
+                "[red]Error: No configuration file specified and mcpbr.yaml not found.[/red]"
+            )
+            console.print("[dim]Run 'mcpbr smoke-test -c <config-file>' or create mcpbr.yaml[/dim]")
+            sys.exit(1)
+
+    # Run smoke tests
+    success = asyncio.run(run_smoke_test(config_path))
+
+    # Exit with appropriate code
+    sys.exit(0 if success else 1)
+
+
+
 if __name__ == "__main__":
     main()

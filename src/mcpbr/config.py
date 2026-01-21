@@ -5,10 +5,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 from rich.console import Console
 
+from .config_inheritance import load_config_with_inheritance
 from .env_expansion import expand_env_vars, load_dotenv_file, validate_config_security
 from .models import DEFAULT_MODEL
 
@@ -128,6 +128,16 @@ class HarnessConfig(BaseModel):
         description="Maximum budget in USD for the evaluation (halts when reached)",
     )
 
+    cache_enabled: bool = Field(
+        default=False,
+        description="Enable result caching to avoid re-running identical evaluations",
+    )
+
+    cache_dir: Path | None = Field(
+        default=None,
+        description="Directory to store cache files (default: ~/.cache/mcpbr)",
+    )
+
     @field_validator("provider")
     @classmethod
     def validate_provider(cls, v: str) -> str:
@@ -197,6 +207,7 @@ def load_config(config_path: str | Path, warn_security: bool = True) -> HarnessC
 
     Automatically loads .env file from current directory if it exists.
     Supports ${VAR} and ${VAR:-default} syntax for environment variables.
+    Supports config inheritance via the 'extends' field.
 
     Args:
         config_path: Path to the YAML configuration file.
@@ -208,6 +219,8 @@ def load_config(config_path: str | Path, warn_security: bool = True) -> HarnessC
     Raises:
         FileNotFoundError: If config file doesn't exist.
         ValueError: If config is invalid or required environment variables are missing.
+        CircularInheritanceError: If circular inheritance is detected.
+        ConfigInheritanceError: If there's an error loading or merging inherited configs.
     """
     path = Path(config_path)
     if not path.exists():
@@ -216,9 +229,8 @@ def load_config(config_path: str | Path, warn_security: bool = True) -> HarnessC
     # Load .env file if it exists in the current directory
     load_dotenv_file()
 
-    # Load raw YAML
-    with open(path) as f:
-        raw_config: dict[str, Any] = yaml.safe_load(f)
+    # Load raw YAML with inheritance support
+    raw_config: dict[str, Any] = load_config_with_inheritance(path)
 
     # Check for security issues before expansion
     if warn_security:

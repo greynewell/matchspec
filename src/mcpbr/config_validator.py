@@ -124,7 +124,8 @@ class ConfigValidator:
             self._validate_api_key()
 
         # Try to create HarnessConfig to trigger Pydantic validation
-        if not self.has_errors:
+        # Skip this if config uses extends, since it won't be complete until merged
+        if not self.has_errors and "extends" not in raw_config:
             self._validate_with_pydantic(raw_config)
 
         return ValidationResult(
@@ -163,16 +164,43 @@ class ConfigValidator:
         Args:
             config: Parsed configuration dictionary.
         """
-        # Check for mcp_server section
-        if "mcp_server" not in config:
-            self.errors.append(
-                ConfigValidationError(
-                    field="mcp_server",
-                    error="Missing required field: mcp_server",
-                    suggestion="Add an 'mcp_server' section with 'command' and 'args' fields.",
+        # Validate extends field if present (optional field)
+        extends = config.get("extends")
+        if extends is not None:
+            if not isinstance(extends, (str, list)):
+                self.errors.append(
+                    ConfigValidationError(
+                        field="extends",
+                        error="'extends' must be a string (single path/URL) or list (multiple paths/URLs)",
+                        suggestion="Use 'extends: ./base.yaml' or 'extends: [./base1.yaml, ./base2.yaml]'",
+                    )
                 )
-            )
+            elif isinstance(extends, list):
+                for i, item in enumerate(extends):
+                    if not isinstance(item, str):
+                        self.errors.append(
+                            ConfigValidationError(
+                                field=f"extends[{i}]",
+                                error=f"extends list items must be strings, got {type(item).__name__}",
+                                suggestion="Each item in extends list should be a path or URL string",
+                            )
+                        )
+
+        # Check for mcp_server section
+        # Note: If using extends, mcp_server might come from base config
+        if "mcp_server" not in config:
+            if "extends" not in config:
+                # No mcp_server and no extends - this is an error
+                self.errors.append(
+                    ConfigValidationError(
+                        field="mcp_server",
+                        error="Missing required field: mcp_server",
+                        suggestion="Add an 'mcp_server' section with 'command' and 'args' fields.",
+                    )
+                )
+            # If extends is present but no mcp_server, that's okay - it might come from the base
         else:
+            # mcp_server is present, validate it
             self._validate_mcp_server(config["mcp_server"])
 
         # Validate provider

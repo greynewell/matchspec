@@ -1,0 +1,19 @@
+# Production configuration
+# Extends the base config with production-specific settings
+
+extends: ./base-config.yaml
+
+# Use the most capable model
+model: "opus"
+
+# Full dataset evaluation
+sample_size: null
+
+# Higher concurrency for production runs
+max_concurrent: 8
+
+# Longer timeout for complex tasks
+timeout_seconds: 600
+
+# Set a budget limit
+budget: 100.0

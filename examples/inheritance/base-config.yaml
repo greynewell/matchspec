@@ -1,0 +1,22 @@
+# Base configuration file
+# This can be extended by other configs to share common settings
+
+mcp_server:
+  name: "filesystem"
+  command: "npx"
+  args:
+    - "-y"
+    - "@modelcontextprotocol/server-filesystem"
+    - "{workdir}"
+  env: {}
+
+# Common settings
+provider: "anthropic"
+agent_harness: "claude-code"
+model: "sonnet"
+
+# Resource limits
+timeout_seconds: 300
+max_concurrent: 4
+max_iterations: 30
+use_prebuilt_images: true

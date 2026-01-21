@@ -1,0 +1,16 @@
+# Development configuration
+# Extends the base config and overrides for local development
+
+extends: ./base-config.yaml
+
+# Override model for faster iteration
+model: "haiku"
+
+# Use smaller sample size for testing
+sample_size: 1
+
+# Lower concurrency for local dev
+max_concurrent: 1
+
+# Shorter timeout for quick feedback
+timeout_seconds: 120

@@ -1,0 +1,8 @@
+# Shared MCP server settings
+# Can be mixed with other configs
+
+mcp_server:
+  env:
+    # Example: shared environment variables for MCP servers
+    LOG_LEVEL: "info"
+    DEBUG: "false"
