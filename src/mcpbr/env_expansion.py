@@ -32,8 +32,9 @@ def load_dotenv_file(dotenv_path: Path | None = None) -> None:
                 value = value.strip()
 
                 # Remove quotes if present
-                if (value.startswith('"') and value.endswith('"')) or \
-                   (value.startswith("'") and value.endswith("'")):
+                if (value.startswith('"') and value.endswith('"')) or (
+                    value.startswith("'") and value.endswith("'")
+                ):
                     value = value[1:-1]
 
                 # Only set if not already in environment
@@ -89,7 +90,7 @@ def _expand_string(text: str, required_vars: set[str]) -> str:
         ValueError: If a required environment variable is missing.
     """
     # Pattern: ${VAR} or ${VAR:-default}
-    pattern = r'\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}'
+    pattern = r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}"
 
     def replace(match: re.Match) -> str:
         var_name = match.group(1)
@@ -153,8 +154,7 @@ def validate_config_security(config_dict: dict[str, Any]) -> list[str]:
             # Check for tokens in key name
             if "token" in key_lower and len(value) > 10:
                 warnings.append(
-                    f"Possible token hardcoded at '{path}'. "
-                    f"Consider using environment variables."
+                    f"Possible token hardcoded at '{path}'. Consider using environment variables."
                 )
 
             # Check for passwords in key name

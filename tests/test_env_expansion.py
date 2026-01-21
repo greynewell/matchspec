@@ -147,8 +147,7 @@ class TestLoadDotenvFile:
         with tempfile.TemporaryDirectory() as tmpdir:
             dotenv_path = Path(tmpdir) / ".env"
             dotenv_path.write_text(
-                'DOUBLE_QUOTED="value with spaces"\n'
-                "SINGLE_QUOTED='value with spaces'\n"
+                "DOUBLE_QUOTED=\"value with spaces\"\nSINGLE_QUOTED='value with spaces'\n"
             )
 
             for key in ["DOUBLE_QUOTED", "SINGLE_QUOTED"]:
@@ -168,11 +167,7 @@ class TestLoadDotenvFile:
         """Test that comments are skipped."""
         with tempfile.TemporaryDirectory() as tmpdir:
             dotenv_path = Path(tmpdir) / ".env"
-            dotenv_path.write_text(
-                "# This is a comment\n"
-                "TEST_KEY=value\n"
-                "# Another comment\n"
-            )
+            dotenv_path.write_text("# This is a comment\nTEST_KEY=value\n# Another comment\n")
 
             if "TEST_KEY" in os.environ:
                 del os.environ["TEST_KEY"]
@@ -238,50 +233,28 @@ class TestValidateConfigSecurity:
 
     def test_no_warning_for_env_var_reference(self):
         """Test that ${ENV_VAR} references don't trigger warnings."""
-        config = {
-            "mcp_server": {
-                "env": {
-                    "API_KEY": "${ANTHROPIC_API_KEY}"
-                }
-            }
-        }
+        config = {"mcp_server": {"env": {"API_KEY": "${ANTHROPIC_API_KEY}"}}}
         warnings = validate_config_security(config)
         # Should not warn about env var references
         assert not any("api key" in w.lower() and "hardcoded" in w.lower() for w in warnings)
 
     def test_detect_password(self):
         """Test detection of hardcoded passwords."""
-        config = {
-            "database": {
-                "password": "secret123"
-            }
-        }
+        config = {"database": {"password": "secret123"}}
         warnings = validate_config_security(config)
         assert len(warnings) > 0
         assert any("password" in w.lower() for w in warnings)
 
     def test_detect_token(self):
         """Test detection of hardcoded tokens."""
-        config = {
-            "auth": {
-                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-            }
-        }
+        config = {"auth": {"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"}}
         warnings = validate_config_security(config)
         assert len(warnings) > 0
         assert any("token" in w.lower() for w in warnings)
 
     def test_nested_dict_scanning(self):
         """Test that nested dictionaries are scanned."""
-        config = {
-            "level1": {
-                "level2": {
-                    "level3": {
-                        "api_key": "hardcoded_key"
-                    }
-                }
-            }
-        }
+        config = {"level1": {"level2": {"level3": {"api_key": "hardcoded_key"}}}}
         warnings = validate_config_security(config)
         assert len(warnings) > 0
 
@@ -305,7 +278,7 @@ class TestValidateConfigSecurity:
                 "env": {
                     "API_KEY": "${ANTHROPIC_API_KEY}",
                     "TOKEN": "${AUTH_TOKEN:-default}",
-                }
+                },
             },
             "model": "sonnet",
             "timeout": 300,
