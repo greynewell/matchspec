@@ -14,6 +14,7 @@ from .config import HarnessConfig
 from .docker_env import DockerEnvironmentManager, TaskEnvironment
 from .evaluation import EvaluationResult
 from .harnesses import AgentHarness, AgentResult, create_harness
+from .incremental_save import save_task_result_incremental
 from .log_formatter import InstanceLogWriter
 from .pricing import calculate_cost
 
@@ -405,6 +406,7 @@ async def run_evaluation(
     log_file: TextIO | None = None,
     log_dir: Path | None = None,
     task_ids: list[str] | None = None,
+    incremental_save_path: Path | None = None,
 ) -> EvaluationResults:
     """Run the full evaluation.
 
@@ -417,6 +419,7 @@ async def run_evaluation(
         log_file: Optional file handle for writing raw JSON logs.
         log_dir: Optional directory for per-instance JSON log files.
         task_ids: Specific task IDs to run (None for all).
+        incremental_save_path: Optional path to save results incrementally for crash recovery.
 
     Returns:
         EvaluationResults with all results.
@@ -447,6 +450,26 @@ async def run_evaluation(
 
     console.print(f"[dim]Evaluating {len(tasks)} tasks[/dim]")
     console.print(f"[dim]Provider: {config.provider}, Harness: {config.agent_harness}[/dim]")
+
+    # Prepare metadata for incremental saves
+    metadata_for_save = None
+    if incremental_save_path:
+        metadata_for_save = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "config": {
+                "provider": config.provider,
+                "agent_harness": config.agent_harness,
+                "model": config.model,
+                "dataset": dataset_name,
+                "sample_size": len(tasks),
+                "timeout_seconds": config.timeout_seconds,
+                "max_concurrent": config.max_concurrent,
+            },
+            "mcp_server": {
+                "command": config.mcp_server.command,
+                "args": config.mcp_server.args,
+            },
+        }
 
     docker_manager = DockerEnvironmentManager(use_prebuilt=config.use_prebuilt_images)
 
@@ -497,6 +520,15 @@ async def run_evaluation(
                 result = await coro
                 if result is not None:
                     results.append(result)
+
+                    # Save result incrementally for crash recovery
+                    if incremental_save_path:
+                        save_task_result_incremental(
+                            result, incremental_save_path, metadata_for_save
+                        )
+                        # Only include metadata on first save
+                        metadata_for_save = None
+
                 if budget_exceeded:
                     console.print(
                         f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
@@ -518,6 +550,15 @@ async def run_evaluation(
                     if result is not None:
                         results.append(result)
                         progress.update(main_task, advance=1)
+
+                        # Save result incrementally for crash recovery
+                        if incremental_save_path:
+                            save_task_result_incremental(
+                                result, incremental_save_path, metadata_for_save
+                            )
+                            # Only include metadata on first save
+                            metadata_for_save = None
+
                     if budget_exceeded:
                         progress.stop()
                         console.print(

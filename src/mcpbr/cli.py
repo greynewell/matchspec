@@ -13,6 +13,7 @@ from .config_validator import validate_config
 from .docker_env import cleanup_all_resources, register_signal_handlers
 from .harness import run_evaluation
 from .harnesses import list_available_harnesses
+from .incremental_save import cleanup_incremental_file
 from .junit_reporter import save_junit_xml
 from .models import list_supported_models
 from .regression import (
@@ -413,6 +414,11 @@ def run(
         if log_dir_path:
             log_dir_path.mkdir(parents=True, exist_ok=True)
 
+        # Enable incremental saving if output path is specified
+        incremental_path = None
+        if output_path:
+            incremental_path = output_path.with_suffix(".incremental.jsonl")
+
         results = asyncio.run(
             run_evaluation(
                 config=config,
@@ -423,6 +429,7 @@ def run(
                 log_file=log_file,
                 log_dir=log_dir_path,
                 task_ids=list(task_ids) if task_ids else None,
+                incremental_save_path=incremental_path,
             )
         )
     except KeyboardInterrupt:
@@ -442,6 +449,10 @@ def run(
     if output_path:
         save_json_results(results, output_path)
         console.print(f"\n[green]Results saved to {output_path}[/green]")
+
+        # Clean up incremental save file after successful completion
+        if incremental_path:
+            cleanup_incremental_file(incremental_path)
 
     if yaml_output:
         save_yaml_results(results, yaml_output)
