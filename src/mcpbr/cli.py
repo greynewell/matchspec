@@ -62,7 +62,6 @@ def main() -> None:
       providers  List available model providers
       harnesses  List available agent harnesses
       benchmarks List available benchmarks
-      cache      Manage result cache
       cleanup    Remove orphaned Docker containers
 
     \b
@@ -864,7 +863,9 @@ def config() -> None:
 
     \b
     Examples:
-      mcpbr config validate config.yaml  # Validate configuration
+      mcpbr config validate config.yaml     # Validate configuration
+      mcpbr config schema                   # Show JSON schema
+      mcpbr config schema --save schema.json  # Save schema to file
     """
     pass
 
@@ -1090,6 +1091,110 @@ def validate(config_path: Path) -> None:
         sys.exit(1)
 
 
+@config.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--save",
+    "-s",
+    "output_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Save schema to a file instead of displaying",
+)
+@click.option(
+    "--docs",
+    "-d",
+    is_flag=True,
+    help="Generate Markdown documentation from schema",
+)
+def schema(output_path: Path | None, docs: bool) -> None:
+    """Show or save the JSON Schema for configuration files.
+
+    The JSON Schema enables IDE auto-completion and validation support
+    for YAML configuration files.
+
+    \b
+    Examples:
+      mcpbr config schema                      # Display schema
+      mcpbr config schema --save schema.json   # Save to file
+      mcpbr config schema --docs               # Show documentation
+    """
+    from .schema import (
+        generate_schema_docs,
+        get_schema_url,
+        print_schema_info,
+        save_schema,
+    )
+
+    if docs:
+        # Generate and display Markdown documentation
+        docs_content = generate_schema_docs()
+        console.print(docs_content)
+        return
+
+    if output_path:
+        # Save schema to file
+        try:
+            save_schema(output_path)
+            console.print(f"[green]Schema saved to {output_path}[/green]")
+            console.print("\n[dim]To use this schema in VS Code, add this to your YAML file:[/dim]")
+            console.print(
+                f"[dim]# yaml-language-server: $schema=file://{output_path.absolute()}[/dim]"
+            )
+        except Exception as e:
+            console.print(f"[red]Error saving schema: {e}[/red]")
+            sys.exit(1)
+    else:
+        # Display schema info
+        info = print_schema_info()
+        console.print(info)
+        console.print("\n[dim]Use --save to export the schema to a file[/dim]")
+        console.print("[dim]Use --docs to see detailed documentation[/dim]")
+        console.print("\n[dim]Published schema URL:[/dim]")
+        console.print(f"[cyan]{get_schema_url()}[/cyan]")
+
+
+@config.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument("config_path", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--add-schema",
+    is_flag=True,
+    help="Add schema comment to enable IDE auto-completion",
+)
+def annotate(config_path: Path, add_schema: bool) -> None:
+    """Add IDE integration comments to configuration file.
+
+    Adds YAML Language Server schema comment to enable auto-completion
+    and validation in supported IDEs (VS Code, IntelliJ, etc.).
+
+    \b
+    Examples:
+      mcpbr config annotate config.yaml --add-schema  # Add schema comment
+    """
+    from .schema import add_schema_comment
+
+    if not add_schema:
+        console.print("[yellow]Use --add-schema to add IDE integration[/yellow]")
+        return
+
+    try:
+        content = config_path.read_text()
+        annotated = add_schema_comment(content)
+
+        if content == annotated:
+            console.print("[yellow]Schema comment already present[/yellow]")
+            return
+
+        # Write back the annotated content
+        config_path.write_text(annotated)
+        console.print(f"[green]Added schema comment to {config_path}[/green]")
+        console.print("[dim]Your IDE should now provide auto-completion for this file[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error annotating config: {e}[/red]")
+        sys.exit(1)
+
+
+
 @main.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cache() -> None:
     """Cache management commands.
@@ -1300,6 +1405,7 @@ def smoke_test(config_path: Path | None) -> None:
 
     # Exit with appropriate code
     sys.exit(0 if success else 1)
+
 
 
 if __name__ == "__main__":
