@@ -1,0 +1,51 @@
+# Template metadata
+id: slack
+name: Slack
+description: Send messages, manage channels, and interact with Slack workspaces
+package: "@modelcontextprotocol/server-slack"
+requires_api_key: true
+env_vars:
+  - SLACK_BOT_TOKEN
+
+# Configuration
+config:
+  mcp_server:
+    # Name to register the MCP server as (appears in tool names)
+    name: slack
+
+    # Command to start the MCP server
+    command: npx
+
+    # Arguments for the command
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-slack"
+
+    # Environment variables
+    # Create a Slack app and get bot token at https://api.slack.com/apps
+    env:
+      SLACK_BOT_TOKEN: "${SLACK_BOT_TOKEN}"
+
+  # Model provider
+  provider: anthropic
+
+  # Agent harness
+  agent_harness: claude-code
+
+  # Model ID
+  model: sonnet
+
+  # Benchmark to run
+  benchmark: swe-bench
+
+  # Number of tasks to evaluate (null for full dataset)
+  sample_size: 10
+
+  # Timeout per task in seconds
+  timeout_seconds: 300
+
+  # Maximum parallel evaluations
+  max_concurrent: 4
+
+  # Maximum agent iterations per task
+  max_iterations: 10

@@ -28,6 +28,7 @@ mcpbr init --help
 |---------|-------------|
 | `mcpbr run` | Run benchmark evaluation with configured MCP server |
 | `mcpbr init` | Generate an example configuration file |
+| `mcpbr config` | Manage configuration templates |
 | `mcpbr models` | List supported models for evaluation |
 | `mcpbr providers` | List available model providers |
 | `mcpbr harnesses` | List available agent harnesses |
@@ -153,6 +154,8 @@ mcpbr init [OPTIONS]
 | Option | Short | Type | Default | Description |
 |--------|-------|------|---------|-------------|
 | `--output PATH` | `-o` | Path | `mcpbr.yaml` | Path to write example config |
+| `--template TEXT` | `-t` | String | | Template ID to use (see `mcpbr config list`) |
+| `--interactive` | `-i` | Flag | | Interactive template selection wizard |
 | `--help` | `-h` | Flag | | Show help message |
 
 ### Examples
@@ -161,8 +164,94 @@ mcpbr init [OPTIONS]
 # Create default config
 mcpbr init
 
-# Custom filename
-mcpbr init -o my-config.yaml
+# Use a template
+mcpbr init -t filesystem
+
+# Interactive template selection
+mcpbr init -i
+
+# Custom filename with template
+mcpbr init -t brave-search -o brave.yaml
+```
+
+---
+
+## `mcpbr config`
+
+Manage configuration templates for popular MCP servers.
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `mcpbr config list` | List available configuration templates |
+| `mcpbr config apply` | Apply a template to create a configuration file |
+
+---
+
+### `mcpbr config list`
+
+List all available MCP server configuration templates.
+
+#### Usage
+
+```bash
+mcpbr config list
+```
+
+#### Output
+
+```text
+                   Available MCP Server Templates
++-------------+------------------+---------------------+----------+-------------+
+| ID          | Name             | Package             | API Key  | Description |
++-------------+------------------+---------------------+----------+-------------+
+| filesystem  | Filesystem       | @modelcontext...    | No       | File system |
+|             | Server           |                     |          | access      |
+| brave-      | Brave Search     | @modelcontext...    | Yes      | Web search  |
+| search      |                  |                     |          | using Brave |
+| github      | GitHub           | @modelcontext...    | Yes      | GitHub API  |
+|             |                  |                     |          | integration |
++-------------+------------------+---------------------+----------+-------------+
+```
+
+---
+
+### `mcpbr config apply`
+
+Apply a template to create a configuration file.
+
+#### Usage
+
+```bash
+mcpbr config apply TEMPLATE_ID [OPTIONS]
+```
+
+#### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `TEMPLATE_ID` | ID of the template to apply (see `mcpbr config list`) |
+
+#### Options
+
+| Option | Short | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| `--output PATH` | `-o` | Path | `mcpbr.yaml` | Path to write configuration file |
+| `--force` | `-f` | Flag | | Overwrite existing configuration file |
+| `--help` | `-h` | Flag | | Show help message |
+
+#### Examples
+
+```bash
+# Apply filesystem template
+mcpbr config apply filesystem
+
+# Custom output path
+mcpbr config apply brave-search -o brave.yaml
+
+# Overwrite existing config
+mcpbr config apply github --force
 ```
 
 ---

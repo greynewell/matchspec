@@ -552,6 +552,8 @@ def init(
 ) -> None:
     """Generate a configuration file from a template.
 
+    Can use a template or create a basic example config.
+
     \b
     Examples:
       mcpbr init                        # Creates mcpbr.yaml with default template
@@ -848,6 +850,17 @@ def benchmarks() -> None:
     console.print("[dim]Example: mcpbr run -c config.yaml --benchmark cybergym --level 2[/dim]")
 
 
+@main.group(context_settings={"help_option_names": ["-h", "--help"]})
+def config() -> None:
+    """Configuration file management commands.
+
+    \b
+    Examples:
+      mcpbr config validate config.yaml  # Validate configuration
+    """
+    pass
+
+
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--dry-run",
@@ -906,17 +919,6 @@ def cleanup(dry_run: bool, force: bool) -> None:
 
     removed = cleanup_orphaned_containers(dry_run=False)
     console.print(f"[green]Removed {len(removed)} container(s).[/green]")
-
-
-@main.group(context_settings={"help_option_names": ["-h", "--help"]})
-def config() -> None:
-    """Configuration file management commands.
-
-    \b
-    Examples:
-      mcpbr config validate config.yaml  # Validate configuration
-    """
-    pass
 
 
 @config.command(context_settings={"help_option_names": ["-h", "--help"]})
