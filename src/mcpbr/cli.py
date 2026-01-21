@@ -54,7 +54,8 @@ def main() -> None:
     \b
     Commands:
       run        Run benchmark evaluation (default command)
-      init       Generate an example configuration file
+      init       Generate a configuration file from a template
+      templates  List available configuration templates
       models     List supported models for evaluation
       providers  List available model providers
       harnesses  List available agent harnesses
@@ -64,6 +65,8 @@ def main() -> None:
     \b
     Quick Start:
       mcpbr init -o config.yaml    # Create config
+      mcpbr init -i                # Interactive config
+      mcpbr templates              # List templates
       mcpbr run -c config.yaml     # Run evaluation
       mcpbr run -c config.yaml -M  # MCP only
       mcpbr run -c config.yaml -B  # Baseline only
@@ -506,82 +509,226 @@ def run(
     default=Path("mcpbr.yaml"),
     help="Path to write example config (default: mcpbr.yaml)",
 )
-def init(output_path: Path) -> None:
-    """Generate an example configuration file.
+@click.option(
+    "--template",
+    "-t",
+    "template_id",
+    type=str,
+    default=None,
+    help="Use a specific template (use 'mcpbr templates' to list available templates)",
+)
+@click.option(
+    "--interactive",
+    "-i",
+    is_flag=True,
+    help="Interactive mode to select template and customize values",
+)
+@click.option(
+    "--list-templates",
+    "-l",
+    is_flag=True,
+    help="List available templates and exit",
+)
+def init(
+    output_path: Path, template_id: str | None, interactive: bool, list_templates: bool
+) -> None:
+    """Generate a configuration file from a template.
 
     \b
     Examples:
-      mcpbr init                    # Creates mcpbr.yaml
-      mcpbr init -o my-config.yaml  # Custom filename
+      mcpbr init                        # Creates mcpbr.yaml with default template
+      mcpbr init -o my-config.yaml      # Custom filename
+      mcpbr init -t filesystem          # Use filesystem template
+      mcpbr init -t cybergym-basic      # Use CyberGym template
+      mcpbr init -i                     # Interactive mode
+      mcpbr init -l                     # List available templates
     """
+    from .templates import generate_config_yaml, get_template
+    from .templates import list_templates as get_all_templates
+
+    # Handle list templates flag
+    if list_templates:
+        templates = get_all_templates()
+        console.print("[bold]Available Templates[/bold]\n")
+        for template in templates:
+            console.print(f"[cyan]{template.id}[/cyan] - {template.name}")
+            console.print(f"  {template.description}")
+            console.print(f"  Category: {template.category} | Tags: {', '.join(template.tags)}\n")
+        return
+
+    # Check if output file already exists
     if output_path.exists():
         console.print(f"[red]Error: {output_path} already exists[/red]")
         sys.exit(1)
 
-    example_config = f"""\
-# mcpbr - Model Context Protocol Benchmark Runner
-#
-# Configure your MCP server and evaluation parameters.
-# Requires ANTHROPIC_API_KEY environment variable.
+    # Interactive mode
+    if interactive:
+        from .templates import get_templates_by_category
 
-mcp_server:
-  # Command to start the MCP server
-  command: "npx"
+        console.print("[bold]Interactive Configuration Generator[/bold]\n")
 
-  # Arguments for the command
-  # Use {{workdir}} as placeholder for task working directory
-  args:
-    - "-y"
-    - "@modelcontextprotocol/server-filesystem"
-    - "{{workdir}}"
+        # Display templates by category
+        templates_by_cat = get_templates_by_category()
+        console.print("Available templates:\n")
 
-  # Environment variables (optional)
-  env: {{}}
+        template_choices: list[tuple[str, str]] = []
+        idx = 1
+        for category, templates in templates_by_cat.items():
+            console.print(f"[bold]{category}[/bold]")
+            for template in templates:
+                console.print(f"  [{idx}] {template.name} - {template.description}")
+                template_choices.append((str(idx), template.id))
+                idx += 1
+            console.print()
 
-# Model provider (currently only anthropic is supported)
-provider: "anthropic"
+        # Get user selection
+        choice = click.prompt(
+            "Select a template",
+            type=click.Choice([c[0] for c in template_choices]),
+            show_choices=False,
+        )
 
-# Agent harness (currently only claude-code is supported)
-agent_harness: "claude-code"
+        # Find the selected template
+        selected_id = next(tid for num, tid in template_choices if num == choice)
+        template = get_template(selected_id)
 
-# Custom agent prompt (optional)
-# Use {{problem_statement}} as placeholder for the issue text
-# agent_prompt: |
-#   Fix the following bug in this repository:
-#
-#   {{problem_statement}}
-#
-#   Make the minimal changes necessary to fix the issue.
+        if not template:
+            console.print("[red]Error: Invalid template selection[/red]")
+            sys.exit(1)
 
-# Model ID (Anthropic model identifier)
-model: "{DEFAULT_MODEL}"
+        console.print(f"\n[green]Selected template: {template.name}[/green]")
 
-# Benchmark to run (swe-bench or cybergym)
-benchmark: "swe-bench"
+        # Ask for customizations
+        custom_values = {}
 
-# HuggingFace dataset (optional, benchmark provides default)
-# dataset: "SWE-bench/SWE-bench_Lite"
+        if click.confirm("\nCustomize configuration values?", default=False):
+            # Sample size
+            sample_size = click.prompt(
+                "Sample size (number of tasks, leave empty for default)",
+                type=int,
+                default=template.config.get("sample_size", 10),
+                show_default=True,
+            )
+            custom_values["sample_size"] = sample_size
 
-# CyberGym difficulty level (0-3, only used for cybergym benchmark)
-# Higher levels provide more context to the agent
-cybergym_level: 1
+            # Timeout
+            timeout = click.prompt(
+                "Timeout per task (seconds)",
+                type=int,
+                default=template.config.get("timeout_seconds", 300),
+                show_default=True,
+            )
+            custom_values["timeout_seconds"] = timeout
 
-# Number of tasks (null for full dataset)
-sample_size: 10
+            # Max concurrent
+            max_concurrent = click.prompt(
+                "Maximum concurrent tasks",
+                type=int,
+                default=template.config.get("max_concurrent", 4),
+                show_default=True,
+            )
+            custom_values["max_concurrent"] = max_concurrent
 
-# Timeout per task in seconds
-timeout_seconds: 300
+        config_yaml = generate_config_yaml(template, custom_values)
 
-# Maximum parallel evaluations
-max_concurrent: 4
+    # Template mode
+    elif template_id:
+        template = get_template(template_id)
+        if not template:
+            console.print(f"[red]Error: Template '{template_id}' not found[/red]")
+            console.print("\nAvailable templates:")
+            for t in get_all_templates():
+                console.print(f"  - {t.id}")
+            sys.exit(1)
 
-# Maximum agent iterations per task
-max_iterations: 10
-"""
-    output_path.write_text(example_config)
-    console.print(f"[green]Created example config at {output_path}[/green]")
+        console.print(f"[green]Using template: {template.name}[/green]")
+        config_yaml = generate_config_yaml(template)
+
+    # Default mode (backwards compatible)
+    else:
+        template = get_template("filesystem")
+        if not template:
+            console.print("[red]Error: Default template not found[/red]")
+            sys.exit(1)
+        config_yaml = generate_config_yaml(template)
+
+    # Write config file
+    output_path.write_text(config_yaml)
+    console.print(f"\n[green]Created config at {output_path}[/green]")
     console.print("\nEdit the config file and run:")
     console.print(f"  mcpbr run --config {output_path}")
+
+
+@main.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--category",
+    "-c",
+    type=str,
+    default=None,
+    help="Filter templates by category",
+)
+@click.option(
+    "--tag",
+    type=str,
+    default=None,
+    help="Filter templates by tag",
+)
+def templates(category: str | None, tag: str | None) -> None:
+    """List available configuration templates.
+
+    Shows pre-built templates for common MCP server scenarios.
+
+    \b
+    Examples:
+      mcpbr templates                    # List all templates
+      mcpbr templates -c Security        # List security templates
+      mcpbr templates --tag quick        # List quick test templates
+    """
+    from .templates import (
+        get_templates_by_category,
+        get_templates_by_tag,
+    )
+    from .templates import (
+        list_templates as get_all_templates,
+    )
+
+    # Filter templates
+    if tag:
+        filtered = get_templates_by_tag(tag)
+        title = f"Templates with tag '{tag}'"
+    elif category:
+        templates_by_cat = get_templates_by_category()
+        filtered = templates_by_cat.get(category, [])
+        title = f"Templates in category '{category}'"
+    else:
+        filtered = get_all_templates()
+        title = "Available Configuration Templates"
+
+    if not filtered:
+        console.print("[yellow]No templates found matching criteria[/yellow]")
+        return
+
+    # Display templates in a table
+    table = Table(title=title, show_header=True, header_style="bold")
+    table.add_column("Template ID", style="cyan", no_wrap=True)
+    table.add_column("Name", style="bold")
+    table.add_column("Category")
+    table.add_column("Description")
+    table.add_column("Tags", style="dim")
+
+    for template in filtered:
+        table.add_row(
+            template.id,
+            template.name,
+            template.category,
+            template.description,
+            ", ".join(template.tags[:3]),  # Limit tags for display
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(filtered)} template(s)[/dim]")
+    console.print("[dim]Use 'mcpbr init -t <template-id>' to use a template[/dim]")
+    console.print("[dim]Use 'mcpbr init -i' for interactive template selection[/dim]")
 
 
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
