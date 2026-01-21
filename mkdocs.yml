@@ -75,6 +75,7 @@ nav:
   - Getting Started:
       - Installation: installation.md
       - Quick Start: index.md
+      - FAQ: FAQ.md
   - User Guide:
       - Configuration: configuration.md
       - CLI Reference: cli.md

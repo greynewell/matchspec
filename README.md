@@ -880,7 +880,9 @@ The architecture uses Protocol-based abstractions for providers, harnesses, and 
 
 ## Troubleshooting
 
-> **[Full troubleshooting guide](https://greynewell.github.io/mcpbr/troubleshooting/)** with solutions to common issues.
+> **[FAQ](https://greynewell.github.io/mcpbr/FAQ/)** - Quick answers to common questions
+>
+> **[Full troubleshooting guide](https://greynewell.github.io/mcpbr/troubleshooting/)** - Detailed solutions to common issues
 
 ### Docker Issues
 

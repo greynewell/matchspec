@@ -135,6 +135,7 @@ Host Machine
 
 ## Next Steps
 
+- [FAQ](FAQ.md) - Frequently asked questions
 - [Installation](installation.md) - Prerequisites and installation options
 - [Configuration](configuration.md) - Full configuration reference
 - [CLI Reference](cli.md) - All available commands and options
