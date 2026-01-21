@@ -405,6 +405,8 @@ async def run_evaluation(
     log_file: TextIO | None = None,
     log_dir: Path | None = None,
     task_ids: list[str] | None = None,
+    state_tracker: Any | None = None,
+    from_task: str | None = None,
 ) -> EvaluationResults:
     """Run the full evaluation.
 
@@ -417,6 +419,8 @@ async def run_evaluation(
         log_file: Optional file handle for writing raw JSON logs.
         log_dir: Optional directory for per-instance JSON log files.
         task_ids: Specific task IDs to run (None for all).
+        state_tracker: Optional state tracker for incremental evaluation.
+        from_task: Optional task ID to resume from.
 
     Returns:
         EvaluationResults with all results.
@@ -445,12 +449,76 @@ async def run_evaluation(
         task_ids=task_ids,
     )
 
-    console.print(f"[dim]Evaluating {len(tasks)} tasks[/dim]")
+    # Apply state tracker filtering and resume logic
+    tasks_to_run = tasks
+    skipped_count = 0
+    resumed_from = False
+
+    if state_tracker:
+        from .state_tracker import compute_task_hash
+
+        # Load existing results from state
+        state_tracker.load_state()
+
+        # Handle from_task: find starting position and run from there
+        if from_task:
+            found = False
+            for i, task in enumerate(tasks):
+                if task["instance_id"] == from_task:
+                    tasks_to_run = tasks[i:]
+                    skipped_count = i
+                    resumed_from = True
+                    found = True
+                    break
+            if not found:
+                console.print(
+                    f"[yellow]Warning: Task {from_task} not found, running all tasks[/yellow]"
+                )
+        else:
+            # Filter out already completed tasks (if config unchanged)
+            filtered_tasks = []
+            cached_results: list[TaskResult] = []
+
+            for task in tasks:
+                instance_id = task["instance_id"]
+                task_hash = compute_task_hash(task)
+
+                if state_tracker.is_task_completed(instance_id, task_hash):
+                    # Task is completed and unchanged, use cached result
+                    cached_state = state_tracker.get_task_result(instance_id)
+                    if cached_state:
+                        cached_results.append(
+                            TaskResult(
+                                instance_id=instance_id,
+                                mcp=cached_state.mcp_result,
+                                baseline=cached_state.baseline_result,
+                            )
+                        )
+                        skipped_count += 1
+                else:
+                    filtered_tasks.append(task)
+
+            tasks_to_run = filtered_tasks
+
+        if skipped_count > 0:
+            if resumed_from:
+                console.print(
+                    f"[cyan]Resuming from task {from_task}, skipping {skipped_count} tasks[/cyan]"
+                )
+            else:
+                console.print(
+                    f"[cyan]Using cached results for {skipped_count} completed tasks[/cyan]"
+                )
+
+    console.print(f"[dim]Evaluating {len(tasks_to_run)} tasks[/dim]")
     console.print(f"[dim]Provider: {config.provider}, Harness: {config.agent_harness}[/dim]")
 
     docker_manager = DockerEnvironmentManager(use_prebuilt=config.use_prebuilt_images)
 
     results: list[TaskResult] = []
+    # Add cached results if using state tracker
+    if state_tracker and "cached_results" in locals():
+        results.extend(cached_results)
     semaphore = asyncio.Semaphore(config.max_concurrent)
     budget_exceeded = False
     current_cost = 0.0
@@ -483,12 +551,32 @@ async def run_evaluation(
             if result.baseline and result.baseline.get("cost"):
                 current_cost += result.baseline.get("cost", 0.0)
 
+            # Save state after task completion
+            if state_tracker:
+                from .state_tracker import compute_task_hash
+
+                task_hash = compute_task_hash(task)
+                error = None
+                if result.mcp and result.mcp.get("error"):
+                    error = result.mcp.get("error")
+                elif result.baseline and result.baseline.get("error"):
+                    error = result.baseline.get("error")
+
+                state_tracker.mark_task_completed(
+                    instance_id=result.instance_id,
+                    task_hash=task_hash,
+                    mcp_result=result.mcp,
+                    baseline_result=result.baseline,
+                    error=error,
+                )
+                state_tracker.save_state()
+
             return result
 
     progress_console = Console(force_terminal=True)
 
     async_tasks = []
-    for task in tasks:
+    for task in tasks_to_run:
         async_tasks.append(run_with_semaphore(task))
 
     try:
@@ -511,7 +599,9 @@ async def run_evaluation(
                 TaskProgressColumn(),
                 console=progress_console,
             ) as progress:
-                main_task = progress.add_task("Evaluating tasks...", total=len(tasks))
+                main_task = progress.add_task(
+                    "Evaluating tasks...", total=len(tasks_to_run), completed=0
+                )
 
                 for coro in asyncio.as_completed(async_tasks):
                     result = await coro
@@ -577,28 +667,45 @@ async def run_evaluation(
     )
     tool_coverage = calculate_tool_coverage(temp_results)
 
-    return EvaluationResults(
-        metadata={
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "config": {
-                "model": config.model,
-                "provider": config.provider,
-                "agent_harness": config.agent_harness,
-                "benchmark": config.benchmark,
-                "dataset": dataset_name,
-                "sample_size": config.sample_size,
-                "timeout_seconds": config.timeout_seconds,
-                "max_iterations": config.max_iterations,
-                "cybergym_level": config.cybergym_level if config.benchmark == "cybergym" else None,
-                "budget": config.budget,
-                "budget_exceeded": budget_exceeded,
-            },
-            "mcp_server": {
-                "command": config.mcp_server.command,
-                "args": config.mcp_server.args,
-                "args_note": "{workdir} is replaced with task repository path at runtime",
-            },
+    # Build metadata with incremental evaluation stats
+    metadata = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "config": {
+            "model": config.model,
+            "provider": config.provider,
+            "agent_harness": config.agent_harness,
+            "benchmark": config.benchmark,
+            "dataset": dataset_name,
+            "sample_size": config.sample_size,
+            "timeout_seconds": config.timeout_seconds,
+            "max_iterations": config.max_iterations,
+            "cybergym_level": config.cybergym_level if config.benchmark == "cybergym" else None,
+            "budget": config.budget,
+            "budget_exceeded": budget_exceeded,
         },
+        "mcp_server": {
+            "command": config.mcp_server.command,
+            "args": config.mcp_server.args,
+            "args_note": "{workdir} is replaced with task repository path at runtime",
+        },
+    }
+
+    # Add incremental evaluation stats if state tracker was used
+    if state_tracker:
+        metadata["incremental"] = {
+            "enabled": True,
+            "total_tasks": len(tasks),
+            "cached_tasks": skipped_count,
+            "evaluated_tasks": len(tasks_to_run),
+            "resumed_from": from_task if from_task and resumed_from else None,
+        }
+    else:
+        metadata["incremental"] = {
+            "enabled": False,
+        }
+
+    return EvaluationResults(
+        metadata=metadata,
         summary={
             "mcp": {
                 "resolved": mcp_resolved,

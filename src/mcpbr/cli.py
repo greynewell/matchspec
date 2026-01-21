@@ -22,6 +22,7 @@ from .regression import (
     send_notification,
 )
 from .reporting import print_summary, save_json_results, save_markdown_report, save_yaml_results
+from .state_tracker import StateTracker
 
 console = Console()
 
@@ -62,6 +63,7 @@ def main() -> None:
       providers  List available model providers
       harnesses  List available agent harnesses
       benchmarks List available benchmarks
+      state      View or manage evaluation state
       cleanup    Remove orphaned Docker containers
 
     \b
@@ -72,6 +74,12 @@ def main() -> None:
       mcpbr run -c config.yaml     # Run evaluation
       mcpbr run -c config.yaml -M  # MCP only
       mcpbr run -c config.yaml -B  # Baseline only
+
+    \b
+    Incremental Evaluation:
+      mcpbr run -c config.yaml --retry-failed  # Re-run failed tasks
+      mcpbr state                              # View current state
+      mcpbr state --clear                      # Clear state
 
     \b
     Environment Variables:
@@ -285,6 +293,33 @@ def main() -> None:
     default=None,
     help="Maximum budget in USD (halts evaluation when reached)",
 )
+@click.option(
+    "--retry-failed",
+    is_flag=True,
+    help="Re-run only tasks that failed in previous evaluation",
+)
+@click.option(
+    "--from-task",
+    type=str,
+    default=None,
+    help="Resume evaluation from a specific task ID",
+)
+@click.option(
+    "--reset-state",
+    is_flag=True,
+    help="Clear evaluation state and start fresh (ignores cached results)",
+)
+@click.option(
+    "--state-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Directory to store state files (default: .mcpbr_state/)",
+)
+@click.option(
+    "--no-incremental",
+    is_flag=True,
+    help="Disable incremental evaluation (always run all tasks)",
+)
 def run(
     config_path: Path,
     model_override: str | None,
@@ -316,6 +351,11 @@ def run(
     smtp_user: str | None,
     smtp_password: str | None,
     budget: float | None,
+    retry_failed: bool,
+    from_task: str | None,
+    reset_state: bool,
+    state_dir: Path | None,
+    no_incremental: bool,
 ) -> None:
     """Run SWE-bench evaluation with the configured MCP server.
 
@@ -329,6 +369,13 @@ def run(
       mcpbr run -c config.yaml -o out.json -r report.md
       mcpbr run -c config.yaml --yaml out.yaml  # Save as YAML
       mcpbr run -c config.yaml -y out.yaml  # Save as YAML (short form)
+
+    \b
+    Incremental Evaluation:
+      mcpbr run -c config.yaml --retry-failed     # Re-run only failed tasks
+      mcpbr run -c config.yaml --from-task ID     # Resume from specific task
+      mcpbr run -c config.yaml --reset-state      # Clear state and start fresh
+      mcpbr run -c config.yaml --no-incremental   # Disable caching
 
     \b
     Regression Detection:
@@ -379,6 +426,41 @@ def run(
             sys.exit(1)
         config.budget = budget
 
+    # Initialize state tracker for incremental evaluation
+    state_tracker = None
+    use_incremental = not no_incremental
+    if use_incremental:
+        state_tracker = StateTracker(state_dir=state_dir)
+        if reset_state:
+            console.print("[yellow]Clearing evaluation state...[/yellow]")
+            state_tracker.clear_state()
+        else:
+            state_tracker.load_state()
+            # Validate config hasn't changed
+            valid, error_msg = state_tracker.validate_config(config)
+            if not valid:
+                console.print(f"[red]Error: {error_msg}[/red]")
+                sys.exit(1)
+
+    # Determine which tasks to run based on incremental flags
+    selected_task_ids: list[str] | None = None
+    if use_incremental and state_tracker:
+        if retry_failed:
+            failed_tasks = state_tracker.get_failed_tasks()
+            if failed_tasks:
+                selected_task_ids = failed_tasks
+                console.print(f"[cyan]Retrying {len(failed_tasks)} failed tasks[/cyan]")
+            else:
+                console.print("[green]No failed tasks to retry[/green]")
+                return
+        elif from_task:
+            # This will be handled in run_evaluation by filtering tasks
+            selected_task_ids = None  # Let run_evaluation handle the from_task logic
+        elif task_ids:
+            selected_task_ids = list(task_ids)
+    elif task_ids:
+        selected_task_ids = list(task_ids)
+
     run_mcp = not baseline_only
     run_baseline = not mcp_only
     verbose = verbosity > 0
@@ -422,7 +504,9 @@ def run(
                 verbosity=verbosity,
                 log_file=log_file,
                 log_dir=log_dir_path,
-                task_ids=list(task_ids) if task_ids else None,
+                task_ids=selected_task_ids,
+                state_tracker=state_tracker,
+                from_task=from_task,
             )
         )
     except KeyboardInterrupt:
@@ -1023,6 +1107,95 @@ def cleanup(
             console.print(f"  - {error}")
         if len(report.errors) > 5:
             console.print(f"  ... and {len(report.errors) - 5} more")
+
+
+@main.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--state-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Directory containing state files (default: .mcpbr_state/)",
+)
+@click.option(
+    "--clear",
+    is_flag=True,
+    help="Clear all evaluation state",
+)
+def state(state_dir: Path | None, clear: bool) -> None:
+    """View or manage evaluation state.
+
+    Shows information about completed tasks and allows clearing state.
+
+    \b
+    Examples:
+      mcpbr state                # View current state
+      mcpbr state --clear        # Clear all state
+    """
+    tracker = StateTracker(state_dir=state_dir)
+
+    if clear:
+        if not tracker.state_file.exists():
+            console.print("[yellow]No state to clear[/yellow]")
+            return
+
+        confirm = click.confirm("Clear all evaluation state?", default=False)
+        if confirm:
+            tracker.clear_state()
+            console.print("[green]State cleared[/green]")
+        else:
+            console.print("[yellow]Aborted[/yellow]")
+        return
+
+    # Load and display state
+    if not tracker.state_file.exists():
+        console.print("[yellow]No evaluation state found[/yellow]")
+        console.print(f"[dim]State will be created in: {tracker.state_file}[/dim]")
+        return
+
+    tracker.load_state()
+
+    if not tracker.state or not tracker.state.tasks:
+        console.print("[yellow]No tasks in state[/yellow]")
+        return
+
+    console.print("[bold]Evaluation State[/bold]")
+    console.print(f"  Location: {tracker.state_file}")
+    console.print(f"  Created: {tracker.state.created_at}")
+    console.print(f"  Updated: {tracker.state.updated_at}")
+    console.print()
+
+    completed = sum(1 for t in tracker.state.tasks.values() if t.completed)
+    console.print(f"[bold]Tasks:[/bold] {completed}/{len(tracker.state.tasks)} completed")
+    console.print()
+
+    # Show failed tasks
+    failed_tasks = tracker.get_failed_tasks()
+    if failed_tasks:
+        console.print(f"[bold]Failed Tasks ({len(failed_tasks)}):[/bold]")
+        for task_id in failed_tasks[:10]:
+            task_state = tracker.state.tasks[task_id]
+            error = task_state.error or "Not resolved"
+            console.print(f"  - {task_id}: {error}")
+        if len(failed_tasks) > 10:
+            console.print(f"  ... and {len(failed_tasks) - 10} more")
+        console.print()
+
+    # Show some statistics
+    mcp_resolved = 0
+    baseline_resolved = 0
+    for task_state in tracker.state.tasks.values():
+        if task_state.completed:
+            if task_state.mcp_result and task_state.mcp_result.get("resolved"):
+                mcp_resolved += 1
+            if task_state.baseline_result and task_state.baseline_result.get("resolved"):
+                baseline_resolved += 1
+
+    if completed > 0:
+        console.print("[bold]Resolution Rates:[/bold]")
+        console.print(f"  MCP: {mcp_resolved}/{completed} ({mcp_resolved / completed:.1%})")
+        console.print(
+            f"  Baseline: {baseline_resolved}/{completed} ({baseline_resolved / completed:.1%})"
+        )
 
 
 @config.command(context_settings={"help_option_names": ["-h", "--help"]})

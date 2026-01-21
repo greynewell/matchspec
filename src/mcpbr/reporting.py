@@ -126,6 +126,20 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
     console.print("[bold]Evaluation Results[/bold]")
     console.print()
 
+    # Show incremental evaluation stats if enabled
+    incremental = results.metadata.get("incremental", {})
+    if incremental.get("enabled"):
+        console.print("[cyan]Incremental Evaluation:[/cyan]")
+        total = incremental.get("total_tasks", 0)
+        cached = incremental.get("cached_tasks", 0)
+        evaluated = incremental.get("evaluated_tasks", 0)
+        console.print(f"  Total tasks: {total}")
+        console.print(f"  Cached (skipped): {cached}")
+        console.print(f"  Evaluated: {evaluated}")
+        if incremental.get("resumed_from"):
+            console.print(f"  Resumed from: {incremental['resumed_from']}")
+        console.print()
+
     table = Table(title="Summary")
     table.add_column("Metric", style="cyan")
     table.add_column("MCP Agent", style="green")
