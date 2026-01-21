@@ -213,6 +213,25 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
 
     console.print(cost_table)
 
+    # Print cache statistics if available
+    cache_stats = results.metadata.get("cache")
+    if cache_stats and cache_stats.get("enabled"):
+        console.print()
+        console.print("[bold]Cache Statistics[/bold]")
+        console.print()
+
+        cache_table = Table(title="Result Caching")
+        cache_table.add_column("Metric", style="cyan")
+        cache_table.add_column("Value", style="green")
+
+        cache_table.add_row("Cache Hits", str(cache_stats.get("hits", 0)))
+        cache_table.add_row("Cache Misses", str(cache_stats.get("misses", 0)))
+        cache_table.add_row("Hit Rate", f"{cache_stats.get('hit_rate', 0.0):.1%}")
+        cache_table.add_row("Total Entries", str(cache_stats.get("total_entries", 0)))
+        cache_table.add_row("Cache Size", f"{cache_stats.get('cache_size_mb', 0.0):.2f} MB")
+
+        console.print(cache_table)
+
     # Print cost comparison
     cost_comparison = results.summary.get("cost_comparison", {})
     total_diff = cost_comparison.get("total_difference")

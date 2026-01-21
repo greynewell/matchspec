@@ -58,6 +58,7 @@ def main() -> None:
       init       Generate a configuration file from a template
       templates  List available configuration templates
       config     Configuration management commands
+      cache      Cache management commands
       models     List supported models for evaluation
       providers  List available model providers
       harnesses  List available agent harnesses
@@ -285,6 +286,23 @@ def main() -> None:
     default=None,
     help="Maximum budget in USD (halts evaluation when reached)",
 )
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Disable result caching (force fresh evaluation)",
+)
+@click.option(
+    "--cache-ttl",
+    type=int,
+    default=None,
+    help="Cache TTL in seconds (default: 86400 = 24h, 0 = no expiration)",
+)
+@click.option(
+    "--cache-size",
+    type=int,
+    default=1000,
+    help="Maximum cache size in MB (default: 1000)",
+)
 def run(
     config_path: Path,
     model_override: str | None,
@@ -316,6 +334,9 @@ def run(
     smtp_user: str | None,
     smtp_password: str | None,
     budget: float | None,
+    no_cache: bool,
+    cache_ttl: int | None,
+    cache_size: int,
 ) -> None:
     """Run SWE-bench evaluation with the configured MCP server.
 
@@ -396,6 +417,7 @@ def run(
     console.print(f"  Sample size: {config.sample_size or 'full'}")
     console.print(f"  Run MCP: {run_mcp}, Run Baseline: {run_baseline}")
     console.print(f"  Pre-built images: {config.use_prebuilt_images}")
+    console.print(f"  Caching: {'disabled' if no_cache else 'enabled'}")
     if config.budget is not None:
         console.print(f"  Budget: ${config.budget:.2f}")
     if log_file_path:
@@ -423,6 +445,9 @@ def run(
                 log_file=log_file,
                 log_dir=log_dir_path,
                 task_ids=list(task_ids) if task_ids else None,
+                use_cache=not no_cache,
+                cache_ttl=cache_ttl,
+                cache_size_mb=cache_size,
             )
         )
     except KeyboardInterrupt:
@@ -868,6 +893,18 @@ def config() -> None:
     pass
 
 
+@main.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cache() -> None:
+    """Cache management commands.
+
+    \b
+    Examples:
+      mcpbr cache clear      # Clear all cached results
+      mcpbr cache stats      # Show cache statistics
+    """
+    pass
+
+
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--dry-run",
@@ -1087,6 +1124,77 @@ def validate(config_path: Path) -> None:
         console.print("[red bold]Configuration validation failed.[/red bold]")
         console.print("[dim]Fix the errors above and run validation again.[/dim]")
         sys.exit(1)
+
+
+@cache.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Skip confirmation prompt",
+)
+def clear(force: bool) -> None:
+    """Clear all cached task results.
+
+    \b
+    Examples:
+      mcpbr cache clear        # Clear with confirmation
+      mcpbr cache clear -f     # Clear without confirmation
+    """
+    from .cache import get_default_cache
+
+    cache_instance = get_default_cache()
+    stats = cache_instance.get_stats()
+
+    if stats.total_entries == 0:
+        console.print("[yellow]Cache is empty.[/yellow]")
+        return
+
+    console.print("[bold]Current cache:[/bold]")
+    console.print(f"  Entries: {stats.total_entries}")
+    console.print(f"  Size: {stats.cache_size_bytes / (1024 * 1024):.2f} MB")
+    console.print()
+
+    if not force:
+        confirm = click.confirm("Clear all cached results?", default=False)
+        if not confirm:
+            console.print("[yellow]Aborted.[/yellow]")
+            return
+
+    count = cache_instance.clear()
+    console.print(f"[green]Cleared {count} cache entries.[/green]")
+
+
+@cache.command(context_settings={"help_option_names": ["-h", "--help"]})
+def stats() -> None:
+    """Display cache statistics.
+
+    \b
+    Examples:
+      mcpbr cache stats  # Show cache statistics
+    """
+    from .cache import get_default_cache
+
+    cache_instance = get_default_cache()
+    stats = cache_instance.get_stats()
+
+    console.print("[bold]Cache Statistics[/bold]\n")
+
+    table = Table()
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", justify="right")
+
+    table.add_row("Total Entries", str(stats.total_entries))
+    table.add_row("Cache Size", f"{stats.cache_size_bytes / (1024 * 1024):.2f} MB")
+    table.add_row("Cache Hits", str(stats.hits))
+    table.add_row("Cache Misses", str(stats.misses))
+    table.add_row("Hit Rate", f"{stats.hit_rate:.1%}")
+
+    console.print(table)
+
+    if stats.total_entries > 0:
+        console.print(f"\n[dim]Cache directory: {cache_instance.cache_dir}[/dim]")
+        console.print("[dim]Use 'mcpbr cache clear' to clear cached results[/dim]")
 
 
 if __name__ == "__main__":

@@ -202,6 +202,7 @@ async def run_single_task(
     verbosity: int = 1,
     log_file: TextIO | None = None,
     log_dir: Path | None = None,
+    cache: Any = None,
 ) -> TaskResult:
     """Run evaluation for a single task.
 
@@ -216,6 +217,7 @@ async def run_single_task(
         verbosity: Verbosity level (0=silent, 1=summary, 2=detailed).
         log_file: Optional file handle for writing raw JSON logs.
         log_dir: Optional directory for per-instance JSON log files.
+        cache: Optional cache instance for result caching.
 
     Returns:
         TaskResult with results for both runs.
@@ -223,41 +225,111 @@ async def run_single_task(
     instance_id = task["instance_id"]
     result = TaskResult(instance_id=instance_id)
 
+    # Prepare config dict for cache key computation
+    config_dict = {
+        "model": config.model,
+        "provider": config.provider,
+        "agent_harness": config.agent_harness,
+        "benchmark": config.benchmark,
+        "max_iterations": config.max_iterations,
+        "timeout_seconds": config.timeout_seconds,
+        "agent_prompt": config.agent_prompt,
+        "mcp_server": {
+            "command": config.mcp_server.command,
+            "args": config.mcp_server.args,
+            "env": config.mcp_server.env,
+        },
+    }
+
     if run_mcp:
-        mcp_log_writer: InstanceLogWriter | None = None
-        if log_dir:
-            mcp_log_writer = InstanceLogWriter(log_dir, instance_id, "mcp")
-        try:
-            result.mcp = await _run_mcp_evaluation(
-                task,
-                config,
-                docker_manager,
-                benchmark,
-                verbose,
-                verbosity,
-                mcp_log_writer if mcp_log_writer else log_file,
-            )
-        finally:
-            if mcp_log_writer:
-                mcp_log_writer.close()
+        # Check cache first
+        if cache:
+            cached_result = cache.get(task, config_dict, "mcp")
+            if cached_result is not None:
+                result.mcp = cached_result
+                if verbose:
+                    console.print(f"[dim]Cache hit: {instance_id} (mcp)[/dim]")
+            else:
+                mcp_log_writer: InstanceLogWriter | None = None
+                if log_dir:
+                    mcp_log_writer = InstanceLogWriter(log_dir, instance_id, "mcp")
+                try:
+                    result.mcp = await _run_mcp_evaluation(
+                        task,
+                        config,
+                        docker_manager,
+                        benchmark,
+                        verbose,
+                        verbosity,
+                        mcp_log_writer if mcp_log_writer else log_file,
+                    )
+                    # Store in cache
+                    cache.put(task, config_dict, "mcp", result.mcp)
+                finally:
+                    if mcp_log_writer:
+                        mcp_log_writer.close()
+        else:
+            mcp_log_writer: InstanceLogWriter | None = None
+            if log_dir:
+                mcp_log_writer = InstanceLogWriter(log_dir, instance_id, "mcp")
+            try:
+                result.mcp = await _run_mcp_evaluation(
+                    task,
+                    config,
+                    docker_manager,
+                    benchmark,
+                    verbose,
+                    verbosity,
+                    mcp_log_writer if mcp_log_writer else log_file,
+                )
+            finally:
+                if mcp_log_writer:
+                    mcp_log_writer.close()
 
     if run_baseline:
-        baseline_log_writer: InstanceLogWriter | None = None
-        if log_dir:
-            baseline_log_writer = InstanceLogWriter(log_dir, instance_id, "baseline")
-        try:
-            result.baseline = await _run_baseline_evaluation(
-                task,
-                config,
-                docker_manager,
-                benchmark,
-                verbose,
-                verbosity,
-                baseline_log_writer if baseline_log_writer else log_file,
-            )
-        finally:
-            if baseline_log_writer:
-                baseline_log_writer.close()
+        # Check cache first
+        if cache:
+            cached_result = cache.get(task, config_dict, "baseline")
+            if cached_result is not None:
+                result.baseline = cached_result
+                if verbose:
+                    console.print(f"[dim]Cache hit: {instance_id} (baseline)[/dim]")
+            else:
+                baseline_log_writer: InstanceLogWriter | None = None
+                if log_dir:
+                    baseline_log_writer = InstanceLogWriter(log_dir, instance_id, "baseline")
+                try:
+                    result.baseline = await _run_baseline_evaluation(
+                        task,
+                        config,
+                        docker_manager,
+                        benchmark,
+                        verbose,
+                        verbosity,
+                        baseline_log_writer if baseline_log_writer else log_file,
+                    )
+                    # Store in cache
+                    cache.put(task, config_dict, "baseline", result.baseline)
+                finally:
+                    if baseline_log_writer:
+                        baseline_log_writer.close()
+        else:
+            baseline_log_writer: InstanceLogWriter | None = None
+            if log_dir:
+                baseline_log_writer = InstanceLogWriter(log_dir, instance_id, "baseline")
+            try:
+                result.baseline = await _run_baseline_evaluation(
+                    task,
+                    config,
+                    docker_manager,
+                    benchmark,
+                    verbose,
+                    verbosity,
+                    baseline_log_writer if baseline_log_writer else log_file,
+                )
+            finally:
+                if baseline_log_writer:
+                    baseline_log_writer.close()
 
     return result
 
@@ -405,6 +477,9 @@ async def run_evaluation(
     log_file: TextIO | None = None,
     log_dir: Path | None = None,
     task_ids: list[str] | None = None,
+    use_cache: bool = True,
+    cache_ttl: int | None = None,
+    cache_size_mb: int = 1000,
 ) -> EvaluationResults:
     """Run the full evaluation.
 
@@ -417,6 +492,9 @@ async def run_evaluation(
         log_file: Optional file handle for writing raw JSON logs.
         log_dir: Optional directory for per-instance JSON log files.
         task_ids: Specific task IDs to run (None for all).
+        use_cache: Whether to use result caching.
+        cache_ttl: Cache TTL in seconds (None for default).
+        cache_size_mb: Maximum cache size in MB.
 
     Returns:
         EvaluationResults with all results.
@@ -448,6 +526,18 @@ async def run_evaluation(
     console.print(f"[dim]Evaluating {len(tasks)} tasks[/dim]")
     console.print(f"[dim]Provider: {config.provider}, Harness: {config.agent_harness}[/dim]")
 
+    # Initialize cache if enabled
+    cache_instance = None
+    if use_cache:
+        from .cache import TaskResultCache
+
+        # Handle cache_ttl of 0 as None (no expiration)
+        ttl = None if cache_ttl == 0 else cache_ttl
+        cache_instance = TaskResultCache(
+            ttl_seconds=ttl,
+            max_size_mb=cache_size_mb,
+        )
+
     docker_manager = DockerEnvironmentManager(use_prebuilt=config.use_prebuilt_images)
 
     results: list[TaskResult] = []
@@ -475,6 +565,7 @@ async def run_evaluation(
                 verbosity,
                 log_file,
                 log_dir,
+                cache_instance,
             )
 
             # Update current cost
@@ -577,6 +668,21 @@ async def run_evaluation(
     )
     tool_coverage = calculate_tool_coverage(temp_results)
 
+    # Collect cache statistics if caching was enabled
+    cache_stats = None
+    if cache_instance:
+        stats = cache_instance.get_stats()
+        cache_stats = {
+            "enabled": True,
+            "hits": stats.hits,
+            "misses": stats.misses,
+            "hit_rate": stats.hit_rate,
+            "total_entries": stats.total_entries,
+            "cache_size_mb": stats.cache_size_bytes / (1024 * 1024),
+        }
+    else:
+        cache_stats = {"enabled": False}
+
     return EvaluationResults(
         metadata={
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -598,6 +704,7 @@ async def run_evaluation(
                 "args": config.mcp_server.args,
                 "args_note": "{workdir} is replaced with task repository path at runtime",
             },
+            "cache": cache_stats,
         },
         summary={
             "mcp": {
