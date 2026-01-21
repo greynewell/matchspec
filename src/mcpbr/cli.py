@@ -55,6 +55,7 @@ def main() -> None:
     \b
     Commands:
       run        Run benchmark evaluation (default command)
+      smoke-test Run smoke tests to validate setup
       init       Generate a configuration file from a template
       templates  List available configuration templates
       config     Configuration management commands
@@ -69,6 +70,7 @@ def main() -> None:
       mcpbr init -o config.yaml    # Create config
       mcpbr init -i                # Interactive config
       mcpbr templates              # List templates
+      mcpbr smoke-test             # Validate setup
       mcpbr run -c config.yaml     # Run evaluation
       mcpbr run -c config.yaml -M  # MCP only
       mcpbr run -c config.yaml -B  # Baseline only
@@ -1087,6 +1089,53 @@ def validate(config_path: Path) -> None:
         console.print("[red bold]Configuration validation failed.[/red bold]")
         console.print("[dim]Fix the errors above and run validation again.[/dim]")
         sys.exit(1)
+
+
+@main.command(name="smoke-test", context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--config",
+    "-c",
+    "config_path",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Path to configuration file (default: mcpbr.yaml)",
+)
+def smoke_test(config_path: Path | None) -> None:
+    """Run smoke tests to validate setup before running evaluations.
+
+    Validates configuration, checks Docker availability, tests API connectivity,
+    and verifies MCP server configuration. This is useful for quickly checking
+    that your environment is properly configured before running a full evaluation.
+
+    \b
+    Tests performed:
+      ✓ Configuration validation
+      ✓ Docker daemon connectivity
+      ✓ Anthropic API authentication
+      ✓ MCP server configuration
+
+    \b
+    Examples:
+      mcpbr smoke-test                    # Use mcpbr.yaml in current directory
+      mcpbr smoke-test -c config.yaml     # Use specific config file
+    """
+    from .smoke_test import run_smoke_test
+
+    # Default to mcpbr.yaml if no config provided
+    if config_path is None:
+        config_path = Path("mcpbr.yaml")
+        if not config_path.exists():
+            console.print(
+                "[red]Error: No configuration file specified and mcpbr.yaml not found.[/red]"
+            )
+            console.print("[dim]Run 'mcpbr smoke-test -c <config-file>' or create mcpbr.yaml[/dim]")
+            sys.exit(1)
+
+    # Run smoke tests
+    success = asyncio.run(run_smoke_test(config_path))
+
+    # Exit with appropriate code
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":
