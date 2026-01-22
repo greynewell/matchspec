@@ -1,0 +1,30 @@
+# Supermodel MCP server configuration for mcpbr
+#
+# This uses the Supermodel codebase analysis MCP server.
+# Requires SUPERMODEL_API_KEY environment variable.
+
+mcp_server:
+  name: "supermodel"
+  command: "npx"
+  args:
+    - "-y"
+    - "@supermodeltools/mcp-server"
+  env:
+    SUPERMODEL_API_KEY: "${SUPERMODEL_API_KEY}"
+    SUPERMODEL_BASE_URL: "https://api.supermodeltools.com"
+
+provider: "anthropic"
+
+agent_harness: "claude-code"
+
+model: "claude-sonnet-4-20250514"
+
+dataset: "SWE-bench/SWE-bench_Lite"
+
+# sample_size: 300  # Uncomment to limit the number of tasks (SWE-bench Lite has 300 total)
+
+timeout_seconds: 300
+
+max_concurrent: 4
+
+max_iterations: 30

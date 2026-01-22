@@ -213,6 +213,10 @@ Debug logs go to stderr:
 - Insufficient disk space: Free up space in your system's temp directory
 - Directory does not exist: Verify the path is correct and absolute
 
+## Benchmarking
+
+Benchmark this MCP server using [mcpbr](https://github.com/caspianmoon/mcpbr-benchmark-caching) with the provided [`mcpbr-config.yaml`](./mcpbr-config.yaml) configuration.
+
 ## Links
 
 - [API Documentation](https://docs.supermodeltools.com)
