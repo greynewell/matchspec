@@ -25,13 +25,12 @@
   },
   "license": "MIT",
   "author": "mcpbr Contributors",
-  "readme": "NPM.md",
   "bin": {
     "mcpbr": "./bin/mcpbr.js"
   },
   "files": [
     "bin/",
-    "NPM.md"
+    "README.md"
   ],
   "scripts": {
     "test": "node bin/mcpbr.js --version",
