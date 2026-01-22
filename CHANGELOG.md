@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.18] - 2026-01-22
+
+### Added
+
+- **Plugin Marketplace**: Added `marketplace.json` for Claude Code plugin manager installation (closes #266)
+  - Proper marketplace manifest with owner information
+  - GitHub source configuration for plugin distribution
+  - Automatic installation via Claude Code plugin manager
+- **Plugin Documentation**: Comprehensive documentation for the Claude Code plugin (closes #273)
+  - Installation guide with multiple methods
+  - Complete skills reference for all three skills
+  - Architecture explanation and execution flow
+  - Troubleshooting section with common issues
+  - FAQ covering plugin usage and development
+- **Plugin Validation**: Automated validation of plugin manifests in CI
+  - Python-based validation script for plugin.json and marketplace.json
+  - Checks required fields, structure, and schema compliance
+  - Runs on every PR to prevent breaking changes
+- **Community Guidelines**: Added Code of Conduct for project contributors
+  - Contributor Covenant code of conduct
+  - Guidelines for respectful collaboration
+
+### Changed
+
+- **Version Sync**: Enhanced version sync script to include marketplace.json
+  - Syncs version across plugin.json, marketplace.json, and package.json files
+  - Updates both root and nested plugin versions
+  - Ensures consistency across all distribution channels
+- **CI/CD**: Updated CI to validate all version files are synced
+  - Checks plugin.json, marketplace.json, package.json versions
+  - Prevents version drift across npm packages
+
+### Infrastructure
+
+- **npm Publishing**: First official npm package releases
+  - `@greynewell/mcpbr` - CLI wrapper for cross-platform installation
+  - `@greynewell/mcpbr-claude-plugin` - Claude Code plugin package
+  - Automated publishing workflow on GitHub releases
+  - Publishes both packages with synchronized versions
+
 ## [0.3.17] - 2026-01-22
 
 ### Added
@@ -294,6 +334,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--no-prebuilt` CLI flag to disable pre-built images and build from scratch
 - Network access for containers to enable API calls from within Docker
 
+[0.3.18]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.18
 [0.3.17]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.17
 [0.3.16]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.16
 [0.3.15]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.15
