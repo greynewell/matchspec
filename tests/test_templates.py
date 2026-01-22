@@ -334,17 +334,17 @@ class TestTemplateValidation:
 
         for template_id, template in TEMPLATES.items():
             benchmark = template.config["benchmark"]
-            assert benchmark in VALID_BENCHMARKS, (
-                f"Template {template_id} has invalid benchmark: {benchmark}"
-            )
+            assert (
+                benchmark in VALID_BENCHMARKS
+            ), f"Template {template_id} has invalid benchmark: {benchmark}"
 
     def test_cybergym_templates_have_level(self) -> None:
         """Test that CyberGym templates have cybergym_level."""
         for template_id, template in TEMPLATES.items():
             if template.config["benchmark"] == "cybergym":
-                assert "cybergym_level" in template.config, (
-                    f"CyberGym template {template_id} missing cybergym_level"
-                )
+                assert (
+                    "cybergym_level" in template.config
+                ), f"CyberGym template {template_id} missing cybergym_level"
                 level = template.config["cybergym_level"]
                 assert 0 <= level <= 3, f"Template {template_id} has invalid level: {level}"
 

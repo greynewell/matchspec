@@ -8,17 +8,17 @@
 mcp_server:
   # Name to register the MCP server as (appears in tool names like mcp__<name>__*)
   name: "filesystem"
-  
+
   # Command to start the MCP server
   command: "npx"
-  
+
   # Arguments to pass to the command
   # Use {workdir} as a placeholder for the task working directory
   args:
     - "-y"
     - "@modelcontextprotocol/server-filesystem"
     - "{workdir}"
-  
+
   # Environment variables for the MCP server (optional)
   env: {}
 

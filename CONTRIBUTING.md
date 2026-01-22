@@ -89,6 +89,79 @@ ruff check --fix src/ tests/
 ruff format src/ tests/
 ```
 
+### Development Tools
+
+#### Makefile
+
+The project includes a `Makefile` for common development tasks:
+
+```bash
+# Show all available commands
+make help
+
+# Install development dependencies
+make install
+
+# Run unit tests
+make test
+
+# Run all tests (including integration)
+make test-all
+
+# Run linting checks
+make lint
+
+# Format code
+make format
+
+# Sync version across project files
+make sync-version
+
+# Clean build artifacts
+make clean
+
+# Build distribution packages
+make build
+```
+
+#### Version Management
+
+The project uses a centralized version in `pyproject.toml` that is automatically synced to other files (like `.claude-plugin/plugin.json`).
+
+**Automated syncing:**
+- The version sync runs automatically during `make build`
+- CI checks verify versions are in sync on every push/PR
+- Pre-commit hooks can sync versions before commits (see below)
+
+**Manual syncing:**
+```bash
+make sync-version
+# or
+python3 scripts/sync_version.py
+```
+
+#### Pre-commit Hooks (Optional)
+
+The project includes a `.pre-commit-config.yaml` for automated checks before commits:
+
+```bash
+# Install pre-commit (if not already installed)
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+
+# Run manually on all files
+pre-commit run --all-files
+```
+
+The pre-commit hooks will automatically:
+- Sync version files when `pyproject.toml` changes
+- Run ruff linting and formatting
+- Fix trailing whitespace and file endings
+- Check YAML syntax
+- Prevent large files and merge conflicts
+
 ### Commit Messages
 
 - Use clear, descriptive commit messages

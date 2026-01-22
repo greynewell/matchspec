@@ -37,9 +37,9 @@ class TestClaude45ModelsRegistered:
         # Pattern: claude-{variant}-{version}-{date}
         pattern = r"^claude-(opus|sonnet|haiku)-4-5-\d{8}$"
         for model_id in CLAUDE_45_MODELS:
-            assert re.match(pattern, model_id), (
-                f"Model ID {model_id} doesn't match expected pattern"
-            )
+            assert re.match(
+                pattern, model_id
+            ), f"Model ID {model_id} doesn't match expected pattern"
 
     def test_model_context_windows(self) -> None:
         """Verify all 4.5 models have 200K context window."""
