@@ -1,0 +1,26 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "mcpbr",
+  "version": "0.3.17",
+  "description": "mcpbr - MCP Benchmark Runner plugin marketplace",
+  "owner": {
+    "name": "mcpbr Contributors",
+    "email": "support@mcpbr.dev"
+  },
+  "plugins": [
+    {
+      "name": "mcpbr",
+      "description": "Expert benchmark runner for MCP servers using mcpbr. Handles Docker checks, config generation, and result parsing.",
+      "version": "0.3.17",
+      "author": {
+        "name": "mcpbr Contributors"
+      },
+      "source": {
+        "source": "github",
+        "repo": "greynewell/mcpbr",
+        "path": ".claude-plugin"
+      },
+      "category": "development"
+    }
+  ]
+}
