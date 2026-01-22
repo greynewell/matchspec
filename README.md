@@ -285,6 +285,60 @@ max_concurrent: 4
 mcpbr run --config config.yaml
 ```
 
+## Claude Code Integration
+
+[![Claude Code Ready](https://img.shields.io/badge/Claude_Code-Ready-5865F2?style=flat&logo=anthropic)](https://claude.ai/download)
+
+mcpbr includes a built-in Claude Code plugin that makes Claude an expert at running benchmarks correctly. When you clone this repository, Claude Code automatically detects the plugin and gains specialized knowledge about mcpbr.
+
+### What This Means for You
+
+When using Claude Code in this repository, you can simply say:
+
+- "Run the SWE-bench Lite benchmark"
+- "Generate a config for my MCP server"
+- "Run a quick test with 1 task"
+
+Claude will automatically:
+- Verify Docker is running before starting
+- Check for required API keys
+- Generate valid configurations with proper `{workdir}` placeholders
+- Use correct CLI flags and options
+- Provide helpful troubleshooting when issues occur
+
+### Available Skills
+
+The plugin includes three specialized skills:
+
+1. **run-benchmark**: Expert at running evaluations with proper validation
+   - Checks prerequisites (Docker, API keys, config files)
+   - Constructs valid `mcpbr run` commands
+   - Handles errors gracefully with actionable feedback
+
+2. **generate-config**: Generates valid mcpbr configuration files
+   - Ensures `{workdir}` placeholder is included
+   - Validates MCP server commands
+   - Provides benchmark-specific templates
+
+3. **swe-bench-lite**: Quick-start command for SWE-bench Lite
+   - Pre-configured for 5-task evaluation
+   - Includes sensible defaults for output files
+   - Perfect for testing and demonstrations
+
+### Getting Started with Claude Code
+
+Just clone the repository and start asking Claude to run benchmarks:
+
+```bash
+git clone https://github.com/greynewell/mcpbr.git
+cd mcpbr
+
+# In Claude Code, simply say:
+# "Run the SWE-bench Lite eval with 5 tasks"
+```
+
+The bundled plugin ensures Claude makes no silly mistakes and follows best practices automatically.
+
 ## Configuration
 
 > **[Full configuration reference](https://greynewell.github.io/mcpbr/configuration/)** with all options and examples.
