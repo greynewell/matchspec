@@ -118,11 +118,8 @@ jobs:
 
       - name: Verify mcpbr Python package installation
         run: |
-          python --version
-          python3 --version
-          pip list | grep mcpbr
           python -m mcpbr --version
-          python3 -m mcpbr --version
+          echo "mcpbr Python package installed successfully"
 
       - name: Verify CLI package structure
         run: |

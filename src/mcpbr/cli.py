@@ -37,8 +37,8 @@ class DefaultToRunGroup(click.Group):
         if args and args[0] not in self.commands and not args[0].startswith("-"):
             return super().parse_args(ctx, args)
 
-        # Don't default to 'run' if asking for help at the group level
-        if args and args[0] in ("--help", "-h"):
+        # Don't default to 'run' if asking for help or version at the group level
+        if args and args[0] in ("--help", "-h", "--version"):
             return super().parse_args(ctx, args)
 
         if not args or args[0].startswith("-"):
