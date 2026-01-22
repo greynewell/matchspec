@@ -116,6 +116,14 @@ jobs:
           python -m build
           pip install dist/*.whl
 
+      - name: Verify mcpbr Python package installation
+        run: |
+          python --version
+          python3 --version
+          pip list | grep mcpbr
+          python -m mcpbr --version
+          python3 -m mcpbr --version
+
       - name: Verify CLI package structure
         run: |
           test -f package.json || (echo "Error: Root package.json not found" && exit 1)
