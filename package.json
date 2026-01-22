@@ -1,6 +1,6 @@
 {
   "name": "@supermodeltools/mcp-server",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "description": "MCP server for Supermodel API - code graph generation for AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
