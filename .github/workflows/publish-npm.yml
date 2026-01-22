@@ -89,17 +89,36 @@ jobs:
           npm install
           echo "CLI dependencies installed"
 
-      - name: Publish CLI package to npm
+      - name: Publish scoped CLI package to npm
         run: |
           npm publish --access public
-          echo "CLI package published successfully"
+          echo "Scoped CLI package (@greynewell/mcpbr) published successfully"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish plugin package to npm
+      - name: Publish scoped plugin package to npm
         run: |
           cd .claude-plugin
           npm publish --access public
-          echo "Plugin package published successfully"
+          echo "Scoped plugin package (@greynewell/mcpbr-claude-plugin) published successfully"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish unscoped CLI package to npm
+        run: |
+          # Update package.json to remove scope
+          node -e "const pkg = require('./package.json'); pkg.name = 'mcpbr'; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+          npm publish --access public
+          echo "Unscoped CLI package (mcpbr) published successfully"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish unscoped plugin package to npm
+        run: |
+          cd .claude-plugin
+          # Update package.json to remove scope
+          node -e "const pkg = require('./package.json'); pkg.name = 'mcpbr-claude-plugin'; require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+          npm publish --access public
+          echo "Unscoped plugin package (mcpbr-claude-plugin) published successfully"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
