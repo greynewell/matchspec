@@ -27,19 +27,45 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Publishing version: $VERSION"
 
-      - name: Update package.json version
+      - name: Update CLI package version
         run: |
-          # Update version in package.json to match release tag
+          # Update version in root package.json to match release tag
           npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
+          echo "CLI package version updated"
 
-      - name: Verify package contents
+      - name: Update plugin package version
         run: |
-          # Check that required files exist
-          test -f .claude-plugin/plugin.json || (echo "Error: plugin.json not found" && exit 1)
-          test -d skills || (echo "Error: skills directory not found" && exit 1)
-          echo "Package contents verified"
+          # Update version in .claude-plugin/package.json to match release tag
+          cd .claude-plugin
+          npm version ${{ steps.get_version.outputs.version }} --no-git-tag-version
+          echo "Plugin package version updated"
 
-      - name: Publish to npm
-        run: npm publish
+      - name: Verify CLI package contents
+        run: |
+          # Check that required files exist for CLI package
+          test -f package.json || (echo "Error: Root package.json not found" && exit 1)
+          test -f bin/mcpbr.js || (echo "Error: CLI binary not found" && exit 1)
+          echo "CLI package contents verified"
+
+      - name: Verify plugin package contents
+        run: |
+          # Check that required files exist for plugin package
+          test -f .claude-plugin/package.json || (echo "Error: Plugin package.json not found" && exit 1)
+          test -f .claude-plugin/plugin.json || (echo "Error: plugin.json not found" && exit 1)
+          test -d .claude-plugin/skills || (echo "Error: skills directory not found" && exit 1)
+          echo "Plugin package contents verified"
+
+      - name: Publish CLI package to npm
+        run: |
+          npm publish --access public
+          echo "CLI package published successfully"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish plugin package to npm
+        run: |
+          cd .claude-plugin
+          npm publish --access public
+          echo "Plugin package published successfully"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -90,3 +90,42 @@ jobs:
         run: |
           pip install twine
           twine check dist/*
+
+  npm-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify CLI package structure
+        run: |
+          test -f package.json || (echo "Error: Root package.json not found" && exit 1)
+          test -f bin/mcpbr.js || (echo "Error: CLI binary not found" && exit 1)
+          echo "CLI package structure verified"
+
+      - name: Run CLI package scripts
+        run: |
+          npm test
+          echo "CLI package tests passed"
+
+      - name: Verify plugin package structure
+        run: |
+          test -f .claude-plugin/package.json || (echo "Error: Plugin package.json not found" && exit 1)
+          test -f .claude-plugin/plugin.json || (echo "Error: plugin.json not found" && exit 1)
+          test -d .claude-plugin/skills || (echo "Error: skills directory not found" && exit 1)
+          echo "Plugin package structure verified"
+
+      - name: Check CLI package with npm pack
+        run: |
+          npm pack --dry-run
+          echo "CLI package check passed"
+
+      - name: Check plugin package with npm pack
+        run: |
+          cd .claude-plugin
+          npm pack --dry-run
+          echo "Plugin package check passed"
