@@ -289,55 +289,131 @@ mcpbr run --config config.yaml
 
 [![Claude Code Ready](https://img.shields.io/badge/Claude_Code-Ready-5865F2?style=flat&logo=anthropic)](https://claude.ai/download)
 
-mcpbr includes a built-in Claude Code plugin that makes Claude an expert at running benchmarks correctly. When you clone this repository, Claude Code automatically detects the plugin and gains specialized knowledge about mcpbr.
+mcpbr includes a built-in Claude Code plugin that makes Claude an expert at running benchmarks correctly. The plugin provides specialized skills and knowledge about mcpbr configuration, execution, and troubleshooting.
 
-### What This Means for You
+### Installation Options
 
-When using Claude Code in this repository, you can simply say:
+You have three ways to enable the mcpbr plugin in Claude Code:
 
-- "Run the SWE-bench Lite benchmark"
-- "Generate a config for my MCP server"
-- "Run a quick test with 1 task"
+#### Option 1: Clone Repository (Automatic Detection)
 
-Claude will automatically:
-- Verify Docker is running before starting
-- Check for required API keys
-- Generate valid configurations with proper `{workdir}` placeholders
-- Use correct CLI flags and options
-- Provide helpful troubleshooting when issues occur
-
-### Available Skills
-
-The plugin includes three specialized skills:
-
-1. **run-benchmark**: Expert at running evaluations with proper validation
-   - Checks prerequisites (Docker, API keys, config files)
-   - Constructs valid `mcpbr run` commands
-   - Handles errors gracefully with actionable feedback
-
-2. **generate-config**: Generates valid mcpbr configuration files
-   - Ensures `{workdir}` placeholder is included
-   - Validates MCP server commands
-   - Provides benchmark-specific templates
-
-3. **swe-bench-lite**: Quick-start command for SWE-bench Lite
-   - Pre-configured for 5-task evaluation
-   - Includes sensible defaults for output files
-   - Perfect for testing and demonstrations
-
-### Getting Started with Claude Code
-
-Just clone the repository and start asking Claude to run benchmarks:
+When you clone this repository, Claude Code automatically detects and loads the plugin:
 
 ```bash
 git clone https://github.com/greynewell/mcpbr.git
 cd mcpbr
 
-# In Claude Code, simply say:
+# Plugin is now active - try asking Claude:
 # "Run the SWE-bench Lite eval with 5 tasks"
 ```
 
-The bundled plugin ensures Claude makes no silly mistakes and follows best practices automatically.
+**Best for**: Contributors, developers testing changes, or users who want the latest unreleased features.
+
+#### Option 2: npm Global Install (Coming Soon)
+
+Install the plugin globally via npm for use across any project:
+
+```bash
+# Coming in v0.4.0
+npm install -g @mcpbr/claude-code-plugin
+```
+
+**Best for**: Users who want plugin features available in any directory.
+
+#### Option 3: Claude Code Plugin Manager
+
+Install via Claude Code's built-in plugin manager:
+
+1. Open Claude Code settings
+2. Navigate to Plugins > Browse
+3. Search for "mcpbr"
+4. Click Install
+
+**Best for**: Users who prefer a GUI and want automatic updates.
+
+### Installation Comparison
+
+| Method | Availability | Auto-updates | Works Anywhere | Latest Features |
+|--------|-------------|--------------|----------------|-----------------|
+| Clone Repository | Available now | Manual (git pull) | No (repo only) | Yes (unreleased) |
+| npm Global Install | Coming v0.4.0 | Via npm | Yes | Yes (published) |
+| Plugin Manager | Coming v0.4.0 | Automatic | Yes | Yes (published) |
+
+### What You Get
+
+The plugin includes three specialized skills that enhance Claude's ability to work with mcpbr:
+
+#### 1. run-benchmark
+Expert at running evaluations with proper validation and error handling.
+
+**Capabilities**:
+- Validates prerequisites (Docker running, API keys set, config files exist)
+- Constructs correct `mcpbr run` commands with appropriate flags
+- Handles errors gracefully with actionable troubleshooting steps
+- Monitors progress and provides meaningful status updates
+
+**Example interactions**:
+- "Run the SWE-bench Lite benchmark with 10 tasks"
+- "Evaluate my MCP server using CyberGym level 2"
+- "Test my config with a single task"
+
+#### 2. generate-config
+Generates valid mcpbr configuration files with benchmark-specific templates.
+
+**Capabilities**:
+- Ensures required `{workdir}` placeholder is included in MCP server args
+- Validates MCP server command syntax
+- Provides templates for different benchmarks (SWE-bench, CyberGym, MCPToolBench++)
+- Suggests appropriate timeouts and concurrency settings
+
+**Example interactions**:
+- "Generate a config for the filesystem MCP server"
+- "Create a config for testing my custom MCP server"
+- "Set up a CyberGym evaluation config"
+
+#### 3. swe-bench-lite
+Quick-start command for running SWE-bench Lite evaluations.
+
+**Capabilities**:
+- Pre-configured for 5-task evaluation (fast testing)
+- Includes sensible defaults for output files and logging
+- Perfect for demonstrations and initial testing
+- Automatically sets up verbose output for debugging
+
+**Example interactions**:
+- "Run a quick SWE-bench Lite test"
+- "Show me how mcpbr works"
+- "Test the filesystem server"
+
+### Benefits
+
+When using Claude Code with the mcpbr plugin active, Claude will automatically:
+
+- Verify Docker is running before starting evaluations
+- Check for required API keys (`ANTHROPIC_API_KEY`)
+- Generate valid configurations with proper `{workdir}` placeholders
+- Use correct CLI flags and avoid deprecated options
+- Provide contextual troubleshooting when issues occur
+- Follow mcpbr best practices for optimal results
+
+### Troubleshooting
+
+**Plugin not detected in cloned repository**:
+- Ensure you're in the repository root directory
+- Verify the `claude-code.json` file exists in the repo
+- Try restarting Claude Code
+
+**Skills not appearing**:
+- Check Claude Code version (requires v2.0+)
+- Verify plugin is listed in Settings > Plugins
+- Try running `/reload-plugins` in Claude Code
+
+**Commands failing**:
+- Ensure mcpbr is installed: `pip install mcpbr`
+- Verify Docker is running: `docker info`
+- Check API key is set: `echo $ANTHROPIC_API_KEY`
+
+For more help, see the [troubleshooting guide](https://greynewell.github.io/mcpbr/troubleshooting/) or [open an issue](https://github.com/greynewell/mcpbr/issues).
 
 ## Configuration
 
