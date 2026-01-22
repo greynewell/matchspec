@@ -153,7 +153,7 @@ npm test
 ## Related Packages
 
 - [`mcpbr`](https://pypi.org/project/mcpbr/) - Python package (core implementation)
-- [`@greynewell/claude-code-plugin`](https://www.npmjs.com/package/@greynewell/claude-code-plugin) - Claude Code plugin
+- [`@greynewell/mcpbr-claude-plugin`](https://www.npmjs.com/package/@greynewell/mcpbr-claude-plugin) - Claude Code plugin
 
 ## License
 
