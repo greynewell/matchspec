@@ -1,0 +1,8 @@
+{
+  "plugins": [
+    {
+      "source": "file:.claude-plugin",
+      "scope": "project"
+    }
+  ]
+}

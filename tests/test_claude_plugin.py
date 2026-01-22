@@ -82,7 +82,7 @@ class TestSkills:
     @pytest.fixture
     def skills_dir(self) -> Path:
         """Return path to skills directory."""
-        return Path(__file__).parent.parent / "skills"
+        return Path(__file__).parent.parent / ".claude-plugin" / "skills"
 
     @pytest.fixture
     def skill_dirs(self, skills_dir: Path) -> list[Path]:
