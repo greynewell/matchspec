@@ -83,6 +83,7 @@ nav:
       - Benchmarks: benchmarks.md
       - MCP Integration: mcp-integration.md
       - Evaluation Results: evaluation-results.md
+      - Claude Code Plugin: claude-code-plugin.md
   - Reference:
       - Architecture: architecture.md
       - API Reference: api/index.md
