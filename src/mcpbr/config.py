@@ -34,6 +34,14 @@ class MCPServerConfig(BaseModel):
         default_factory=dict,
         description="Environment variables for the MCP server",
     )
+    startup_timeout_ms: int = Field(
+        default=60000,
+        description="Timeout in milliseconds for MCP server startup (default: 60s)",
+    )
+    tool_timeout_ms: int = Field(
+        default=900000,
+        description="Timeout in milliseconds for MCP tool execution (default: 15 min for long-running tools)",
+    )
 
     def get_args_for_workdir(self, workdir: str) -> list[str]:
         """Replace {workdir} placeholder in args with actual path."""

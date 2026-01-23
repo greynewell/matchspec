@@ -602,6 +602,12 @@ class ClaudeCodeHarness:
             "USER": "mcpbr",
         }
 
+        # Add MCP timeout configuration if MCP server is configured
+        # See: https://code.claude.com/docs/en/settings.md
+        if self.mcp_server:
+            docker_env["MCP_TIMEOUT"] = str(self.mcp_server.startup_timeout_ms)
+            docker_env["MCP_TOOL_TIMEOUT"] = str(self.mcp_server.tool_timeout_ms)
+
         prompt_file = "/tmp/.mcpbr_prompt.txt"
         await env.exec_command(
             f"cat > {prompt_file} << 'MCPBR_PROMPT_EOF'\n{prompt}\nMCPBR_PROMPT_EOF",
@@ -612,8 +618,14 @@ class ClaudeCodeHarness:
         env_file = "/tmp/.mcpbr_env.sh"
         env_exports = f"export ANTHROPIC_API_KEY='{api_key}'\nexport HOME='/home/mcpbr'\n"
 
-        # Add MCP server env vars
+        # Add MCP server env vars and timeout configuration
         if self.mcp_server:
+            # Add MCP timeout configuration for Claude CLI
+            # See: https://code.claude.com/docs/en/settings.md
+            env_exports += f"export MCP_TIMEOUT='{self.mcp_server.startup_timeout_ms}'\n"
+            env_exports += f"export MCP_TOOL_TIMEOUT='{self.mcp_server.tool_timeout_ms}'\n"
+
+            # Add user-defined MCP server env vars
             for key, value in self.mcp_server.get_expanded_env().items():
                 env_exports += f"export {key}='{value}'\n"
 
