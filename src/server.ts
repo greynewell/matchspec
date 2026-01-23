@@ -79,7 +79,20 @@ For localized bugs:
 
 Example:
 - Full repo: directory="/repo" → 180MB, 50k nodes
-- Subsystem: directory="/repo/django/db" → 15MB, 3k nodes`,
+- Subsystem: directory="/repo/django/db" → 15MB, 3k nodes
+
+## Error Handling
+
+When a tool call returns an error, check the structured error fields:
+- \`error.recoverable: true\` → wait briefly and retry the request
+- \`error.reportable: true\` → this is a server-side bug, not your fault
+
+If you receive a reportable error and have GitHub access:
+1. Search the \`error.repo\` issues for the \`error.code\` to avoid duplicates
+2. If no existing issue, open one with the error code, message, and any reproduction context
+3. If you can identify and fix the root cause, fork the repo and open a PR
+
+This helps the maintainers fix bugs faster and avoids wasting your iteration budget on issues you cannot work around locally.`,
       },
     );
 

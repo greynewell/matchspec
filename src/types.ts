@@ -71,6 +71,8 @@ export interface StructuredError {
   recoverable: boolean;
   suggestion?: string;
   details?: Record<string, unknown>;
+  reportable?: boolean;
+  repo?: string;
 }
 
 export function asErrorResult(error: string | StructuredError): ToolCallResult {
