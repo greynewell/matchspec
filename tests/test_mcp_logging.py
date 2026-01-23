@@ -222,3 +222,109 @@ class TestMCPLogging:
         """Test that environment variables are properly configured."""
         assert "TEST_VAR" in mcp_config.env
         assert mcp_config.env["TEST_VAR"] == "test_value"
+
+    @pytest.mark.asyncio
+    async def test_mcp_logs_captured_without_keywords(self, harness: ClaudeCodeHarness) -> None:
+        """Test that MCP server stdout is captured even without 'mcp' or 'supermodel' keywords.
+
+        Regression test for bug where stdout was filtered by keywords, causing most
+        MCP server logs (e.g., filesystem server, generic diagnostics) to be dropped.
+        """
+        mock_env = MagicMock()
+        mock_env.workdir = "/workspace"
+        mock_env.exec_command_streaming = AsyncMock()
+        mock_env.exec_command = AsyncMock()
+
+        # MCP server output without "mcp" or "supermodel" keywords
+        # This is typical output from filesystem MCP server
+        test_stdout = """Server initialized on stdio
+Received request: tools/list
+Returning 10 tools
+Request completed in 12ms
+File read: /workspace/test.py
+Request completed in 5ms"""
+
+        test_stderr = """Warning: Large file detected
+Debug: Cache miss for /workspace/"""
+
+        # Mock successful execution with stdout that doesn't contain filter keywords
+        mock_env.exec_command.side_effect = [
+            (0, "", ""),  # prompt file write
+            (0, "", ""),  # chown prompt
+            (0, "", ""),  # env file write
+            (0, "", ""),  # chown env
+            (0, "MCP server registered successfully", ""),  # MCP registration
+            (0, "", ""),  # MCP server remove (cleanup)
+            (0, "", ""),  # rm temp files (cleanup)
+        ]
+
+        # Mock streaming execution with our test output
+        async def mock_streaming(*args, **kwargs):
+            # Call the on_stdout callback for each line
+            if "on_stdout" in kwargs:
+                for line in test_stdout.splitlines():
+                    kwargs["on_stdout"](line)
+            if "on_stderr" in kwargs:
+                for line in test_stderr.splitlines():
+                    kwargs["on_stderr"](line)
+            # Return as if task completed (simulating timeout but with output)
+            return (124, test_stdout, test_stderr)
+
+        mock_env.exec_command_streaming.side_effect = mock_streaming
+
+        task = {
+            "instance_id": "test-filesystem-server",
+            "problem_statement": "Test problem",
+            "hints_text": "",
+            "created_at": "2024-01-01",
+        }
+
+        # Log file location (using actual .mcpbr_state directory)
+        log_dir = Path.home() / ".mcpbr_state" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        expected_log_file = log_dir / "test_id_mcp.log"
+
+        # Clean up any existing log file from previous test runs
+        if expected_log_file.exists():
+            expected_log_file.unlink()
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            _ = await harness._solve_in_docker(
+                task=task,
+                env=mock_env,
+                timeout=60,
+                verbose=True,
+                task_id="test_id",
+            )
+
+            # Verify the log file was created
+            assert expected_log_file.exists(), "MCP log file should be created"
+
+            # Read the actual log file content
+            log_content = expected_log_file.read_text()
+
+            # Check that stdout lines without "mcp" or "supermodel" were captured
+            # These lines would NOT be captured with the old keyword-filtering code
+            assert "[STDOUT] Server initialized on stdio" in log_content, (
+                "Stdout without keywords should be captured"
+            )
+            assert "[STDOUT] Returning 10 tools" in log_content, (
+                "Generic server output should be captured"
+            )
+            assert "[STDOUT] File read: /workspace/test.py" in log_content, (
+                "Filesystem operations should be captured"
+            )
+            assert "[STDOUT] Request completed in 12ms" in log_content, (
+                "Performance logs should be captured"
+            )
+
+            # Check that stderr was also captured
+            assert "[STDERR] Warning: Large file detected" in log_content, (
+                "Stderr should be captured"
+            )
+            assert "[STDERR] Debug: Cache miss for /workspace/" in log_content, (
+                "Stderr debug output should be captured"
+            )
+
+            # Clean up the test log file
+            expected_log_file.unlink()
