@@ -277,6 +277,113 @@ export PATH="$PATH:$(npm config get prefix)/bin"
 2. Check per-instance logs for tool registration
 3. Review tool_usage in results JSON
 
+### MCP Server Logs
+
+**New in v3.0.0**: mcpbr now captures MCP server logs automatically.
+
+**Log Location**: `~/.mcpbr_state/logs/{instance_id}_mcp.log`
+
+**What's captured**:
+- MCP server stdout and stderr
+- Claude CLI's MCP-related output
+- Tool call errors and timeouts
+
+**How to access**:
+
+```bash
+# View logs for a specific instance
+cat ~/.mcpbr_state/logs/django__django-11905_mcp.log
+
+# View logs for all instances
+ls ~/.mcpbr_state/logs/
+
+# Follow logs in real-time during evaluation
+tail -f ~/.mcpbr_state/logs/*.log
+```
+
+**Error messages now include log paths**:
+```text
+Error: Task execution timed out after 1200s.
+       MCP server 'supermodel' was registered successfully
+       but the agent failed to complete within the timeout.
+       MCP server logs saved to: ~/.mcpbr_state/logs/django__django-11905_mcp.log
+```
+
+### MCP Tool Timeouts
+
+**Symptom**: MCP tool calls timing out or failing with "Request failed"
+
+**Explanation**: Some MCP servers (like Supermodel's codebase analyzer) can take several minutes to respond. Claude CLI has default timeouts that may be too short.
+
+**Solution**: Configure MCP timeouts in your config file:
+
+```yaml
+mcp_server:
+  name: "supermodel"
+  command: "npx"
+  args:
+    - "-y"
+    - "@supermodeltools/mcp-server"
+    - "{workdir}"
+  startup_timeout_ms: 60000      # 60 seconds for server to start
+  tool_timeout_ms: 900000        # 15 minutes for tool calls
+  env:
+    SUPERMODEL_API_KEY: "${SUPERMODEL_API_KEY}"
+```
+
+**Recommended timeouts by server type**:
+
+| Server Type | startup_timeout_ms | tool_timeout_ms | Notes |
+|-------------|-------------------|-----------------|-------|
+| Fast (filesystem, git) | 10000 (10s) | 30000 (30s) | Local operations |
+| Medium (web search) | 30000 (30s) | 120000 (2m) | Network I/O |
+| Slow (code analysis) | 60000 (60s) | 900000 (15m) | Complex processing |
+
+**Debug steps if timeouts persist**:
+
+1. Check MCP server logs (see above)
+2. Test the tool independently:
+   ```bash
+   # For Supermodel
+   npx -y @supermodeltools/mcp-server /tmp/test
+   ```
+3. Increase task timeout to allow for multiple retries:
+   ```yaml
+   timeout_seconds: 1200  # 20 minutes
+   ```
+
+### Registration Failures
+
+**Symptom**: "MCP server registration failed" or "MCP server registration timed out"
+
+**New in v3.0.0**: Detailed error messages showing exactly what failed.
+
+**Example errors**:
+
+```text
+MCP server registration failed (exit 1):
+  npx: command not found
+```
+
+```text
+MCP server registration timed out after 60s.
+  The MCP server may have failed to start or is hanging.
+```
+
+**Solutions**:
+
+1. **Command not found**: Ensure the MCP server command is in PATH:
+   ```bash
+   which npx  # Should return a path
+   ```
+
+2. **Slow server startup**: If your server takes >60s to start, this is unusual but you can modify the registration timeout in code (default is 60s)
+
+3. **Environment variables missing**: Check MCP server logs to see what's missing:
+   ```bash
+   cat ~/.mcpbr_state/logs/{instance_id}_mcp.log
+   ```
+
 ## Evaluation Issues
 
 ### Patch Not Applying

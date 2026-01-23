@@ -402,6 +402,45 @@ mcp_server:
     SUPERMODEL_API_KEY: "${SUPERMODEL_API_KEY}"
 ```
 
+### MCP Timeout Configuration
+
+mcpbr supports configurable timeouts for MCP server operations to handle different server types and workloads.
+
+#### Configuration Fields
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `startup_timeout_ms` | Timeout in milliseconds for MCP server startup | 60000 (60s) |
+| `tool_timeout_ms` | Timeout in milliseconds for MCP tool execution | 900000 (15 min) |
+
+These fields map to the `MCP_TIMEOUT` and `MCP_TOOL_TIMEOUT` environment variables used by Claude Code. See the [Claude Code settings documentation](https://code.claude.com/docs/en/settings.md) for more details.
+
+#### Example Configuration
+
+```yaml
+mcp_server:
+  command: "npx"
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
+  startup_timeout_ms: 60000      # 60 seconds for server to start
+  tool_timeout_ms: 900000        # 15 minutes for long-running tools
+```
+
+#### Common Timeout Values
+
+Different server types require different timeout settings based on their operational characteristics:
+
+| Server Type | startup_timeout_ms | tool_timeout_ms | Notes |
+|-------------|-------------------|-----------------|-------|
+| Fast (filesystem, git) | 10000 (10s) | 30000 (30s) | Local operations with minimal overhead |
+| Medium (web search, APIs) | 30000 (30s) | 120000 (2m) | Network I/O with moderate latency |
+| Slow (code analysis, databases) | 60000 (60s) | 900000 (15m) | Complex processing or large datasets |
+
+**When to adjust timeouts:**
+
+- **Increase `startup_timeout_ms`** if your server takes longer to initialize (e.g., loading large models, establishing database connections)
+- **Increase `tool_timeout_ms`** if your tools perform long-running operations (e.g., codebase analysis, file processing, AI inference)
+- **Decrease timeouts** for fast servers to fail quickly on connection issues
+
 ### Custom Agent Prompt
 
 You can customize the prompt sent to the agent using the `agent_prompt` field:
