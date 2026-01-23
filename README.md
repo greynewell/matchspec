@@ -196,6 +196,37 @@ Analyzes code structure, dependencies, and relationships across a repository. Us
 - Cleans up temporary files automatically
 - Cross-platform compatible
 
+## Tool Performance & Timeout Requirements
+
+The `explore_codebase` tool analyzes your entire repository to build a comprehensive code graph. Analysis time scales with repository size and complexity.
+
+| Tool | Typical Duration | Recommended Timeout | Repository Size |
+|------|------------------|---------------------|--------------------|
+| `explore_codebase` | 2-5 min | 600000ms (10 min) | Small (<1k files) |
+| `explore_codebase` | 5-10 min | 900000ms (15 min) | Medium (1k-10k files) |
+| `explore_codebase` | 10-15 min | 1200000ms (20 min) | Large (10k+ files) |
+
+**Default recommendation**: The server uses a 15-minute timeout (`900000ms`) by default, which works well for most medium-sized repositories.
+
+**Caching behavior**: The first run analyzes your codebase and caches the results. Subsequent queries on the same repository are typically much faster (seconds instead of minutes) as they use the cached graph.
+
+**Setting custom timeouts**: If you need to adjust the timeout for larger repositories, you can set the `SUPERMODEL_TIMEOUT_MS` environment variable:
+
+```json
+{
+  "mcpServers": {
+    "supermodel": {
+      "command": "npx",
+      "args": ["-y", "@supermodeltools/mcp-server"],
+      "env": {
+        "SUPERMODEL_API_KEY": "your-api-key",
+        "SUPERMODEL_TIMEOUT_MS": "1200000"
+      }
+    }
+  }
+}
+```
+
 ## Troubleshooting
 
 Debug logs go to stderr:
