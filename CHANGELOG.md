@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **MCP Server Log Capture** (closes #287): Comprehensive logging for MCP server debugging
+  - Automatic capture of MCP server stdout/stderr to `~/.mcpbr_state/logs/{instance_id}_mcp.log`
+  - MCP log path included in all error messages for easy access
+  - Real-time log writing during task execution for troubleshooting
+  - Proper cleanup in finally block to ensure logs are always saved
+- **Separate MCP Registration Phase** (closes #285): Better error visibility for MCP initialization
+  - MCP server registration now separate from Claude CLI execution with its own 60s timeout
+  - Detailed logging showing exact MCP registration command and arguments
+  - Clear success/failure messages for MCP server startup
+  - Early detection of MCP server initialization issues
+- **MCP Timeout Configuration**: Configurable timeouts for MCP servers
+  - `startup_timeout_ms` field for MCP server startup (default: 60 seconds)
+  - `tool_timeout_ms` field for long-running MCP tool calls (default: 15 minutes)
+  - Environment variables passed to Claude CLI for timeout configuration
+  - Documented recommended timeouts for different server types
+- **Integration Tests**: Comprehensive test coverage for MCP logging features
+  - Tests for log file creation and cleanup
+  - Tests for error message formatting with log paths
+  - Tests for stdout/stderr capture in error messages
+  - Tests for timeout handling and temp file cleanup
+
+### Changed
+
+- **Improved Error Messages**: Much more detailed MCP-related error reporting
+  - Registration failures now show exact command, exit code, and stderr
+  - MCP stdout included in error messages for better diagnostics
+  - Timeouts distinguish between init timeout vs execution timeout
+  - 0-iteration failures include hint to check MCP server logs
+  - All MCP errors include log file path for debugging
+- **Enhanced Security**: Shell injection prevention in MCP commands
+  - All MCP command arguments now quoted with `shlex.quote()`
+  - Prevents shell injection vulnerabilities
+  - Handles spaces and special characters correctly in paths
+- **Better Resource Cleanup**: Temp files cleaned up on all exit paths
+  - API keys in env files cleaned up before early returns
+  - Cleanup happens on registration failure, timeout, and normal exit
+  - Cleanup errors logged when verbose mode enabled
+
+### Fixed
+
+- **Resource Leaks**: Fixed temp file leaks on MCP registration failure
+  - Temp files containing `ANTHROPIC_API_KEY` now cleaned up before early returns
+  - Fixed cleanup bypass in registration failure and timeout paths
+- **Unused Variables**: Fixed RUF059 lint warnings
+  - `mcp_stdout` now used in error messages instead of discarded
+- **Shell Injection**: Fixed potential command injection in MCP registration
+  - Added `shlex` import and proper quoting for all command arguments
+
+### Documentation
+
+- **Troubleshooting Guide**: Added comprehensive MCP debugging section
+  - MCP server log location and access instructions
+  - MCP tool timeout configuration examples
+  - Recommended timeout values by server type
+  - Registration failure troubleshooting steps
+  - Examples of new error message formats
+- **Configuration Guide**: Documented new MCP timeout fields
+  - `startup_timeout_ms` and `tool_timeout_ms` configuration
+  - Examples for different MCP server types (fast, medium, slow)
+  - Integration with Claude CLI environment variables
+
 ## [0.3.20] - 2026-01-22
 
 ### Infrastructure
