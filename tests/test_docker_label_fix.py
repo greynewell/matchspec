@@ -19,7 +19,7 @@ def test_docker_labels_with_integer_instance_id():
     for key, value in labels_str.items():
         assert isinstance(value, str), f"Label {key} value should be str, got {type(value)}"
 
-    print(f"✓ Test 1 passed: String instance_id works")
+    print("✓ Test 1 passed: String instance_id works")
 
     # Test case 2: instance_id is an integer (bug case)
     instance_id_int = 12345
@@ -34,7 +34,7 @@ def test_docker_labels_with_integer_instance_id():
     for key, value in labels_int.items():
         assert isinstance(value, str), f"Label {key} value should be str, got {type(value)}"
 
-    print(f"✓ Test 2 passed: Integer instance_id converted to string")
+    print("✓ Test 2 passed: Integer instance_id converted to string")
 
     # Test case 3: Demonstrate the old bug (without str())
     try:
@@ -50,7 +50,7 @@ def test_docker_labels_with_integer_instance_id():
         for key, value in labels_buggy.items():
             if not isinstance(value, str):
                 # Simulate what Docker library does internally
-                label_string = key + "=" + value  # This will fail with int
+                _ = key + "=" + value  # This will fail with int
 
     except TypeError as e:
         print(f"✓ Test 3 passed: Confirmed old bug would fail with: {e}")
