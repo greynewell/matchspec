@@ -14,8 +14,7 @@ class TestTaskFieldTypes:
 
         # Current code uses f-strings which handle this correctly
         instance_id = task.get(
-            "instance_id",
-            f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
+            "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
         )
 
         assert instance_id == "django_12345"
@@ -28,8 +27,7 @@ class TestTaskFieldTypes:
         }
 
         instance_id = task.get(
-            "instance_id",
-            f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
+            "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
         )
 
         assert instance_id == "django_12345"
@@ -43,8 +41,7 @@ class TestTaskFieldTypes:
         }
 
         instance_id = task.get(
-            "instance_id",
-            f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
+            "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
         )
 
         assert instance_id == "django__django-12345"
@@ -72,8 +69,7 @@ class TestTaskFieldTypes:
         }
 
         instance_id = task.get(
-            "instance_id",
-            f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
+            "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
         )
 
         assert instance_id == "None_None"  # f-strings convert None to "None"
