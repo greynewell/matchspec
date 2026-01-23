@@ -698,6 +698,18 @@ class ClaudeCodeHarness:
                 f"cd {env.workdir} && su mcpbr -c 'source {env_file} && cd {env.workdir} && {claude_cmd}'",
             ]
 
+            # Set up MCP server log file if MCP is enabled
+            mcp_log_file = None
+            mcp_log_path = None
+            if self.mcp_server:
+                from pathlib import Path
+
+                # Create logs directory in .mcpbr_state
+                state_dir = Path.home() / ".mcpbr_state" / "logs"
+                state_dir.mkdir(parents=True, exist_ok=True)
+                mcp_log_path = state_dir / f"{instance_id}_mcp.log"
+                mcp_log_file = open(mcp_log_path, "w")
+
             if verbose:
                 from .log_formatter import FormatterConfig
 
@@ -713,9 +725,17 @@ class ClaudeCodeHarness:
 
                 def on_stdout(line: str) -> None:
                     formatter.format_line(line, instance_id)
+                    # Capture MCP-related output
+                    if mcp_log_file and ("mcp" in line.lower() or "supermodel" in line.lower()):
+                        mcp_log_file.write(f"[STDOUT] {line}\n")
+                        mcp_log_file.flush()
 
                 def on_stderr(line: str) -> None:
                     self._console.print(f"[dim red]{line}[/dim red]")
+                    # Capture all stderr to MCP log (MCP servers often log to stderr)
+                    if mcp_log_file:
+                        mcp_log_file.write(f"[STDERR] {line}\n")
+                        mcp_log_file.flush()
 
                 exit_code, stdout, stderr = await env.exec_command_streaming(
                     command,
@@ -752,6 +772,8 @@ class ClaudeCodeHarness:
 
                     if self.mcp_server:
                         error_msg += f"\n\nMCP server was registered: {mcp_server_name}. Check MCP server logs for initialization issues."
+                        if mcp_log_path:
+                            error_msg += f"\nMCP server logs saved to: {mcp_log_path}"
 
                 if mcp_server_name:
                     await env.exec_command(
@@ -838,6 +860,8 @@ class ClaudeCodeHarness:
             error_msg = f"Task execution timed out after {timeout}s."
             if self.mcp_server:
                 error_msg += f" MCP server '{mcp_server_name}' was registered successfully but the agent failed to complete within the timeout."
+                if mcp_log_path:
+                    error_msg += f"\nMCP server logs saved to: {mcp_log_path}"
             else:
                 error_msg += " The Claude Code agent failed to complete within the timeout."
 
@@ -858,6 +882,15 @@ class ClaudeCodeHarness:
                     pass
             raise
         finally:
+            # Close MCP log file if it was opened
+            if mcp_log_file:
+                try:
+                    mcp_log_file.close()
+                    if verbose and mcp_log_path:
+                        self._console.print(f"[dim]MCP server logs saved to: {mcp_log_path}[/dim]")
+                except Exception:
+                    pass
+
             await env.exec_command(f"rm -f {prompt_file} {env_file}", timeout=5)
 
 
