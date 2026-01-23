@@ -212,6 +212,44 @@ Verify installation:
 claude mcp list
 ```
 
+## Health Checks
+
+This MCP server implements the [MCP ping utility](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping) for connection health monitoring. The ping mechanism allows clients to verify that the server is responsive and the connection remains alive.
+
+### How It Works
+
+- **Request**: Client sends a `ping` JSON-RPC request with no parameters
+- **Response**: Server responds promptly with an empty result object `{}`
+- **Automatic**: Handled automatically by the MCP SDK - no additional configuration needed
+
+### Use Cases
+
+- **Pre-flight checks**: Verify server is accessible before starting work
+- **Connection monitoring**: Detect stale connections during long-running sessions
+- **Periodic health checks**: Confirm server remains responsive
+
+### Example
+
+```json
+// Request
+{
+  "jsonrpc": "2.0",
+  "id": "123",
+  "method": "ping"
+}
+
+// Response
+{
+  "jsonrpc": "2.0",
+  "id": "123",
+  "result": {}
+}
+```
+
+If the server doesn't respond within a reasonable timeout (typically 5-10 seconds), the connection should be considered stale.
+
+For more details, see the [MCP specification for ping/health checks](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping).
+
 ## Tools
 
 ### `explore_codebase`
