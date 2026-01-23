@@ -487,7 +487,7 @@ def _calculate_mcp_tool_stats(results: list[TaskResult]) -> dict[str, Any]:
 
     for r in results:
         if r.mcp:
-            # Aggregate successful tool calls
+            # Aggregate total tool calls (successful + failed)
             if "tool_usage" in r.mcp:
                 for tool_name, count in r.mcp["tool_usage"].items():
                     tool_usage[tool_name] = tool_usage.get(tool_name, 0) + count

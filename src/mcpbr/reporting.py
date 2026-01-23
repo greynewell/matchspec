@@ -243,34 +243,32 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
                 tool_table.add_column("Failed", justify="right")
                 tool_table.add_column("Failure Rate", justify="right")
 
-                # Sort by failure rate (descending)
-                sorted_tools = sorted(
-                    by_tool.items(),
-                    key=lambda x: x[1].get("failure_rate", 0.0),
-                    reverse=True,
-                )
+                # Filter to only tools with failures and sort by failure rate (descending)
+                failing_tools = [
+                    (name, stats) for name, stats in by_tool.items() if stats.get("failed", 0) > 0
+                ]
+                failing_tools.sort(key=lambda x: x[1].get("failure_rate", 0.0), reverse=True)
 
-                for tool_name, stats in sorted_tools[:10]:
-                    if stats.get("failed", 0) > 0:  # Only show tools with failures
-                        total = stats.get("total", 0)
-                        failed = stats.get("failed", 0)
-                        rate = stats.get("failure_rate", 0.0)
+                for tool_name, stats in failing_tools[:10]:
+                    total = stats.get("total", 0)
+                    failed = stats.get("failed", 0)
+                    rate = stats.get("failure_rate", 0.0)
 
-                        # Color code by severity
-                        rate_style = "bold red" if rate > 0.5 else "yellow" if rate > 0.1 else ""
+                    # Color code by severity
+                    rate_style = "bold red" if rate > 0.5 else "yellow" if rate > 0.1 else ""
 
-                        tool_table.add_row(
-                            tool_name,
-                            f"{total:,}",
-                            f"{failed:,}",
-                            f"{rate:.1%}",
-                            style=rate_style,
-                        )
+                    tool_table.add_row(
+                        tool_name,
+                        f"{total:,}",
+                        f"{failed:,}",
+                        f"{rate:.1%}",
+                        style=rate_style,
+                    )
 
                 console.print(tool_table)
 
-                if len([t for t in sorted_tools if t[1].get("failed", 0) > 0]) > 10:
-                    remaining = len(sorted_tools) - 10
+                if len(failing_tools) > 10:
+                    remaining = len(failing_tools) - 10
                     console.print(f"[dim]... and {remaining} more tools with failures[/dim]")
 
     # Print cost analysis
@@ -566,20 +564,20 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
         # Per-tool breakdown
         by_tool = mcp_tool_stats.get("by_tool", {})
         if by_tool:
-            lines.append("### Per-Tool Breakdown")
-            lines.append("")
-            lines.append("| Tool | Total Calls | Succeeded | Failed | Failure Rate |")
-            lines.append("|------|-------------|-----------|--------|--------------|")
+            # Filter to only tools with failures and sort by failure rate (descending)
+            failing_tools = [
+                (name, stats) for name, stats in by_tool.items() if stats.get("failed", 0) > 0
+            ]
+            failing_tools.sort(key=lambda x: x[1].get("failure_rate", 0.0), reverse=True)
 
-            # Sort by failure rate (descending)
-            sorted_tools = sorted(
-                by_tool.items(),
-                key=lambda x: x[1].get("failure_rate", 0.0),
-                reverse=True,
-            )
+            if failing_tools:
+                lines.append("### Per-Tool Breakdown")
+                lines.append("")
+                lines.append("| Tool | Total Calls | Succeeded | Failed | Failure Rate |")
+                lines.append("|------|-------------|-----------|--------|--------------|")
 
-            for tool_name, stats in sorted_tools:
-                if stats.get("failed", 0) > 0:  # Only show tools with failures
+                # Show top 10 failing tools (matching console output)
+                for tool_name, stats in failing_tools[:10]:
                     total = stats.get("total", 0)
                     succeeded = stats.get("succeeded", 0)
                     failed = stats.get("failed", 0)
@@ -588,22 +586,28 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
                         f"| {tool_name} | {total:,} | {succeeded:,} | {failed:,} | {rate:.1%} |"
                     )
 
-            lines.append("")
+                lines.append("")
 
-            # Show sample errors for top failing tools
-            has_errors = False
-            for tool_name, stats in sorted_tools[:3]:  # Top 3 failing tools
-                if "sample_errors" in stats:
-                    if not has_errors:
-                        lines.append("### Sample Errors")
+                if len(failing_tools) > 10:
+                    remaining = len(failing_tools) - 10
+                    lines.append(f"*... and {remaining} more tools with failures*")
+                    lines.append("")
+
+                # Show sample errors for top 3 failing tools
+                has_errors = False
+                for tool_name, stats in failing_tools[:3]:
+                    sample_errors = stats.get("sample_errors", [])
+                    if sample_errors:
+                        if not has_errors:
+                            lines.append("### Sample Errors")
+                            lines.append("")
+                            has_errors = True
+
+                        lines.append(f"**{tool_name}:**")
                         lines.append("")
-                        has_errors = True
-
-                    lines.append(f"**{tool_name}:**")
-                    lines.append("")
-                    for error in stats["sample_errors"][:2]:  # First 2 errors per tool
-                        lines.append(f"- {error}")
-                    lines.append("")
+                        for error in sample_errors[:2]:  # First 2 errors per tool
+                            lines.append(f"- {error}")
+                        lines.append("")
 
     lines.append("## MCP Server Configuration")
     lines.append("")

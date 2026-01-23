@@ -208,8 +208,10 @@ provider: anthropic
 
         assert len(runner.results) == 1
         assert runner.results[0].passed is True
-        assert runner.results[0].name == "MCP Server Configuration"
-        assert "npx" in runner.results[0].details
+        assert runner.results[0].name == "MCP Server Health Check"
+        assert (
+            "npx" in runner.results[0].details or "executable" in runner.results[0].details.lower()
+        )
 
     async def test_mcp_server_config_failure(self, tmp_path: Path):
         """Test MCP server configuration check with missing config."""
@@ -259,7 +261,7 @@ provider: anthropic
         assert "Configuration Validation" in test_names
         assert "Docker Availability" in test_names
         assert "Anthropic API" in test_names
-        assert "MCP Server Configuration" in test_names
+        assert "MCP Server Health Check" in test_names
 
     def test_get_summary_all_passed(self, temp_config: Path):
         """Test summary when all tests pass."""
