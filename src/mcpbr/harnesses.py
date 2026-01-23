@@ -622,16 +622,57 @@ class ClaudeCodeHarness:
         )
         await env.exec_command(f"chown mcpbr:mcpbr {env_file}", timeout=5)
 
-        # Build MCP server add command prefix (runs in same shell session as claude)
+        # Register MCP server if configured (separate from main execution for better error reporting)
         mcp_server_name = None
-        mcp_add_prefix = ""
         if self.mcp_server:
             mcp_server_name = self.mcp_server.name
             args = self.mcp_server.get_args_for_workdir(env.workdir)
             args_str = " ".join(args)
-            mcp_add_prefix = (
-                f"claude mcp add {mcp_server_name} -- {self.mcp_server.command} {args_str} && "
-            )
+
+            # Log MCP server initialization
+            if verbose:
+                self._console.print(f"[cyan]Registering MCP server: {mcp_server_name}[/cyan]")
+                self._console.print(f"[dim]  Command: {self.mcp_server.command} {args_str}[/dim]")
+
+            # Register MCP server separately with its own timeout
+            mcp_add_cmd = [
+                "/bin/bash",
+                "-c",
+                f"cd {env.workdir} && su mcpbr -c 'source {env_file} && cd {env.workdir} && claude mcp add {mcp_server_name} -- {self.mcp_server.command} {args_str}'",
+            ]
+
+            try:
+                mcp_exit_code, mcp_stdout, mcp_stderr = await env.exec_command(
+                    mcp_add_cmd,
+                    timeout=60,  # Separate 60s timeout for MCP registration
+                    environment=docker_env,
+                )
+
+                if mcp_exit_code != 0:
+                    error_msg = f"MCP server registration failed (exit {mcp_exit_code})"
+                    if mcp_stderr:
+                        error_msg += f": {mcp_stderr}"
+                    if verbose:
+                        self._console.print(f"[red]✗ {error_msg}[/red]")
+                    return AgentResult(
+                        patch="",
+                        success=False,
+                        error=error_msg,
+                        stderr=mcp_stderr,
+                    )
+
+                if verbose:
+                    self._console.print(f"[green]✓ MCP server registered successfully[/green]")
+
+            except asyncio.TimeoutError:
+                error_msg = f"MCP server registration timed out after 60s. The MCP server may have failed to start or is hanging during initialization."
+                if verbose:
+                    self._console.print(f"[red]✗ {error_msg}[/red]")
+                return AgentResult(
+                    patch="",
+                    success=False,
+                    error=error_msg,
+                )
 
         try:
             claude_args = [
@@ -650,12 +691,11 @@ class ClaudeCodeHarness:
             claude_args_str = " ".join(claude_args)
             claude_cmd = f'claude {claude_args_str} "$(cat {prompt_file})"'
 
-            # Use su without login (-) to preserve working directory context
-            # This ensures claude mcp add registers the server for the correct project
+            # Run Claude Code (MCP server already registered above)
             command = [
                 "/bin/bash",
                 "-c",
-                f"cd {env.workdir} && su mcpbr -c 'source {env_file} && cd {env.workdir} && {mcp_add_prefix}{claude_cmd}'",
+                f"cd {env.workdir} && su mcpbr -c 'source {env_file} && cd {env.workdir} && {claude_cmd}'",
             ]
 
             if verbose:
@@ -701,12 +741,25 @@ class ClaudeCodeHarness:
 
             if exit_code != 0:
                 error_msg = stderr or "Unknown error"
+
+                # Add context about timeout vs other failures
+                if num_turns == 0 and total_tool_calls == 0:
+                    # Agent never started - likely timeout during execution
+                    if exit_code == 124:  # Standard timeout exit code
+                        error_msg = f"Task timed out after {timeout}s before starting execution. This may indicate the Claude Code agent failed to initialize or hung during startup."
+                    else:
+                        error_msg = f"Agent failed before making any progress (exit {exit_code}). {error_msg}"
+
+                    if self.mcp_server:
+                        error_msg += f"\n\nMCP server was registered: {mcp_server_name}. Check MCP server logs for initialization issues."
+
                 if mcp_server_name:
                     await env.exec_command(
                         f"su mcpbr -c 'source {env_file} && claude mcp remove {mcp_server_name}'",
                         timeout=10,
                         environment=docker_env,
                     )
+
                 return AgentResult(
                     patch="",
                     success=False,
@@ -769,6 +822,29 @@ class ClaudeCodeHarness:
                 tokens_output=tokens_out,
                 tool_calls=total_tool_calls,
                 tool_usage=tool_usage,
+            )
+        except asyncio.TimeoutError:
+            # Task execution timed out
+            if mcp_server_name:
+                try:
+                    await env.exec_command(
+                        f"su mcpbr -c 'source {env_file} && claude mcp remove {mcp_server_name}'",
+                        timeout=10,
+                        environment=docker_env,
+                    )
+                except Exception:
+                    pass
+
+            error_msg = f"Task execution timed out after {timeout}s."
+            if self.mcp_server:
+                error_msg += f" MCP server '{mcp_server_name}' was registered successfully but the agent failed to complete within the timeout."
+            else:
+                error_msg += " The Claude Code agent failed to complete within the timeout."
+
+            return AgentResult(
+                patch="",
+                success=False,
+                error=error_msg,
             )
         except Exception:
             if mcp_server_name:
