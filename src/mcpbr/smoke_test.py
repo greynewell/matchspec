@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -205,32 +206,17 @@ class SmokeTestRunner:
             )
 
     async def _test_mcp_server_config(self) -> None:
-        """Test MCP server configuration."""
+        """Test MCP server configuration and health.
+
+        Validates MCP server configuration and checks if the command is executable.
+        See MCP specification for ping/health check details:
+        https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping
+        """
         try:
             config = load_config(self.config_path)
 
             # Check that we have a valid MCP server configuration
-            if config.mcp_server and config.mcp_server.command:
-                details_parts = [
-                    f"Command: {config.mcp_server.command}",
-                ]
-
-                if config.mcp_server.args:
-                    # Show first few args (truncate if too long)
-                    args_str = " ".join(str(arg) for arg in config.mcp_server.args[:3])
-                    if len(config.mcp_server.args) > 3:
-                        args_str += "..."
-                    details_parts.append(f"Args: {args_str}")
-
-                self.results.append(
-                    SmokeTestResult(
-                        name="MCP Server Configuration",
-                        passed=True,
-                        message="MCP server is properly configured",
-                        details="\n".join(details_parts),
-                    )
-                )
-            else:
+            if not config.mcp_server or not config.mcp_server.command:
                 self.results.append(
                     SmokeTestResult(
                         name="MCP Server Configuration",
@@ -239,12 +225,53 @@ class SmokeTestRunner:
                         error="Missing command or configuration",
                     )
                 )
+                return
+
+            details_parts = [
+                f"Command: {config.mcp_server.command}",
+            ]
+
+            if config.mcp_server.args:
+                # Show first few args (truncate if too long)
+                args_str = " ".join(str(arg) for arg in config.mcp_server.args[:3])
+                if len(config.mcp_server.args) > 3:
+                    args_str += "..."
+                details_parts.append(f"Args: {args_str}")
+
+            # Check if command is available in PATH
+            command_path = shutil.which(config.mcp_server.command)
+            if not command_path:
+                self.results.append(
+                    SmokeTestResult(
+                        name="MCP Server Health Check",
+                        passed=False,
+                        message=f"MCP server command not found: {config.mcp_server.command}",
+                        error=f"Command '{config.mcp_server.command}' is not in PATH or not executable",
+                        details="Suggestion: Install the MCP server or check your PATH environment variable\n"
+                        "MCP Health Check Docs: https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping",
+                    )
+                )
+                return
+
+            details_parts.append(f"Executable: {command_path}")
+            details_parts.append(f"Startup timeout: {config.mcp_server.startup_timeout_ms}ms")
+            details_parts.append(f"Tool timeout: {config.mcp_server.tool_timeout_ms}ms")
+
+            self.results.append(
+                SmokeTestResult(
+                    name="MCP Server Health Check",
+                    passed=True,
+                    message="MCP server is properly configured and executable",
+                    details="\n".join(details_parts) + "\n\n"
+                    "MCP Health Check Docs: https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping",
+                )
+            )
         except Exception as e:
             self.results.append(
                 SmokeTestResult(
-                    name="MCP Server Configuration",
+                    name="MCP Server Health Check",
                     passed=False,
-                    message="Failed to load MCP server configuration",
+                    message="Failed to validate MCP server configuration",
                     error=str(e),
                 )
             )
@@ -332,3 +359,63 @@ async def run_smoke_test(config_path: Path) -> bool:
 
     summary = runner.get_summary()
     return summary["all_passed"]
+
+
+async def run_mcp_preflight_check(
+    config_path: Path, silent: bool = False
+) -> tuple[bool, str | None]:
+    """Run pre-flight MCP server health check before evaluation.
+
+    Validates that the MCP server command exists and is executable.
+    This is a quick check to catch configuration issues early.
+
+    See MCP specification for ping/health check details:
+    https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping
+
+    Args:
+        config_path: Path to configuration file.
+        silent: If True, don't print output (used for testing).
+
+    Returns:
+        Tuple of (success: bool, error_message: str | None).
+    """
+    try:
+        config = load_config(config_path)
+
+        if not config.mcp_server or not config.mcp_server.command:
+            error_msg = "MCP server not configured in config file"
+            if not silent:
+                console.print(f"[yellow]⚠️  Warning: {error_msg}[/yellow]")
+            return False, error_msg
+
+        command = config.mcp_server.command
+        command_path = shutil.which(command)
+
+        if not command_path:
+            error_msg = (
+                f"MCP server command '{command}' not found in PATH\n"
+                f"  Suggestion: Install the MCP server or check your PATH environment variable\n"
+                f"  MCP Health Check Docs: https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/ping"
+            )
+            if not silent:
+                console.print("[red]✗ MCP Pre-flight Check Failed[/red]")
+                console.print(f"[red]{error_msg}[/red]")
+            return False, error_msg
+
+        if not silent:
+            console.print("[green]✓ MCP Pre-flight Check Passed[/green]")
+            console.print(f"[dim]  MCP Command: {command} ({command_path})[/dim]")
+            if config.mcp_server.args:
+                args_str = " ".join(str(arg) for arg in config.mcp_server.args[:3])
+                if len(config.mcp_server.args) > 3:
+                    args_str += "..."
+                console.print(f"[dim]  Args: {args_str}[/dim]")
+
+        return True, None
+
+    except Exception as e:
+        error_msg = f"Failed to run MCP pre-flight check: {e}"
+        if not silent:
+            console.print("[red]✗ MCP Pre-flight Check Failed[/red]")
+            console.print(f"[red]{error_msg}[/red]")
+        return False, error_msg

@@ -322,6 +322,11 @@ def main() -> None:
     is_flag=True,
     help="Disable incremental evaluation (always run all tasks)",
 )
+@click.option(
+    "--skip-health-check",
+    is_flag=True,
+    help="Skip MCP server pre-flight health check",
+)
 def run(
     config_path: Path,
     model_override: str | None,
@@ -358,6 +363,7 @@ def run(
     reset_state: bool,
     state_dir: Path | None,
     no_incremental: bool,
+    skip_health_check: bool,
 ) -> None:
     """Run SWE-bench evaluation with the configured MCP server.
 
@@ -466,6 +472,18 @@ def run(
     run_mcp = not baseline_only
     run_baseline = not mcp_only
     verbose = verbosity > 0
+
+    # Run MCP pre-flight health check if MCP is enabled
+    if run_mcp and not skip_health_check:
+        from .smoke_test import run_mcp_preflight_check
+
+        success, error_msg = asyncio.run(run_mcp_preflight_check(config_path))
+        if not success:
+            console.print(
+                "\n[yellow]Use --skip-health-check to proceed anyway (not recommended)[/yellow]"
+            )
+            sys.exit(1)
+        console.print()
 
     console.print("[bold]mcpbr Evaluation[/bold]")
     console.print(f"  Config: {config_path}")
