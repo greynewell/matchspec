@@ -178,9 +178,7 @@ class StreamEventFormatter:
                 offset = int(offset) if offset is not None else 0
                 limit = int(limit) if limit is not None else 0
                 end_line = offset + limit if limit else "..."
-                summaries.append(
-                    f"{file_path} (lines {offset}-{end_line})"
-                )
+                summaries.append(f"{file_path} (lines {offset}-{end_line})")
             else:
                 summaries.append(file_path)
 
