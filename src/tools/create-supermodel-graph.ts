@@ -760,11 +760,6 @@ async function fetchFromApi(client: ClientContext, file: string, idempotencyKey:
   // Log the request details
   logRequest(apiUrl, 'POST', fileSize, idempotencyKey);
 
-  const requestParams = {
-    file: fileBlob as any,
-    idempotencyKey: idempotencyKey,
-  };
-
   // Start progress logging
   console.error('[Supermodel] Starting codebase analysis...');
 
@@ -778,7 +773,11 @@ async function fetchFromApi(client: ClientContext, file: string, idempotencyKey:
   }, 15000);
 
   try {
-    const response = await client.graphs.generateSupermodelGraph(requestParams);
+    // SupermodelClient handles polling automatically
+    const response = await client.graphs.generateSupermodelGraph(
+      fileBlob as any,
+      { idempotencyKey }
+    );
     const duration = Date.now() - startTime;
 
     // Clear progress interval

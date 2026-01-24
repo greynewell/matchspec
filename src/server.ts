@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { Configuration, DefaultApi } from '@supermodeltools/sdk';
+import { Configuration, DefaultApi, SupermodelClient } from '@supermodeltools/sdk';
 import createSupermodelGraphTool from './tools/create-supermodel-graph';
 import { ClientContext } from './types';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -109,8 +109,9 @@ This helps the maintainers fix bugs faster and avoids wasting your iteration bud
       logger.debug('Default workdir:', this.defaultWorkdir);
     }
 
+    const api = new DefaultApi(config);
     this.client = {
-      graphs: new DefaultApi(config),
+      graphs: new SupermodelClient(api),
     };
 
     this.setupHandlers();
