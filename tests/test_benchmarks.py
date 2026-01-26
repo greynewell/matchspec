@@ -5,6 +5,7 @@ import pytest
 from mcpbr.benchmarks import (
     Benchmark,
     CyberGymBenchmark,
+    GSM8KBenchmark,
     MCPToolBenchmark,
     SWEBenchmark,
     create_benchmark,
@@ -21,7 +22,8 @@ class TestBenchmarkRegistry:
         assert "swe-bench" in benchmarks
         assert "cybergym" in benchmarks
         assert "mcptoolbench" in benchmarks
-        assert len(benchmarks) >= 3
+        assert "gsm8k" in benchmarks
+        assert len(benchmarks) >= 4
 
     def test_create_swebench(self) -> None:
         """Test creating SWE-bench benchmark."""
@@ -54,6 +56,17 @@ class TestBenchmarkRegistry:
     def test_create_mcptoolbench_with_custom_dataset(self) -> None:
         """Test creating MCPToolBench++ with custom dataset."""
         benchmark = create_benchmark("mcptoolbench", dataset="custom/dataset")
+        assert benchmark.dataset == "custom/dataset"
+
+    def test_create_gsm8k(self) -> None:
+        """Test creating GSM8K benchmark."""
+        benchmark = create_benchmark("gsm8k")
+        assert isinstance(benchmark, GSM8KBenchmark)
+        assert benchmark.name == "gsm8k"
+
+    def test_create_gsm8k_with_custom_dataset(self) -> None:
+        """Test creating GSM8K with custom dataset."""
+        benchmark = create_benchmark("gsm8k", dataset="custom/dataset")
         assert benchmark.dataset == "custom/dataset"
 
     def test_create_unknown_benchmark(self) -> None:
@@ -345,3 +358,301 @@ class TestBenchmarkProtocol:
         assert hasattr(benchmark, "evaluate")
         assert hasattr(benchmark, "get_prebuilt_image")
         assert hasattr(benchmark, "get_prompt_template")
+
+    def test_gsm8k_implements_protocol(self) -> None:
+        """Test that GSM8KBenchmark implements Benchmark protocol."""
+        benchmark = GSM8KBenchmark()
+        assert isinstance(benchmark, Benchmark)
+        assert hasattr(benchmark, "load_tasks")
+        assert hasattr(benchmark, "normalize_task")
+        assert hasattr(benchmark, "create_environment")
+        assert hasattr(benchmark, "evaluate")
+        assert hasattr(benchmark, "get_prebuilt_image")
+        assert hasattr(benchmark, "get_prompt_template")
+
+
+class TestGSM8KBenchmark:
+    """Tests for GSM8K benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test GSM8K initialization."""
+        benchmark = GSM8KBenchmark()
+        assert benchmark.name == "gsm8k"
+        assert benchmark.dataset == "openai/gsm8k"
+        assert benchmark.subset == "main"
+
+    def test_custom_dataset(self) -> None:
+        """Test GSM8K with custom dataset."""
+        benchmark = GSM8KBenchmark(dataset="custom/dataset")
+        assert benchmark.dataset == "custom/dataset"
+
+    def test_custom_subset(self) -> None:
+        """Test GSM8K with custom subset."""
+        benchmark = GSM8KBenchmark(subset="socratic")
+        assert benchmark.subset == "socratic"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing GSM8K task."""
+        benchmark = GSM8KBenchmark()
+        task = {
+            "instance_id": "gsm8k_0",
+            "question": "Janet has 5 apples. She buys 3 more. How many apples does she have?",
+            "answer": "#### 8",
+        }
+
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "gsm8k_0"
+        assert "Janet has 5 apples" in normalized.problem_statement
+        assert normalized.repo == "gsm8k/math"
+        assert normalized.commit == "HEAD"
+        assert normalized.metadata["question"] == task["question"]
+        assert normalized.metadata["answer"] == task["answer"]
+        assert normalized.metadata["ground_truth_numeric"] == 8.0
+
+    def test_normalize_task_missing_instance_id(self) -> None:
+        """Test normalizing task without instance_id raises error."""
+        benchmark = GSM8KBenchmark()
+        task = {
+            "question": "What is 2+2?",
+            "answer": "#### 4",
+        }
+
+        with pytest.raises(ValueError, match="missing required 'instance_id' field"):
+            benchmark.normalize_task(task)
+
+    def test_normalize_task_missing_question(self) -> None:
+        """Test normalizing task without question raises error."""
+        benchmark = GSM8KBenchmark()
+        task = {
+            "instance_id": "gsm8k_0",
+            "answer": "#### 4",
+        }
+
+        with pytest.raises(ValueError, match="missing required 'question' field"):
+            benchmark.normalize_task(task)
+
+    def test_generate_problem_statement(self) -> None:
+        """Test problem statement generation."""
+        benchmark = GSM8KBenchmark()
+        task = {
+            "question": "If a train travels 60 miles per hour for 2 hours, how far does it go?",
+        }
+
+        statement = benchmark._generate_problem_statement(task)
+        assert "Solve the following math problem" in statement
+        assert "train travels 60 miles per hour" in statement
+        assert "chain-of-thought" in statement
+        assert "final numeric answer" in statement
+
+    def test_extract_answer_gsm8k_format(self) -> None:
+        """Test extracting answer in GSM8K format (#### number)."""
+        benchmark = GSM8KBenchmark()
+
+        # Standard GSM8K format
+        text = "First, add 5 + 3 = 8\n#### 8"
+        assert benchmark._extract_answer(text) == 8.0
+
+        # With decimal
+        text = "The area is 3.14 square meters\n#### 3.14"
+        assert benchmark._extract_answer(text) == 3.14
+
+        # With negative number
+        text = "The temperature dropped to #### -5"
+        assert benchmark._extract_answer(text) == -5.0
+
+        # With comma
+        text = "The total is #### 1,234"
+        assert benchmark._extract_answer(text) == 1234.0
+
+    def test_extract_answer_boxed_format(self) -> None:
+        """Test extracting answer in LaTeX boxed format."""
+        benchmark = GSM8KBenchmark()
+
+        text = "Therefore, the answer is \\boxed{42}"
+        assert benchmark._extract_answer(text) == 42.0
+
+        text = "The solution is \\boxed{3.14159}"
+        assert benchmark._extract_answer(text) == 3.14159
+
+    def test_extract_answer_sentence_format(self) -> None:
+        """Test extracting answer from sentence patterns."""
+        benchmark = GSM8KBenchmark()
+
+        # "The answer is X"
+        text = "After calculation, the answer is 42."
+        assert benchmark._extract_answer(text) == 42.0
+
+        # "Final answer: X"
+        text = "Step 1: ... Step 2: ... Final answer: 123"
+        assert benchmark._extract_answer(text) == 123.0
+
+        # With dollar sign
+        text = "The total cost is $1,234.56"
+        assert benchmark._extract_answer(text) == 1234.56
+
+    def test_extract_answer_last_number(self) -> None:
+        """Test extracting last number as fallback."""
+        benchmark = GSM8KBenchmark()
+
+        text = "We have 5 apples, then 3 more, so 8 total."
+        assert benchmark._extract_answer(text) == 8.0
+
+    def test_extract_answer_no_number(self) -> None:
+        """Test extracting answer when no number present."""
+        benchmark = GSM8KBenchmark()
+
+        text = "I don't know the answer."
+        assert benchmark._extract_answer(text) is None
+
+        text = ""
+        assert benchmark._extract_answer(text) is None
+
+    def test_parse_number(self) -> None:
+        """Test parsing various number formats."""
+        benchmark = GSM8KBenchmark()
+
+        # Simple integers
+        assert benchmark._parse_number("42") == 42.0
+        assert benchmark._parse_number("0") == 0.0
+
+        # Decimals
+        assert benchmark._parse_number("3.14") == 3.14
+        assert benchmark._parse_number("0.5") == 0.5
+
+        # With commas
+        assert benchmark._parse_number("1,234") == 1234.0
+        assert benchmark._parse_number("1,234,567") == 1234567.0
+
+        # With dollar sign
+        assert benchmark._parse_number("$42") == 42.0
+        assert benchmark._parse_number("$1,234.56") == 1234.56
+
+        # Negative numbers
+        assert benchmark._parse_number("-42") == -42.0
+        assert benchmark._parse_number("-3.14") == -3.14
+
+        # Invalid
+        assert benchmark._parse_number("abc") is None
+        assert benchmark._parse_number("") is None
+
+    def test_compare_answers_exact(self) -> None:
+        """Test comparing answers with exact match."""
+        benchmark = GSM8KBenchmark()
+
+        assert benchmark._compare_answers(42.0, 42.0) is True
+        assert benchmark._compare_answers(0.0, 0.0) is True
+        assert benchmark._compare_answers(-5.0, -5.0) is True
+
+    def test_compare_answers_with_tolerance(self) -> None:
+        """Test comparing answers with small differences."""
+        benchmark = GSM8KBenchmark()
+
+        # Within absolute tolerance (0.001)
+        assert benchmark._compare_answers(42.0, 42.0005) is True
+        assert benchmark._compare_answers(0.0, 0.0005) is True
+
+        # Within relative tolerance (0.1%)
+        assert benchmark._compare_answers(1000.0, 1000.5) is True
+
+        # Outside tolerance
+        assert benchmark._compare_answers(42.0, 43.0) is False
+        assert benchmark._compare_answers(100.0, 105.0) is False
+
+    def test_compare_answers_different_signs(self) -> None:
+        """Test comparing answers with different signs."""
+        benchmark = GSM8KBenchmark()
+
+        assert benchmark._compare_answers(42.0, -42.0) is False
+        assert benchmark._compare_answers(-5.0, 5.0) is False
+
+    def test_get_prebuilt_image(self) -> None:
+        """Test getting pre-built image (should be None for GSM8K)."""
+        benchmark = GSM8KBenchmark()
+        task = {"instance_id": "gsm8k_0"}
+        image = benchmark.get_prebuilt_image(task)
+        assert image is None
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = GSM8KBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+        assert "grade-school math" in prompt.lower()
+        assert "chain-of-thought" in prompt.lower()
+        assert "final numeric answer" in prompt.lower()
+
+    def test_evaluate_correct_answer(self) -> None:
+        """Test evaluation with correct answer."""
+        benchmark = GSM8KBenchmark()
+        task = {
+            "instance_id": "gsm8k_0",
+            "question": "What is 2 + 2?",
+            "answer": "#### 4",
+        }
+        solution = "Let me solve this step by step:\n2 + 2 = 4\nThe answer is: 4"
+
+        # This would be async in real code, but we can test the logic
+        result = benchmark._extract_answer(solution)
+        assert result == 4.0
+
+        ground_truth = benchmark._extract_answer(task["answer"])
+        assert ground_truth == 4.0
+
+        assert benchmark._compare_answers(result, ground_truth) is True
+
+    def test_evaluate_incorrect_answer(self) -> None:
+        """Test evaluation with incorrect answer."""
+        benchmark = GSM8KBenchmark()
+        task = {
+            "instance_id": "gsm8k_0",
+            "question": "What is 2 + 2?",
+            "answer": "#### 4",
+        }
+        solution = "Let me solve this:\n2 + 2 = 5\nThe answer is: 5"
+
+        result = benchmark._extract_answer(solution)
+        assert result == 5.0
+
+        ground_truth = benchmark._extract_answer(task["answer"])
+        assert ground_truth == 4.0
+
+        assert benchmark._compare_answers(result, ground_truth) is False
+
+    def test_evaluate_no_answer_extracted(self) -> None:
+        """Test evaluation when no answer can be extracted."""
+        benchmark = GSM8KBenchmark()
+
+        solution = "I don't understand this problem."
+        result = benchmark._extract_answer(solution)
+        assert result is None
+
+    def test_edge_case_large_numbers(self) -> None:
+        """Test handling of large numbers."""
+        benchmark = GSM8KBenchmark()
+
+        text = "The population is #### 7,890,123"
+        assert benchmark._extract_answer(text) == 7890123.0
+
+        text = "The answer is 1,000,000"
+        assert benchmark._extract_answer(text) == 1000000.0
+
+    def test_edge_case_small_decimals(self) -> None:
+        """Test handling of small decimal numbers."""
+        benchmark = GSM8KBenchmark()
+
+        text = "The probability is #### 0.0001"
+        assert benchmark._extract_answer(text) == 0.0001
+
+        # Compare with tolerance
+        assert benchmark._compare_answers(0.0001, 0.00010001) is True
+
+    def test_edge_case_scientific_notation(self) -> None:
+        """Test that scientific notation is not currently supported."""
+        benchmark = GSM8KBenchmark()
+
+        # Scientific notation is not in the initial implementation
+        text = "The answer is 1.23e5"
+        # This will either return None or extract "1.23" depending on regex
+        _ = benchmark._extract_answer(text)
+        # We don't assert specific behavior since scientific notation
+        # could be added in the future

@@ -1,0 +1,57 @@
+# GSM8K Math Reasoning Configuration
+#
+# Use this configuration to evaluate your MCP server on grade-school
+# math word problems. Tests mathematical reasoning and chain-of-thought
+# capabilities.
+#
+# Steps:
+# 1. Update the mcp_server section if needed
+# 2. Run: mcpbr run -c examples/quick-start/gsm8k-math-reasoning.yaml -v
+# 3. Review results to see how well the agent solves math problems
+#
+# Expected runtime: 30-60 minutes (for 50 problems)
+# Expected cost: $3-8
+
+mcp_server:
+  # Default: Filesystem server (agents may create Python scripts for calculations)
+  command: "npx"
+  args:
+    - "-y"
+    - "@modelcontextprotocol/server-filesystem"
+    - "{workdir}"
+  env: {}
+
+provider: "anthropic"
+agent_harness: "claude-code"
+
+# Sonnet provides good balance for math reasoning
+model: "sonnet"
+
+# GSM8K benchmark for math word problems
+benchmark: "gsm8k"
+dataset: "openai/gsm8k"
+
+# Test with 50 problems (out of 1,319 total)
+sample_size: 50
+
+# Math problems typically solve quickly
+timeout_seconds: 180
+
+# Run tasks in parallel
+max_concurrent: 4
+
+# Standard iterations
+max_iterations: 30
+
+# Custom prompt encouraging chain-of-thought
+agent_prompt: |
+  Solve the following grade-school math problem step-by-step:
+
+  {problem_statement}
+
+  Show your reasoning clearly. You can use Python for calculations if needed.
+  Make sure to provide your final answer as a number.
+  End with: "The answer is: [number]"
+
+# Budget control
+budget: 10.0

@@ -8,6 +8,7 @@ mcpbr supports multiple software engineering benchmarks through a flexible abstr
 |-----------|------|---------|------------|------------------|
 | **SWE-bench** | Bug fixing | GitHub issues | Test suite pass/fail | Yes (most tasks) |
 | **CyberGym** | Security exploits | Vulnerabilities | Crash detection | No |
+| **GSM8K** | Math reasoning | Grade-school math | Numeric answer matching | No |
 
 ## SWE-bench
 
@@ -231,6 +232,196 @@ The default CyberGym prompt instructs the agent to:
 
 You can customize this with the `agent_prompt` configuration field.
 
+## GSM8K
+
+[GSM8K (Grade School Math 8K)](https://github.com/openai/grade-school-math) is a dataset of 8,500 linguistically diverse grade school math word problems created by OpenAI. It tests mathematical reasoning and multi-step problem solving.
+
+### Dataset
+
+- **Source**: [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) on HuggingFace
+- **Tasks**: 1,319 test problems (8,792 total including training set)
+- **Problem Types**: Word problems requiring 2-8 steps to solve
+- **Skills Tested**: Arithmetic, algebra, basic reasoning, chain-of-thought
+
+### Task Structure
+
+Each GSM8K task contains:
+
+- **Question**: A natural language word problem
+- **Answer**: A chain-of-thought solution ending with the numeric answer
+
+**Example**:
+```
+Question: Janet has 5 apples. She buys 3 more apples at the store.
+How many apples does she have now?
+
+Answer: Janet starts with 5 apples. She buys 3 more.
+5 + 3 = 8
+#### 8
+```
+
+### Evaluation
+
+GSM8K evaluation focuses on getting the correct final answer:
+
+1. Agent receives the math problem
+2. Agent shows reasoning (chain-of-thought encouraged but not required)
+3. Agent provides final numeric answer
+4. Answer is extracted and normalized from agent's response
+5. Comparison with ground truth using tolerance for rounding
+
+**Answer Extraction**:
+The evaluation handles multiple answer formats:
+- GSM8K format: `#### 42`
+- LaTeX boxed: `\boxed{42}`
+- Sentence format: "The answer is 42"
+- Dollar amounts: "$1,234.56"
+- Numbers with commas: "1,234"
+- Negative numbers: "-42"
+- Decimals: "3.14"
+
+**Tolerance**:
+Answers are compared with both relative (0.1%) and absolute (0.001) tolerance to handle:
+- Rounding differences
+- Floating point precision
+- Different decimal places
+
+### Chain-of-Thought
+
+While GSM8K can be solved with direct answer generation, chain-of-thought reasoning typically improves performance:
+
+**Without CoT**:
+```
+Question: If you buy 3 notebooks for $2 each, how much do you spend?
+Answer: 6
+```
+
+**With CoT**:
+```
+Question: If you buy 3 notebooks for $2 each, how much do you spend?
+Answer: Let me solve this step by step:
+- Each notebook costs $2
+- I'm buying 3 notebooks
+- Total cost = 3 × $2 = $6
+The answer is: 6
+```
+
+The benchmark prompt encourages chain-of-thought by default but accepts either format.
+
+### Example
+
+```bash
+# Run GSM8K (default)
+mcpbr run -c config.yaml --benchmark gsm8k
+
+# Run with sample size
+mcpbr run -c config.yaml --benchmark gsm8k -n 100
+
+# Run specific problems
+mcpbr run -c config.yaml --benchmark gsm8k -t gsm8k_0 -t gsm8k_42
+```
+
+### Configuration
+
+```yaml
+benchmark: "gsm8k"
+dataset: "openai/gsm8k"  # Optional, this is the default
+sample_size: 50
+timeout_seconds: 180  # Math problems typically solve quickly
+max_concurrent: 4
+```
+
+### Environment Setup
+
+GSM8K tasks create minimal Docker environments with:
+- Python 3 (for potential calculation scripts)
+- NumPy, SciPy, SymPy (mathematical libraries)
+- No repository cloning required
+
+This keeps the environment lightweight since the agent only needs to solve the problem, not modify code.
+
+### Agent Capabilities
+
+Agents can approach GSM8K problems in multiple ways:
+
+1. **Pure reasoning**: Solve entirely through language model reasoning
+2. **Python calculations**: Write and execute Python code for complex arithmetic
+3. **Hybrid**: Reason through steps, use Python for specific calculations
+
+**Example with Python**:
+```python
+# Problem: Calculate compound interest
+principal = 1000
+rate = 0.05
+years = 3
+final_amount = principal * (1 + rate) ** years
+print(f"The answer is: {final_amount}")
+```
+
+### Performance Metrics
+
+GSM8K evaluation tracks:
+- **Resolution rate**: Percentage of problems solved correctly
+- **Answer match**: Whether extracted answer equals ground truth
+- **Extraction success**: Whether a numeric answer could be extracted
+
+### Example Output
+
+```text
+GSM8K Evaluation Results
+
+                 Summary
++-----------------+-----------+----------+
+| Metric          | MCP Agent | Baseline |
++-----------------+-----------+----------+
+| Resolved        | 45/50     | 38/50    |
+| Resolution Rate | 90.0%     | 76.0%    |
++-----------------+-----------+----------+
+
+Improvement: +18.4%
+```
+
+### Common Pitfalls
+
+**Answer Format**:
+- Ensure the agent clearly states the final numeric answer
+- Avoid ambiguous phrasing like "approximately 42"
+- Use explicit format: "The answer is: 42"
+
+**Unit Confusion**:
+- Agent must provide the numeric value only (not "42 apples")
+- Evaluation extracts numbers, ignoring units
+
+**Calculation Errors**:
+- Small arithmetic mistakes lead to wrong answers
+- Consider using Python for complex calculations
+- Double-check multi-step problems
+
+### Best Practices
+
+**For Math Reasoning**:
+- Encourage chain-of-thought in the prompt
+- Break complex problems into smaller steps
+- Verify intermediate calculations
+- Use Python for arithmetic when helpful
+
+**For Evaluation**:
+- Start with small sample size (n=10) to test setup
+- Increase timeout if agent uses Python calculations
+- Check logs for answer extraction issues
+- Monitor token usage (CoT increases tokens)
+
+**Agent Prompt Tips**:
+```yaml
+agent_prompt: |
+  Solve this math problem step-by-step:
+
+  {problem_statement}
+
+  Show your work clearly. Use Python if needed for calculations.
+  End with: "The answer is: [number]"
+```
+
 ## Benchmark Abstraction
 
 mcpbr uses a Protocol-based abstraction that makes it easy to add new benchmarks:
@@ -288,29 +479,31 @@ $ mcpbr benchmarks
 
 Available Benchmarks
 
-┌────────────┬──────────────────────────────────────────────────────────┬─────────────────────────┐
-│ Benchmark  │ Description                                              │ Output Type             │
-├────────────┼──────────────────────────────────────────────────────────┼─────────────────────────┤
-│ swe-bench  │ Software bug fixes in GitHub repositories                │ Patch (unified diff)    │
-│ cybergym   │ Security vulnerability exploitation (PoC generation)     │ Exploit code            │
-└────────────┴──────────────────────────────────────────────────────────┴─────────────────────────┘
+┌─────────────┬──────────────────────────────────────────────────────────┬─────────────────────────┐
+│ Benchmark   │ Description                                              │ Output Type             │
+├─────────────┼──────────────────────────────────────────────────────────┼─────────────────────────┤
+│ swe-bench   │ Software bug fixes in GitHub repositories                │ Patch (unified diff)    │
+│ cybergym    │ Security vulnerability exploitation (PoC generation)     │ Exploit code            │
+│ gsm8k       │ Grade-school math word problems                          │ Numeric answer          │
+└─────────────┴──────────────────────────────────────────────────────────┴─────────────────────────┘
 
 Use --benchmark flag with 'run' command to select a benchmark
-Example: mcpbr run -c config.yaml --benchmark cybergym --level 2
+Example: mcpbr run -c config.yaml --benchmark gsm8k -n 50
 ```
 
 ## Comparing Benchmarks
 
-| Aspect | SWE-bench | CyberGym |
-|--------|-----------|----------|
-| **Goal** | Fix bugs | Exploit vulnerabilities |
-| **Output** | Patch (unified diff) | PoC code |
-| **Languages** | Python | C/C++ |
-| **Evaluation** | Test suite | Crash detection |
-| **Pre-built Images** | Yes (most tasks) | No |
-| **Build Requirements** | Python packages | gcc, sanitizers, cmake |
-| **Difficulty Levels** | N/A | 0-3 |
-| **Typical Timeout** | 300-600s | 600-900s |
+| Aspect | SWE-bench | CyberGym | GSM8K |
+|--------|-----------|----------|-------|
+| **Goal** | Fix bugs | Exploit vulnerabilities | Solve math problems |
+| **Output** | Patch (unified diff) | PoC code | Numeric answer |
+| **Languages** | Python | C/C++ | Natural language |
+| **Evaluation** | Test suite | Crash detection | Answer matching |
+| **Pre-built Images** | Yes (most tasks) | No | No |
+| **Build Requirements** | Python packages | gcc, sanitizers, cmake | Python (optional) |
+| **Difficulty Levels** | N/A | 0-3 | N/A |
+| **Typical Timeout** | 300-600s | 600-900s | 120-300s |
+| **Chain-of-Thought** | Not emphasized | Not emphasized | Encouraged |
 
 ## Best Practices
 
@@ -329,6 +522,15 @@ Example: mcpbr run -c config.yaml --benchmark cybergym --level 2
 - **Allow longer timeouts** (600-900s) for compilation and testing
 - **Check PoC files** - agent must save output to poc.c/poc.py/etc.
 - **Monitor memory** - sanitizers increase memory usage
+
+### GSM8K
+
+- **Encourage chain-of-thought** reasoning in prompts for better accuracy
+- **Start with small samples** (n=10-20) to test answer extraction
+- **Use shorter timeouts** (120-300s) - math problems solve quickly
+- **Monitor answer formats** - ensure agent states final answer clearly
+- **Consider Python tools** - agents can use Python for calculations
+- **Check token usage** - chain-of-thought increases token consumption
 
 ## Related Links
 

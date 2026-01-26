@@ -83,6 +83,15 @@ Large-scale MCP tool use evaluation across 45+ categories. Tests agent capabilit
 - **Categories**: Browser, Finance, Code Analysis, and 40+ more
 - **Learn more**: [MCPToolBench++ Paper](https://arxiv.org/pdf/2508.07575) | [GitHub](https://github.com/mcp-tool-bench/MCPToolBenchPP)
 
+### GSM8K
+Grade-school math word problems testing mathematical reasoning and chain-of-thought capabilities.
+
+- **Dataset**: [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k)
+- **Task**: Solve math word problems with step-by-step reasoning
+- **Evaluation**: Numeric answer correctness with tolerance
+- **Problem Types**: Multi-step arithmetic and basic algebra
+- **Learn more**: [GSM8K Paper](https://arxiv.org/abs/2110.14168) | [GitHub](https://github.com/openai/grade-school-math)
+
 ```bash
 # Run SWE-bench (default)
 mcpbr run -c config.yaml
@@ -92,6 +101,9 @@ mcpbr run -c config.yaml --benchmark cybergym --level 2
 
 # Run MCPToolBench++
 mcpbr run -c config.yaml --benchmark mcptoolbench
+
+# Run GSM8K
+mcpbr run -c config.yaml --benchmark gsm8k -n 50
 
 # List available benchmarks
 mcpbr benchmarks
