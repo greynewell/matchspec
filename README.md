@@ -513,7 +513,7 @@ Run SWE-bench evaluation with the configured MCP server.
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--config PATH` | `-c` | Path to YAML configuration file (required) |
+| `--config PATH` | `-c` | Path to YAML configuration file (default: `mcpbr.yaml`, auto-created if missing) |
 | `--model TEXT` | `-m` | Override model from config |
 | `--benchmark TEXT` | `-b` | Override benchmark from config (`swe-bench`, `cybergym`, or `mcptoolbench`) |
 | `--level INTEGER` | | Override CyberGym difficulty level (0-3) |

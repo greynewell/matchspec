@@ -424,9 +424,16 @@ def run(
             sys.exit(1)
 
         config_yaml = generate_config_yaml(template)
-        config_path.write_text(config_yaml)
-        console.print(f"[green]✓ Created {config_path}[/green]")
-        console.print("[dim]Edit this file to customize your MCP server configuration[/dim]\n")
+
+        # Create parent directories if they don't exist
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(config_yaml)
+            console.print(f"[green]✓ Created {config_path}[/green]")
+            console.print("[dim]Edit this file to customize your MCP server configuration[/dim]\n")
+        except OSError as e:
+            console.print(f"[red]Error: Could not create config file: {e}[/red]")
+            sys.exit(1)
 
     try:
         config = load_config(config_path)

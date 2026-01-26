@@ -77,13 +77,19 @@ echo -e "${CYAN}Documentation:${NC} https://greynewell.github.io/mcpbr/"
 echo -e "${CYAN}Need help?${NC} https://github.com/greynewell/mcpbr/issues"
 echo ""
 
-# Ask if user wants to run a quick test
-read -p "Would you like to run a quick test now? (y/N) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo ""
-    echo -e "${CYAN}Running quick test with 1 task...${NC}"
-    echo -e "${YELLOW}Note: This will auto-create mcpbr.yaml if it doesn't exist${NC}"
-    echo ""
-    mcpbr run -n 1 -v
+# Ask if user wants to run a quick test (only in interactive mode)
+if [ -t 0 ] || [ -t 1 ]; then
+    # Interactive mode: ask the user
+    read -p "Would you like to run a quick test now? (y/N) " -n 1 -r </dev/tty
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        echo -e "${CYAN}Running quick test with 1 task...${NC}"
+        echo -e "${YELLOW}Note: This will auto-create mcpbr.yaml if it doesn't exist${NC}"
+        echo ""
+        mcpbr run -n 1 -v
+    fi
+else
+    # Non-interactive mode (piped): skip test
+    echo -e "${YELLOW}Tip: Run 'mcpbr run -n 1' to test your installation${NC}"
 fi
