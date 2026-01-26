@@ -1,6 +1,7 @@
 """Reporting utilities for evaluation results."""
 
 import json
+import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -424,6 +425,74 @@ def save_yaml_results(results: "EvaluationResults", output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+
+def save_xml_results(results: "EvaluationResults", output_path: Path) -> None:
+    """Save evaluation results to an XML file.
+
+    Args:
+        results: Evaluation results.
+        output_path: Path to save the XML file.
+    """
+    root = ET.Element("evaluation_results")
+
+    # Add metadata section
+    metadata_elem = ET.SubElement(root, "metadata")
+    _dict_to_xml(results.metadata, metadata_elem)
+
+    # Add summary section
+    summary_elem = ET.SubElement(root, "summary")
+    _dict_to_xml(results.summary, summary_elem)
+
+    # Add tasks section
+    tasks_elem = ET.SubElement(root, "tasks")
+    for task in results.tasks:
+        task_elem = ET.SubElement(tasks_elem, "task")
+        task_elem.set("instance_id", task.instance_id)
+
+        if task.mcp:
+            mcp_elem = ET.SubElement(task_elem, "mcp")
+            _dict_to_xml(task.mcp, mcp_elem)
+
+        if task.baseline:
+            baseline_elem = ET.SubElement(task_elem, "baseline")
+            _dict_to_xml(task.baseline, baseline_elem)
+
+    # Pretty print the XML
+    ET.indent(root, space="  ", level=0)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tree = ET.ElementTree(root)
+    tree.write(output_path, encoding="utf-8", xml_declaration=True)
+
+
+def _dict_to_xml(data: dict | list | str | int | float | bool | None, parent: ET.Element) -> None:
+    """Convert a dictionary or other data structure to XML elements.
+
+    Args:
+        data: The data to convert (dict, list, or primitive value).
+        parent: The parent XML element to append to.
+    """
+    if isinstance(data, dict):
+        for key, value in data.items():
+            # Skip None values in dictionaries to match JSON/YAML behavior
+            if value is None:
+                continue
+            # Sanitize key to be valid XML element name
+            safe_key = str(key).replace(" ", "_").replace("-", "_")
+            child = ET.SubElement(parent, safe_key)
+            _dict_to_xml(value, child)
+    elif isinstance(data, list):
+        for item in data:
+            item_elem = ET.SubElement(parent, "item")
+            _dict_to_xml(item, item_elem)
+    elif data is None:
+        # For explicit None values (not in dict), use empty string
+        parent.text = ""
+    elif isinstance(data, bool):
+        parent.text = str(data).lower()
+    else:
+        parent.text = str(data)
 
 
 def save_markdown_report(results: "EvaluationResults", output_path: Path) -> None:

@@ -1065,7 +1065,7 @@ wheels = [
 
 [[package]]
 name = "mcpbr"
-version = "0.3.25"
+version = "0.3.28"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

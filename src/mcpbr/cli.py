@@ -23,7 +23,13 @@ from .regression import (
     load_baseline_results,
     send_notification,
 )
-from .reporting import print_summary, save_json_results, save_markdown_report, save_yaml_results
+from .reporting import (
+    print_summary,
+    save_json_results,
+    save_markdown_report,
+    save_xml_results,
+    save_yaml_results,
+)
 from .state_tracker import StateTracker
 
 console = Console()
@@ -179,6 +185,13 @@ def main() -> None:
     type=click.Path(path_type=Path),
     default=None,
     help="Path to save JUnit XML report (for CI/CD integration)",
+)
+@click.option(
+    "--output-xml",
+    "xml_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to save XML results",
 )
 @click.option(
     "--verbose",
@@ -351,6 +364,7 @@ def run(
     output_path: Path | None,
     report_path: Path | None,
     junit_path: Path | None,
+    xml_path: Path | None,
     verbosity: int,
     log_file_path: Path | None,
     log_dir_path: Path | None,
@@ -640,6 +654,10 @@ To archive:
     if junit_path:
         save_junit_xml(results, junit_path)
         console.print(f"[green]JUnit XML saved to {junit_path}[/green]")
+
+    if xml_path:
+        save_xml_results(results, xml_path)
+        console.print(f"[green]XML results saved to {xml_path}[/green]")
 
     # Regression detection
     if baseline_results:
