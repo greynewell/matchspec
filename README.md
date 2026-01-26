@@ -297,7 +297,7 @@ sample_size: 10
 timeout_seconds: 300
 max_concurrent: 4
 
-# Optional: disable default logging (logs are saved to .mcpbr_state/logs/ by default)
+# Optional: disable default logging (logs are saved to output_dir/logs/ by default)
 # disable_logs: true
 ```
 
@@ -522,7 +522,7 @@ Run SWE-bench evaluation with the configured MCP server.
 | `--output-junit PATH` | | Path to save JUnit XML report (for CI/CD integration) |
 | `--verbose` | `-v` | Verbose output (`-v` summary, `-vv` detailed) |
 | `--log-file PATH` | `-l` | Path to write raw JSON log output (single file) |
-| `--log-dir PATH` | | Directory to write per-instance JSON log files (default: `.mcpbr_state/logs/`) |
+| `--log-dir PATH` | | Directory to write per-instance JSON log files (default: `output_dir/logs/`) |
 | `--disable-logs` | | Disable detailed execution logs (overrides default and config) |
 | `--task TEXT` | `-t` | Run specific task(s) by instance_id (repeatable) |
 | `--prompt TEXT` | | Override agent prompt (use `{problem_statement}` placeholder) |
@@ -818,7 +818,7 @@ Generates a human-readable report with:
 
 ### Per-Instance Logs (`--log-dir`)
 
-**Logging is enabled by default** to prevent data loss. Detailed execution traces are automatically saved to `.mcpbr_state/logs/` unless disabled.
+**Logging is enabled by default** to prevent data loss. Detailed execution traces are automatically saved to `output_dir/logs/` unless disabled.
 
 To disable logging:
 ```bash

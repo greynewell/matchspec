@@ -557,9 +557,9 @@ To archive:
         log_dir_path = None
         log_file_path = None
     elif not log_dir_path and not log_file_path:
-        # No explicit logging specified, enable default log directory
-        log_dir_path = Path(".mcpbr_state/logs")
-        console.print("[dim]Logging enabled (default): .mcpbr_state/logs/[/dim]")
+        # No explicit logging specified, enable default log directory in output_dir
+        log_dir_path = final_output_dir / "logs"
+        console.print(f"[dim]Logging enabled (default): {log_dir_path}/[/dim]")
         console.print(
             "[dim]To disable: use --disable-logs flag or set disable_logs: true in config[/dim]"
         )

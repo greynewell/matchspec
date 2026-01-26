@@ -153,7 +153,7 @@ class HarnessConfig(BaseModel):
 
     disable_logs: bool = Field(
         default=False,
-        description="Disable detailed execution logs (logs are enabled by default to .mcpbr_state/logs/)",
+        description="Disable detailed execution logs (logs are enabled by default to output_dir/logs/)",
     )
 
     @field_validator("provider")
