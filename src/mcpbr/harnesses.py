@@ -999,7 +999,39 @@ class ClaudeCodeHarness:
                 tool_errors=tool_errors,
             )
         except asyncio.TimeoutError:
-            # Task execution timed out
+            # Task execution timed out - but we may have partial stdout with tool usage stats
+            # Try to parse what we have so far from MCP log file
+            partial_stdout = ""
+            if mcp_log_file:
+                try:
+                    mcp_log_file.flush()
+                    mcp_log_file.close()
+                    # Read back the log to extract stdout lines
+                    if mcp_log_path and mcp_log_path.exists():
+                        with open(mcp_log_path, "r") as f:
+                            stdout_lines = []
+                            for line in f:
+                                if line.startswith("[STDOUT] "):
+                                    stdout_lines.append(line[9:])  # Strip "[STDOUT] " prefix
+                            partial_stdout = "".join(stdout_lines)
+                except Exception as e:
+                    if verbose:
+                        self._console.print(
+                            f"[dim yellow]Failed to read partial stdout from MCP log: {e}[/dim yellow]"
+                        )
+
+            # Parse tool usage from partial stdout
+            (
+                total_tool_calls,
+                tool_usage,
+                tool_failures,
+                tool_errors,
+                num_turns,
+                tokens_in,
+                tokens_out,
+                result_subtype,
+            ) = _parse_tool_usage_from_stream(partial_stdout)
+
             if mcp_server_name:
                 try:
                     # Use shlex.quote() for MCP removal command
@@ -1025,10 +1057,22 @@ class ClaudeCodeHarness:
             else:
                 error_msg += " The Claude Code agent failed to complete within the timeout."
 
+            # Include statistics from partial execution
+            if total_tool_calls > 0:
+                error_msg += f" Agent made {total_tool_calls} tool calls across {num_turns} iterations before timeout."
+
             return AgentResult(
                 patch="",
                 success=False,
                 error=error_msg,
+                tokens_input=tokens_in,
+                tokens_output=tokens_out,
+                iterations=num_turns,
+                tool_calls=total_tool_calls,
+                tool_usage=tool_usage,
+                tool_failures=tool_failures,
+                tool_errors=tool_errors,
+                stdout=partial_stdout,
             )
         except Exception:
             if mcp_server_name:

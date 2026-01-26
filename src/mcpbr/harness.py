@@ -108,6 +108,9 @@ def agent_result_to_dict(
 
     if result.error:
         data["error"] = result.error
+        # Add status field to distinguish timeouts from other errors
+        if "timed out" in result.error.lower() or "timeout" in result.error.lower():
+            data["status"] = "timeout"
 
     if result.messages:
         data["messages"] = result.messages
@@ -346,10 +349,13 @@ async def _run_mcp_evaluation(
         return result
 
     except asyncio.TimeoutError:
+        # Note: The agent harness should have captured partial statistics in the AgentResult
+        # before raising TimeoutError, but this is a fallback for unexpected timeout locations
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
             "patch_applied": False,
+            "status": "timeout",
             "error": "Timeout",
             "tokens": {"input": 0, "output": 0},
             "iterations": 0,
@@ -444,10 +450,13 @@ async def _run_baseline_evaluation(
         return result
 
     except asyncio.TimeoutError:
+        # Note: The agent harness should have captured partial statistics in the AgentResult
+        # before raising TimeoutError, but this is a fallback for unexpected timeout locations
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
             "patch_applied": False,
+            "status": "timeout",
             "error": "Timeout",
             "tokens": {"input": 0, "output": 0},
             "iterations": 0,
