@@ -14,6 +14,7 @@ from .pricing import format_cost
 
 if TYPE_CHECKING:
     from .harness import EvaluationResults
+    from .statistics import ComprehensiveStatistics
 
 
 class ToolCoverageReport:
@@ -114,6 +115,202 @@ def calculate_tool_coverage(
             coverage.add_task_usage(task.mcp["tool_usage"])
 
     return coverage.to_dict()
+
+
+def print_comprehensive_statistics(stats: "ComprehensiveStatistics", console: Console) -> None:
+    """Print comprehensive statistics to the console.
+
+    Args:
+        stats: Comprehensive statistics object.
+        console: Rich console for output.
+    """
+    # Token Usage Statistics
+    console.print()
+    console.print("[bold]Token Usage Statistics[/bold]")
+    console.print()
+
+    token_table = Table(title="Token Usage Comparison")
+    token_table.add_column("Metric", style="cyan")
+    token_table.add_column("MCP Agent", style="green", justify="right")
+    token_table.add_column("Baseline", style="yellow", justify="right")
+
+    token_table.add_row(
+        "Total Input",
+        f"{stats.mcp_tokens.total_input:,}",
+        f"{stats.baseline_tokens.total_input:,}",
+    )
+    token_table.add_row(
+        "Total Output",
+        f"{stats.mcp_tokens.total_output:,}",
+        f"{stats.baseline_tokens.total_output:,}",
+    )
+    token_table.add_row(
+        "Total Tokens",
+        f"{stats.mcp_tokens.total_tokens:,}",
+        f"{stats.baseline_tokens.total_tokens:,}",
+    )
+    token_table.add_row(
+        "Avg Input/Task",
+        f"{stats.mcp_tokens.avg_input_per_task:,.0f}",
+        f"{stats.baseline_tokens.avg_input_per_task:,.0f}",
+    )
+    token_table.add_row(
+        "Avg Output/Task",
+        f"{stats.mcp_tokens.avg_output_per_task:,.0f}",
+        f"{stats.baseline_tokens.avg_output_per_task:,.0f}",
+    )
+    token_table.add_row(
+        "Max Input/Task",
+        f"{stats.mcp_tokens.max_input_per_task:,}",
+        f"{stats.baseline_tokens.max_input_per_task:,}",
+    )
+    token_table.add_row(
+        "Max Output/Task",
+        f"{stats.mcp_tokens.max_output_per_task:,}",
+        f"{stats.baseline_tokens.max_output_per_task:,}",
+    )
+
+    console.print(token_table)
+
+    # Iteration Statistics
+    console.print()
+    console.print("[bold]Iteration Statistics[/bold]")
+    console.print()
+
+    iter_table = Table(title="Iteration Comparison")
+    iter_table.add_column("Metric", style="cyan")
+    iter_table.add_column("MCP Agent", style="green", justify="right")
+    iter_table.add_column("Baseline", style="yellow", justify="right")
+
+    iter_table.add_row(
+        "Total Iterations",
+        f"{stats.mcp_iterations.total_iterations:,}",
+        f"{stats.baseline_iterations.total_iterations:,}",
+    )
+    iter_table.add_row(
+        "Avg Iterations/Task",
+        f"{stats.mcp_iterations.avg_iterations:.1f}",
+        f"{stats.baseline_iterations.avg_iterations:.1f}",
+    )
+    iter_table.add_row(
+        "Max Iterations",
+        f"{stats.mcp_iterations.max_iterations}",
+        f"{stats.baseline_iterations.max_iterations}",
+    )
+    iter_table.add_row(
+        "Min Iterations",
+        f"{stats.mcp_iterations.min_iterations}",
+        f"{stats.baseline_iterations.min_iterations}",
+    )
+
+    console.print(iter_table)
+
+    # MCP Tool Statistics
+    if stats.mcp_tools.total_calls > 0:
+        console.print()
+        console.print("[bold]MCP Tool Usage Statistics[/bold]")
+        console.print()
+
+        tool_summary = Table(title="Tool Call Summary")
+        tool_summary.add_column("Metric", style="cyan")
+        tool_summary.add_column("Value", style="green", justify="right")
+
+        tool_summary.add_row("Total Calls", f"{stats.mcp_tools.total_calls:,}")
+        tool_summary.add_row("Successful Calls", f"{stats.mcp_tools.total_successes:,}")
+        tool_summary.add_row("Failed Calls", f"{stats.mcp_tools.total_failures:,}")
+        tool_summary.add_row("Failure Rate", f"{stats.mcp_tools.failure_rate:.1%}")
+        tool_summary.add_row("Unique Tools Used", f"{stats.mcp_tools.unique_tools_used}")
+        tool_summary.add_row("Avg Calls/Task", f"{stats.mcp_tools.avg_calls_per_task:.1f}")
+
+        console.print(tool_summary)
+
+        # Most used tools
+        if stats.mcp_tools.most_used_tools:
+            console.print()
+            console.print("[bold]Top 10 Most Used Tools:[/bold]")
+            top_tools_table = Table()
+            top_tools_table.add_column("Tool", style="cyan")
+            top_tools_table.add_column("Calls", justify="right")
+            top_tools_table.add_column("Success Rate", justify="right")
+
+            for tool_name, count in stats.mcp_tools.most_used_tools[:10]:
+                per_tool = stats.mcp_tools.per_tool.get(tool_name, {})
+                success_rate = 1.0 - per_tool.get("failure_rate", 0.0)
+                top_tools_table.add_row(tool_name, f"{count:,}", f"{success_rate:.1%}")
+
+            console.print(top_tools_table)
+
+        # Most failed tools
+        if stats.mcp_tools.most_failed_tools and stats.mcp_tools.total_failures > 0:
+            console.print()
+            console.print("[bold]Top 10 Most Failed Tools:[/bold]")
+            failed_tools_table = Table()
+            failed_tools_table.add_column("Tool", style="cyan")
+            failed_tools_table.add_column("Failures", justify="right")
+            failed_tools_table.add_column("Failure Rate", justify="right", style="red")
+
+            for tool_name, fail_count in stats.mcp_tools.most_failed_tools[:10]:
+                per_tool = stats.mcp_tools.per_tool.get(tool_name, {})
+                failure_rate = per_tool.get("failure_rate", 0.0)
+                failed_tools_table.add_row(tool_name, f"{fail_count:,}", f"{failure_rate:.1%}")
+
+            console.print(failed_tools_table)
+
+    # Error Analysis
+    if stats.mcp_errors.total_errors > 0 or stats.baseline_errors.total_errors > 0:
+        console.print()
+        console.print("[bold]Error Analysis[/bold]")
+        console.print()
+
+        error_table = Table(title="Error Comparison")
+        error_table.add_column("Metric", style="cyan")
+        error_table.add_column("MCP Agent", style="green", justify="right")
+        error_table.add_column("Baseline", style="yellow", justify="right")
+
+        error_table.add_row(
+            "Total Errors",
+            f"{stats.mcp_errors.total_errors}",
+            f"{stats.baseline_errors.total_errors}",
+        )
+        error_table.add_row(
+            "Error Rate",
+            f"{stats.mcp_errors.error_rate:.1%}",
+            f"{stats.baseline_errors.error_rate:.1%}",
+        )
+        error_table.add_row(
+            "Timeout Count",
+            f"{stats.mcp_errors.timeout_count}",
+            f"{stats.baseline_errors.timeout_count}",
+        )
+        error_table.add_row(
+            "Timeout Rate",
+            f"{stats.mcp_errors.timeout_rate:.1%}",
+            f"{stats.baseline_errors.timeout_rate:.1%}",
+        )
+
+        console.print(error_table)
+
+        # MCP Error Categories
+        if stats.mcp_errors.error_categories:
+            console.print()
+            console.print("[bold]MCP Error Categories:[/bold]")
+            for category, count in sorted(
+                stats.mcp_errors.error_categories.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            ):
+                console.print(f"  {category}: {count}")
+
+        # Baseline Error Categories
+        if stats.baseline_errors.error_categories:
+            console.print()
+            console.print("[bold]Baseline Error Categories:[/bold]")
+            for category, count in sorted(
+                stats.baseline_errors.error_categories.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            ):
+                console.print(f"  {category}: {count}")
 
 
 def print_summary(results: "EvaluationResults", console: Console) -> None:
@@ -333,6 +530,42 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
         if results.metadata["config"].get("budget_exceeded"):
             console.print("[yellow]Budget limit reached - evaluation halted early[/yellow]")
 
+    # Print comprehensive statistics if available
+    comprehensive_stats = results.summary.get("comprehensive_stats")
+    if comprehensive_stats:
+        from .statistics import ComprehensiveStatistics
+
+        # Convert dict back to dataclass
+        stats_obj = ComprehensiveStatistics()
+        stats_dict = comprehensive_stats
+
+        # Reconstruct the statistics object from the dict
+        from .statistics import (
+            CostStatistics,
+            ErrorStatistics,
+            IterationStatistics,
+            TokenStatistics,
+            ToolStatistics,
+        )
+
+        # Helper to convert dict to dataclass
+        def dict_to_stats(cls, data):
+            return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+        stats_obj.mcp_tokens = dict_to_stats(TokenStatistics, stats_dict["mcp_tokens"])
+        stats_obj.baseline_tokens = dict_to_stats(TokenStatistics, stats_dict["baseline_tokens"])
+        stats_obj.mcp_costs = dict_to_stats(CostStatistics, stats_dict["mcp_costs"])
+        stats_obj.baseline_costs = dict_to_stats(CostStatistics, stats_dict["baseline_costs"])
+        stats_obj.mcp_tools = dict_to_stats(ToolStatistics, stats_dict["mcp_tools"])
+        stats_obj.mcp_errors = dict_to_stats(ErrorStatistics, stats_dict["mcp_errors"])
+        stats_obj.baseline_errors = dict_to_stats(ErrorStatistics, stats_dict["baseline_errors"])
+        stats_obj.mcp_iterations = dict_to_stats(IterationStatistics, stats_dict["mcp_iterations"])
+        stats_obj.baseline_iterations = dict_to_stats(
+            IterationStatistics, stats_dict["baseline_iterations"]
+        )
+
+        print_comprehensive_statistics(stats_obj, console)
+
     console.print()
     console.print("[bold]Per-Task Results[/bold]")
 
@@ -508,7 +741,8 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
     lines.append("")
     lines.append(f"**Generated:** {results.metadata['timestamp']}")
     lines.append(f"**Model:** {results.metadata['config']['model']}")
-    lines.append(f"**Dataset:** {results.metadata['config']['dataset']}")
+    if "dataset" in results.metadata["config"]:
+        lines.append(f"**Dataset:** {results.metadata['config']['dataset']}")
     lines.append("")
 
     lines.append("## Summary")
@@ -677,6 +911,201 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
                         for error in sample_errors[:2]:  # First 2 errors per tool
                             lines.append(f"- {error}")
                         lines.append("")
+
+    # Add comprehensive statistics if available
+    comprehensive_stats = results.summary.get("comprehensive_stats")
+    if comprehensive_stats:
+        lines.append("## Comprehensive Statistics")
+        lines.append("")
+
+        # Token Usage
+        lines.append("### Token Usage")
+        lines.append("")
+        lines.append("| Metric | MCP Agent | Baseline |")
+        lines.append("|--------|-----------|----------|")
+        mcp_tok = comprehensive_stats["mcp_tokens"]
+        base_tok = comprehensive_stats["baseline_tokens"]
+        lines.append(f"| Total Input | {mcp_tok['total_input']:,} | {base_tok['total_input']:,} |")
+        lines.append(
+            f"| Total Output | {mcp_tok['total_output']:,} | {base_tok['total_output']:,} |"
+        )
+        lines.append(
+            f"| Total Tokens | {mcp_tok['total_tokens']:,} | {base_tok['total_tokens']:,} |"
+        )
+        lines.append(
+            f"| Avg Input/Task | {mcp_tok['avg_input_per_task']:,.0f} | "
+            f"{base_tok['avg_input_per_task']:,.0f} |"
+        )
+        lines.append(
+            f"| Avg Output/Task | {mcp_tok['avg_output_per_task']:,.0f} | "
+            f"{base_tok['avg_output_per_task']:,.0f} |"
+        )
+        lines.append(
+            f"| Max Input/Task | {mcp_tok['max_input_per_task']:,} | "
+            f"{base_tok['max_input_per_task']:,} |"
+        )
+        lines.append(
+            f"| Max Output/Task | {mcp_tok['max_output_per_task']:,} | "
+            f"{base_tok['max_output_per_task']:,} |"
+        )
+        lines.append("")
+
+        # Cost Breakdown
+        lines.append("### Detailed Cost Breakdown")
+        lines.append("")
+        lines.append("| Metric | MCP Agent | Baseline |")
+        lines.append("|--------|-----------|----------|")
+        mcp_cost = comprehensive_stats["mcp_costs"]
+        base_cost = comprehensive_stats["baseline_costs"]
+        lines.append(
+            f"| Total Cost | {format_cost(mcp_cost['total_cost'])} | "
+            f"{format_cost(base_cost['total_cost'])} |"
+        )
+        lines.append(
+            f"| Avg Cost/Task | {format_cost(mcp_cost['avg_cost_per_task'])} | "
+            f"{format_cost(base_cost['avg_cost_per_task'])} |"
+        )
+        lines.append(
+            f"| Max Cost/Task | {format_cost(mcp_cost['max_cost_per_task'])} | "
+            f"{format_cost(base_cost['max_cost_per_task'])} |"
+        )
+        lines.append(
+            f"| Min Cost/Task | {format_cost(mcp_cost['min_cost_per_task'])} | "
+            f"{format_cost(base_cost['min_cost_per_task'])} |"
+        )
+        if mcp_cost.get("cost_per_resolved"):
+            lines.append(
+                f"| Cost/Resolved | {format_cost(mcp_cost['cost_per_resolved'])} | "
+                f"{format_cost(base_cost.get('cost_per_resolved'))} |"
+            )
+        lines.append("")
+
+        # Iteration Statistics
+        lines.append("### Iteration Statistics")
+        lines.append("")
+        lines.append("| Metric | MCP Agent | Baseline |")
+        lines.append("|--------|-----------|----------|")
+        mcp_iter = comprehensive_stats["mcp_iterations"]
+        base_iter = comprehensive_stats["baseline_iterations"]
+        lines.append(
+            f"| Total Iterations | {mcp_iter['total_iterations']:,} | "
+            f"{base_iter['total_iterations']:,} |"
+        )
+        lines.append(
+            f"| Avg Iterations/Task | {mcp_iter['avg_iterations']:.1f} | "
+            f"{base_iter['avg_iterations']:.1f} |"
+        )
+        lines.append(
+            f"| Max Iterations | {mcp_iter['max_iterations']} | {base_iter['max_iterations']} |"
+        )
+        lines.append(
+            f"| Min Iterations | {mcp_iter['min_iterations']} | {base_iter['min_iterations']} |"
+        )
+        lines.append("")
+
+        # Iteration Distribution
+        if mcp_iter.get("distribution"):
+            lines.append("#### MCP Iteration Distribution")
+            lines.append("")
+            lines.append("| Iterations | Task Count |")
+            lines.append("|------------|------------|")
+            for iters, count in sorted(mcp_iter["distribution"].items()):
+                lines.append(f"| {iters} | {count} |")
+            lines.append("")
+
+        # MCP Tool Usage
+        mcp_tools = comprehensive_stats["mcp_tools"]
+        if mcp_tools["total_calls"] > 0:
+            lines.append("### MCP Tool Usage Statistics")
+            lines.append("")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
+            lines.append(f"| Total Calls | {mcp_tools['total_calls']:,} |")
+            lines.append(f"| Successful Calls | {mcp_tools['total_successes']:,} |")
+            lines.append(f"| Failed Calls | {mcp_tools['total_failures']:,} |")
+            lines.append(f"| Failure Rate | {mcp_tools['failure_rate']:.1%} |")
+            lines.append(f"| Unique Tools Used | {mcp_tools['unique_tools_used']} |")
+            lines.append(f"| Avg Calls/Task | {mcp_tools['avg_calls_per_task']:.1f} |")
+            lines.append("")
+
+            # Most used tools
+            if mcp_tools.get("most_used_tools"):
+                lines.append("#### Top 10 Most Used Tools")
+                lines.append("")
+                lines.append("| Tool | Calls | Success Rate |")
+                lines.append("|------|-------|--------------|")
+                for tool_name, count in list(mcp_tools["most_used_tools"].items())[:10]:
+                    per_tool = mcp_tools["per_tool"].get(tool_name, {})
+                    success_rate = 1.0 - per_tool.get("failure_rate", 0.0)
+                    lines.append(f"| {tool_name} | {count:,} | {success_rate:.1%} |")
+                lines.append("")
+
+            # Most failed tools
+            if mcp_tools.get("most_failed_tools") and mcp_tools["total_failures"] > 0:
+                lines.append("#### Top 10 Most Failed Tools")
+                lines.append("")
+                lines.append("| Tool | Failures | Failure Rate |")
+                lines.append("|------|----------|--------------|")
+                for tool_name, fail_count in list(mcp_tools["most_failed_tools"].items())[:10]:
+                    per_tool = mcp_tools["per_tool"].get(tool_name, {})
+                    failure_rate = per_tool.get("failure_rate", 0.0)
+                    lines.append(f"| {tool_name} | {fail_count:,} | {failure_rate:.1%} |")
+                lines.append("")
+
+        # Error Analysis
+        mcp_err = comprehensive_stats["mcp_errors"]
+        base_err = comprehensive_stats["baseline_errors"]
+        if mcp_err["total_errors"] > 0 or base_err["total_errors"] > 0:
+            lines.append("### Error Analysis")
+            lines.append("")
+            lines.append("| Metric | MCP Agent | Baseline |")
+            lines.append("|--------|-----------|----------|")
+            lines.append(
+                f"| Total Errors | {mcp_err['total_errors']} | {base_err['total_errors']} |"
+            )
+            lines.append(
+                f"| Error Rate | {mcp_err['error_rate']:.1%} | {base_err['error_rate']:.1%} |"
+            )
+            lines.append(
+                f"| Timeout Count | {mcp_err['timeout_count']} | {base_err['timeout_count']} |"
+            )
+            lines.append(
+                f"| Timeout Rate | {mcp_err['timeout_rate']:.1%} | {base_err['timeout_rate']:.1%} |"
+            )
+            lines.append("")
+
+            # Error categories
+            if mcp_err.get("error_categories"):
+                lines.append("#### MCP Error Categories")
+                lines.append("")
+                for category, count in sorted(
+                    mcp_err["error_categories"].items(),
+                    key=lambda x: x[1],
+                    reverse=True,
+                ):
+                    lines.append(f"- **{category}**: {count}")
+                lines.append("")
+
+            if base_err.get("error_categories"):
+                lines.append("#### Baseline Error Categories")
+                lines.append("")
+                for category, count in sorted(
+                    base_err["error_categories"].items(),
+                    key=lambda x: x[1],
+                    reverse=True,
+                ):
+                    lines.append(f"- **{category}**: {count}")
+                lines.append("")
+
+            # Sample errors
+            if mcp_err.get("sample_errors"):
+                lines.append("#### Sample Errors (MCP)")
+                lines.append("")
+                for sample in mcp_err["sample_errors"][:5]:
+                    lines.append(
+                        f"- **{sample['instance_id']}** [{sample['category']}]: {sample['error']}"
+                    )
+                lines.append("")
 
     lines.append("## MCP Server Configuration")
     lines.append("")

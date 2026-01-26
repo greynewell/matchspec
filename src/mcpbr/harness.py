@@ -861,6 +861,7 @@ async def run_evaluation(
     # Calculate cost-effectiveness metrics
     from .pricing import calculate_cost_effectiveness
     from .reporting import calculate_tool_coverage
+    from .statistics import calculate_comprehensive_statistics
 
     cost_effectiveness = calculate_cost_effectiveness(
         mcp_cost=mcp_cost,
@@ -876,6 +877,9 @@ async def run_evaluation(
         tasks=results,
     )
     tool_coverage = calculate_tool_coverage(temp_results)
+
+    # Calculate comprehensive statistics
+    comprehensive_stats = calculate_comprehensive_statistics(temp_results)
 
     # Calculate MCP tool failure statistics
     mcp_tool_stats = _calculate_mcp_tool_stats(results)
@@ -945,6 +949,7 @@ async def run_evaluation(
             },
             "tool_coverage": tool_coverage,
             "mcp_tool_stats": mcp_tool_stats,
+            "comprehensive_stats": comprehensive_stats.to_dict(),
         },
         tasks=results,
     )
