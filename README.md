@@ -1,11 +1,11 @@
 # mcpbr
 
 ```bash
-# Install via pip
-pip install mcpbr && mcpbr init && mcpbr run -c mcpbr.yaml -n 1 -v
+# One-liner install (installs + runs quick test)
+curl -sSL https://raw.githubusercontent.com/greynewell/mcpbr/main/install.sh | bash
 
-# Or via npm
-npm install -g mcpbr-cli && mcpbr init && mcpbr run -c mcpbr.yaml -n 1 -v
+# Or install and run manually
+pip install mcpbr && mcpbr run -n 1
 ```
 
 Benchmark your MCP server against real GitHub issues. One command, hard numbers.
@@ -271,9 +271,13 @@ See the **[Examples README](examples/README.md)** for the complete guide.
 export ANTHROPIC_API_KEY="your-api-key"
 ```
 
-2. **Generate a configuration file:**
+2. **Run mcpbr (config auto-created if missing):**
 
 ```bash
+# Config is auto-created on first run
+mcpbr run -n 1
+
+# Or explicitly generate a config file first
 mcpbr init
 ```
 
