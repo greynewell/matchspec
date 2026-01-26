@@ -60,10 +60,14 @@ mcpbr supports multiple software engineering benchmarks through a flexible abstr
 ### SWE-bench (Default)
 Real GitHub issues requiring bug fixes and patches. The agent generates unified diffs evaluated by running pytest test suites.
 
-- **Dataset**: [SWE-bench/SWE-bench_Lite](https://huggingface.co/datasets/SWE-bench/SWE-bench_Lite)
 - **Task**: Generate patches to fix bugs
 - **Evaluation**: Test suite pass/fail
 - **Pre-built images**: Available for most tasks
+
+**Dataset Variants:**
+- **Lite** ([SWE-bench/SWE-bench_Lite](https://huggingface.co/datasets/SWE-bench/SWE-bench_Lite)) - 300 tasks, default option, good for quick testing
+- **Verified** ([SWE-bench/SWE-bench_Verified](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified)) - Subset with manually validated test cases for higher quality evaluation
+- **Full** ([SWE-bench/SWE-bench](https://huggingface.co/datasets/SWE-bench/SWE-bench)) - 2,294 tasks, complete benchmark
 
 ### CyberGym
 Security vulnerabilities requiring Proof-of-Concept (PoC) exploits. The agent generates exploits that trigger crashes in vulnerable code.
@@ -84,8 +88,14 @@ Large-scale MCP tool use evaluation across 45+ categories. Tests agent capabilit
 - **Learn more**: [MCPToolBench++ Paper](https://arxiv.org/pdf/2508.07575) | [GitHub](https://github.com/mcp-tool-bench/MCPToolBenchPP)
 
 ```bash
-# Run SWE-bench (default)
+# Run SWE-bench Lite (default)
 mcpbr run -c config.yaml
+
+# Run SWE-bench Verified (higher quality, manually validated tests)
+mcpbr run -c config.yaml --verified
+
+# Run full SWE-bench dataset
+mcpbr run -c config.yaml --dataset SWE-bench/SWE-bench
 
 # Run CyberGym at level 2
 mcpbr run -c config.yaml --benchmark cybergym --level 2

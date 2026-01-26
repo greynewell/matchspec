@@ -76,6 +76,18 @@ class TestSWEBenchmark:
         benchmark = SWEBenchmark(dataset="custom/dataset")
         assert benchmark.dataset == "custom/dataset"
 
+    def test_verified_dataset(self) -> None:
+        """Test SWE-bench with Verified dataset."""
+        benchmark = SWEBenchmark(dataset="SWE-bench/SWE-bench_Verified")
+        assert benchmark.dataset == "SWE-bench/SWE-bench_Verified"
+        assert benchmark.name == "swe-bench"
+
+    def test_full_dataset(self) -> None:
+        """Test SWE-bench with full dataset."""
+        benchmark = SWEBenchmark(dataset="SWE-bench/SWE-bench")
+        assert benchmark.dataset == "SWE-bench/SWE-bench"
+        assert benchmark.name == "swe-bench"
+
     def test_normalize_task(self) -> None:
         """Test normalizing SWE-bench task."""
         benchmark = SWEBenchmark()

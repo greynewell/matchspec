@@ -144,6 +144,11 @@ def main() -> None:
     help="Override CyberGym difficulty level (0-3)",
 )
 @click.option(
+    "--verified",
+    is_flag=True,
+    help="Use SWE-bench Verified dataset (shortcut for --dataset SWE-bench/SWE-bench_Verified)",
+)
+@click.option(
     "--sample",
     "-n",
     "sample_size",
@@ -358,6 +363,7 @@ def run(
     harness_override: str | None,
     benchmark_override: str | None,
     level_override: int | None,
+    verified: bool,
     sample_size: int | None,
     mcp_only: bool,
     baseline_only: bool,
@@ -400,6 +406,7 @@ def run(
       mcpbr run -c config.yaml -M        # MCP only
       mcpbr run -c config.yaml -B        # Baseline only
       mcpbr run -c config.yaml -n 10     # Sample 10 tasks
+      mcpbr run -c config.yaml --verified  # Use SWE-bench Verified dataset
       mcpbr run -c config.yaml -v        # Verbose output
       mcpbr run -c config.yaml -o out.json -r report.md
       mcpbr run -c config.yaml --yaml out.yaml  # Save as YAML
@@ -469,6 +476,9 @@ def run(
 
     if level_override is not None:
         config.cybergym_level = level_override
+
+    if verified:
+        config.dataset = "SWE-bench/SWE-bench_Verified"
 
     if sample_size is not None:
         config.sample_size = sample_size

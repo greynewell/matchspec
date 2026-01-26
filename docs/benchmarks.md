@@ -13,11 +13,26 @@ mcpbr supports multiple software engineering benchmarks through a flexible abstr
 
 [SWE-bench](https://www.swebench.com/) is a benchmark of real-world software issues from GitHub repositories. The agent's task is to generate a patch that fixes the bug.
 
-### Dataset
+### Dataset Variants
 
-- **Source**: [SWE-bench/SWE-bench_Lite](https://huggingface.co/datasets/SWE-bench/SWE-bench_Lite) on HuggingFace
+SWE-bench offers three dataset variants with different characteristics:
+
+#### Lite (Default)
+- **Source**: [SWE-bench/SWE-bench_Lite](https://huggingface.co/datasets/SWE-bench/SWE-bench_Lite)
 - **Tasks**: 300 curated bug fixes from popular Python repositories
+- **Use Case**: Quick testing and evaluation, recommended for most users
 - **Repositories**: Django, Flask, Matplotlib, Pandas, Scikit-learn, SymPy, and more
+
+#### Verified
+- **Source**: [SWE-bench/SWE-bench_Verified](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified)
+- **Tasks**: Subset with manually validated test cases
+- **Use Case**: Higher quality evaluation with reliable tests, recommended for accurate benchmarking
+- **Quality**: Each task has been manually reviewed to ensure test correctness
+
+#### Full
+- **Source**: [SWE-bench/SWE-bench](https://huggingface.co/datasets/SWE-bench/SWE-bench)
+- **Tasks**: 2,294 tasks from the complete benchmark
+- **Use Case**: Comprehensive evaluation, research purposes
 
 ### Task Structure
 
@@ -55,21 +70,32 @@ This ensures:
 ### Example
 
 ```bash
-# Run SWE-bench (default)
+# Run SWE-bench Lite (default - 300 tasks)
 mcpbr run -c config.yaml
+
+# Run SWE-bench Verified (manually validated tests)
+mcpbr run -c config.yaml --verified
+
+# Run full SWE-bench (2,294 tasks)
+mcpbr run -c config.yaml --dataset SWE-bench/SWE-bench
 
 # Run specific SWE-bench tasks
 mcpbr run -c config.yaml -t astropy__astropy-12907 -t django__django-11099
 
-# Run with custom dataset
-mcpbr run -c config.yaml --benchmark swe-bench -n 50
+# Run sample of tasks
+mcpbr run -c config.yaml -n 50
 ```
 
 ### Configuration
 
 ```yaml
 benchmark: "swe-bench"
-dataset: "SWE-bench/SWE-bench_Lite"  # Optional, this is the default
+
+# Dataset variants (choose one):
+dataset: "SWE-bench/SWE-bench_Lite"      # Default: 300 tasks, quick testing
+# dataset: "SWE-bench/SWE-bench_Verified"  # Manually validated, high quality
+# dataset: "SWE-bench/SWE-bench"           # Full: 2,294 tasks
+
 sample_size: 25
 use_prebuilt_images: true  # Recommended
 ```

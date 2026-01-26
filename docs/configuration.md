@@ -273,8 +273,12 @@ See [Installation](installation.md#supported-models) for the full list of suppor
 
 The `dataset` field is optional. If not specified, each benchmark uses its default dataset:
 
-- **SWE-bench**: `SWE-bench/SWE-bench_Lite`
+- **SWE-bench**: `SWE-bench/SWE-bench_Lite` (default)
+  - Lite: `SWE-bench/SWE-bench_Lite` - 300 tasks
+  - Verified: `SWE-bench/SWE-bench_Verified` - Manually validated tests
+  - Full: `SWE-bench/SWE-bench` - 2,294 tasks
 - **CyberGym**: `sunblaze-ucb/cybergym`
+- **MCPToolBench++**: `MCPToolBench/MCPToolBenchPP`
 
 ### Execution Parameters
 

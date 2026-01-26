@@ -203,3 +203,55 @@ class TestCreateDefaultConfig:
         assert config.model == DEFAULT_MODEL
         assert config.provider == "anthropic"
         assert config.agent_harness == "claude-code"
+
+
+class TestDatasetConfiguration:
+    """Tests for dataset configuration."""
+
+    def test_swe_bench_lite_dataset(self) -> None:
+        """Test SWE-bench Lite dataset configuration."""
+        yaml_content = """
+mcp_server:
+  command: npx
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
+
+dataset: "SWE-bench/SWE-bench_Lite"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+
+            config = load_config(f.name)
+            assert config.dataset == "SWE-bench/SWE-bench_Lite"
+
+    def test_swe_bench_verified_dataset(self) -> None:
+        """Test SWE-bench Verified dataset configuration."""
+        yaml_content = """
+mcp_server:
+  command: npx
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
+
+dataset: "SWE-bench/SWE-bench_Verified"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+
+            config = load_config(f.name)
+            assert config.dataset == "SWE-bench/SWE-bench_Verified"
+
+    def test_swe_bench_full_dataset(self) -> None:
+        """Test SWE-bench full dataset configuration."""
+        yaml_content = """
+mcp_server:
+  command: npx
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
+
+dataset: "SWE-bench/SWE-bench"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+
+            config = load_config(f.name)
+            assert config.dataset == "SWE-bench/SWE-bench"
