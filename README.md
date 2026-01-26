@@ -309,18 +309,20 @@ cd mcpbr
 
 **Best for**: Contributors, developers testing changes, or users who want the latest unreleased features.
 
-#### Option 2: npm Global Install (Coming Soon)
+#### Option 2: npm Global Install (Planned for v0.4.0)
 
 Install the plugin globally via npm for use across any project:
 
 ```bash
-# Coming in v0.4.0
+# Planned for v0.4.0 (not yet released)
 npm install -g @mcpbr/claude-code-plugin
 ```
 
+> **Note**: The npm package is not yet published. This installation method will be available in a future release. Track progress in [issue #265](https://github.com/greynewell/mcpbr/issues/265).
+
 **Best for**: Users who want plugin features available in any directory.
 
-#### Option 3: Claude Code Plugin Manager
+#### Option 3: Claude Code Plugin Manager (Planned for v0.4.0)
 
 Install via Claude Code's built-in plugin manager:
 
@@ -329,6 +331,8 @@ Install via Claude Code's built-in plugin manager:
 3. Search for "mcpbr"
 4. Click Install
 
+> **Note**: Plugin manager installation is not yet available. This installation method will be available after plugin marketplace submission. Track progress in [issue #267](https://github.com/greynewell/mcpbr/issues/267).
+
 **Best for**: Users who prefer a GUI and want automatic updates.
 
 ### Installation Comparison
@@ -336,8 +340,8 @@ Install via Claude Code's built-in plugin manager:
 | Method | Availability | Auto-updates | Works Anywhere | Latest Features |
 |--------|-------------|--------------|----------------|-----------------|
 | Clone Repository | Available now | Manual (git pull) | No (repo only) | Yes (unreleased) |
-| npm Global Install | Coming v0.4.0 | Via npm | Yes | Yes (published) |
-| Plugin Manager | Coming v0.4.0 | Automatic | Yes | Yes (published) |
+| npm Global Install | Planned (not yet released) | Via npm | Yes | Yes (published) |
+| Plugin Manager | Planned (not yet released) | Automatic | Yes | Yes (published) |
 
 ### What You Get
 
