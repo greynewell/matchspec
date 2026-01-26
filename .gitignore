@@ -80,6 +80,8 @@ reports/
 .swebench-mcp/
 .logs/
 logs/
+.mcpbr_run_*/
+.mcpbr_state/
 
 # npm
 node_modules/

@@ -142,6 +142,7 @@ def _create_mcp_agent(
     benchmark: Benchmark,
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
+    mcp_logs_dir: Path | None = None,
 ) -> AgentHarness:
     """Create the agent harness based on config.
 
@@ -150,6 +151,7 @@ def _create_mcp_agent(
         benchmark: Benchmark instance for getting default prompt.
         verbosity: Verbosity level (0=silent, 1=summary, 2=detailed).
         log_file: Optional file handle for writing raw JSON logs.
+        mcp_logs_dir: Directory for MCP server logs.
 
     Returns:
         Configured AgentHarness.
@@ -165,6 +167,7 @@ def _create_mcp_agent(
         max_iterations=config.max_iterations,
         verbosity=verbosity,
         log_file=log_file,
+        mcp_logs_dir=mcp_logs_dir,
     )
 
 
@@ -211,6 +214,7 @@ async def run_single_task(
     log_file: TextIO | None = None,
     log_dir: Path | None = None,
     cache: ResultCache | None = None,
+    mcp_logs_dir: Path | None = None,
 ) -> TaskResult:
     """Run evaluation for a single task.
 
@@ -226,6 +230,7 @@ async def run_single_task(
         log_file: Optional file handle for writing raw JSON logs.
         log_dir: Optional directory for per-instance JSON log files.
         cache: Optional result cache.
+        mcp_logs_dir: Directory for MCP server logs.
 
     Returns:
         TaskResult with results for both runs.
@@ -247,6 +252,7 @@ async def run_single_task(
                 verbosity,
                 mcp_log_writer if mcp_log_writer else log_file,
                 cache,
+                mcp_logs_dir,
             )
         finally:
             if mcp_log_writer:
@@ -283,6 +289,7 @@ async def _run_mcp_evaluation(
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
     cache: ResultCache | None = None,
+    mcp_logs_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run MCP agent evaluation with optional caching.
 
@@ -295,6 +302,7 @@ async def _run_mcp_evaluation(
         verbosity: Verbosity level.
         log_file: Optional log file writer.
         cache: Optional result cache.
+        mcp_logs_dir: Directory for MCP server logs.
 
     Returns:
         Dictionary with evaluation results.
@@ -312,7 +320,7 @@ async def _run_mcp_evaluation(
     try:
         env = await benchmark.create_environment(task, docker_manager)
 
-        agent = _create_mcp_agent(config, benchmark, verbosity, log_file)
+        agent = _create_mcp_agent(config, benchmark, verbosity, log_file, mcp_logs_dir)
 
         instance_id = task.get(
             "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
@@ -558,6 +566,7 @@ async def run_evaluation(
     state_tracker: Any | None = None,
     from_task: str | None = None,
     incremental_save_path: Path | None = None,
+    mcp_logs_dir: Path | None = None,
 ) -> EvaluationResults:
     """Run the full evaluation.
 
@@ -573,6 +582,7 @@ async def run_evaluation(
         state_tracker: Optional state tracker for incremental evaluation.
         from_task: Optional task ID to resume from.
         incremental_save_path: Optional path to save results incrementally for crash recovery.
+        mcp_logs_dir: Directory for MCP server logs.
 
     Returns:
         EvaluationResults with all results.
@@ -722,6 +732,7 @@ async def run_evaluation(
                 log_file,
                 log_dir,
                 cache,
+                mcp_logs_dir,
             )
 
             # Update current cost

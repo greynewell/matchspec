@@ -773,6 +773,36 @@ Results saved to results.json
 }
 ```
 
+### Output Directory Structure
+
+By default, mcpbr consolidates all outputs into a single timestamped directory:
+
+```text
+.mcpbr_run_20260126_133000/
+├── config.yaml                # Copy of configuration used
+├── evaluation_state.json      # Task results and state
+├── logs/                      # Detailed MCP server logs
+│   ├── task_1_mcp.log
+│   ├── task_2_mcp.log
+│   └── ...
+└── README.txt                 # Auto-generated explanation
+```
+
+This makes it easy to:
+- **Archive results**: `tar -czf results.tar.gz .mcpbr_run_*`
+- **Clean up**: `rm -rf .mcpbr_run_*`
+- **Share**: Just zip one directory
+
+You can customize the output directory:
+
+```bash
+# Custom output directory
+mcpbr run -c config.yaml --output-dir ./my-results
+
+# Or in config.yaml
+output_dir: "./my-results"
+```
+
 ### Markdown Report (`--report`)
 
 Generates a human-readable report with:

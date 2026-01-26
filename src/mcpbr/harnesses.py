@@ -452,6 +452,7 @@ class ClaudeCodeHarness:
         max_iterations: int = 10,
         verbosity: int = 1,
         log_file: TextIO | InstanceLogWriter | None = None,
+        mcp_logs_dir: Path | None = None,
     ) -> None:
         """Initialize Claude Code harness.
 
@@ -462,6 +463,7 @@ class ClaudeCodeHarness:
             max_iterations: Maximum number of agentic turns.
             verbosity: Verbosity level (0=silent, 1=summary, 2=detailed).
             log_file: Optional file handle for writing raw JSON logs.
+            mcp_logs_dir: Directory for MCP server logs. Default: ~/.mcpbr_state/logs
         """
         self.model = model
         self.mcp_server = mcp_server
@@ -471,6 +473,7 @@ class ClaudeCodeHarness:
         self.max_iterations = max_iterations
         self.verbosity = verbosity
         self.log_file = log_file
+        self.mcp_logs_dir = mcp_logs_dir
         self._console = Console()
 
     async def solve(
@@ -825,8 +828,11 @@ class ClaudeCodeHarness:
             if self.mcp_server:
                 from pathlib import Path
 
-                # Create logs directory in .mcpbr_state
-                state_dir = Path.home() / ".mcpbr_state" / "logs"
+                # Determine logs directory: use mcp_logs_dir if provided, otherwise fall back to home directory
+                if self.mcp_logs_dir:
+                    state_dir = self.mcp_logs_dir / "logs"
+                else:
+                    state_dir = Path.home() / ".mcpbr_state" / "logs"
                 state_dir.mkdir(parents=True, exist_ok=True)
                 # Sanitize instance_id to prevent path traversal
                 safe_instance_id = instance_id.replace("/", "_").replace("\\", "_")
@@ -1075,6 +1081,7 @@ def create_harness(
     max_iterations: int = 10,
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
+    mcp_logs_dir: Path | None = None,
 ) -> AgentHarness:
     """Factory function to create an agent harness.
 
@@ -1086,6 +1093,7 @@ def create_harness(
         max_iterations: Maximum agent iterations (used by claude-code harness).
         verbosity: Verbosity level for logging (0=silent, 1=summary, 2=detailed).
         log_file: Optional file handle for writing raw JSON logs.
+        mcp_logs_dir: Directory for MCP server logs.
 
     Returns:
         AgentHarness instance.
@@ -1107,6 +1115,7 @@ def create_harness(
         max_iterations=max_iterations,
         verbosity=verbosity,
         log_file=log_file,
+        mcp_logs_dir=mcp_logs_dir,
     )
 
 

@@ -146,6 +146,11 @@ class HarnessConfig(BaseModel):
         description="Directory to store cache files (default: ~/.cache/mcpbr)",
     )
 
+    output_dir: str | None = Field(
+        default=None,
+        description="Directory for all evaluation outputs (logs, state, results). Default: .mcpbr_run_TIMESTAMP",
+    )
+
     @field_validator("provider")
     @classmethod
     def validate_provider(cls, v: str) -> str:
