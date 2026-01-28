@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from .benchmarks import Benchmark, create_benchmark
 from .cache import ResultCache
@@ -767,42 +774,115 @@ async def run_evaluation(
 
     progress_console = Console(force_terminal=True)
 
-    async_tasks = []
-    for task in tasks_to_run:
-        async_tasks.append(run_with_semaphore(task))
+    # Track currently running tasks with progress indicators
+    task_progress_items: dict[str, Any] = {}
+
+    async def run_with_progress_tracking(
+        task: dict[str, Any], progress: Progress
+    ) -> TaskResult | None:
+        """Run a task with progress tracking."""
+        instance_id = task["instance_id"]
+
+        # Add progress indicator for this specific task
+        task_progress = progress.add_task(
+            f"[cyan]Running {instance_id}...",
+            total=None,  # Indeterminate progress for individual tasks
+        )
+        task_progress_items[instance_id] = task_progress
+
+        try:
+            result = await run_with_semaphore(task)
+
+            # Update progress to show completion or skip status
+            if instance_id in task_progress_items:
+                if result is not None:
+                    # Task completed successfully
+                    progress.update(
+                        task_progress_items[instance_id],
+                        description=f"[green]✓ {instance_id}",
+                    )
+                    # Remove completed task to avoid clutter
+                    progress.remove_task(task_progress_items[instance_id])
+                    del task_progress_items[instance_id]
+                else:
+                    # Task was skipped (budget exceeded)
+                    progress.update(
+                        task_progress_items[instance_id],
+                        description=f"[yellow]⊘ {instance_id} (skipped)",
+                    )
+
+            return result
+        except Exception as e:
+            # Update progress to show error
+            if instance_id in task_progress_items:
+                progress.update(
+                    task_progress_items[instance_id],
+                    description=f"[red]✗ {instance_id}: {str(e)[:50]}",
+                )
+                progress.remove_task(task_progress_items[instance_id])
+                del task_progress_items[instance_id]
+            raise
 
     try:
         if verbose:
-            for coro in asyncio.as_completed(async_tasks):
-                result = await coro
-                if result is not None:
-                    results.append(result)
+            # In verbose mode, show per-task progress with spinners (no overall bar)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                TimeElapsedColumn(),
+                console=progress_console,
+            ) as progress:
+                # Create async tasks for all work items
+                async_tasks = [
+                    asyncio.create_task(run_with_progress_tracking(task, progress))
+                    for task in tasks_to_run
+                ]
 
-                    # Save result incrementally for crash recovery
-                    if incremental_save_path:
-                        save_task_result_incremental(
-                            result, incremental_save_path, metadata_for_save
+                for coro in asyncio.as_completed(async_tasks):
+                    result = await coro
+                    if result is not None:
+                        results.append(result)
+
+                        # Save result incrementally for crash recovery
+                        if incremental_save_path:
+                            save_task_result_incremental(
+                                result, incremental_save_path, metadata_for_save
+                            )
+                            # Only include metadata on first save
+                            metadata_for_save = None
+
+                    if budget_exceeded:
+                        progress.stop()
+                        console.print(
+                            f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
+                            f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
                         )
-                        # Only include metadata on first save
-                        metadata_for_save = None
-
-                if budget_exceeded:
-                    console.print(
-                        f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
-                        f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
-                    )
-                    break
+                        # Cancel all pending tasks
+                        for task in async_tasks:
+                            if not task.done():
+                                task.cancel()
+                        # Wait for cancellation to complete
+                        await asyncio.gather(*async_tasks, return_exceptions=True)
+                        break
         else:
+            # In non-verbose mode, show overall progress bar + per-task spinners
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TaskProgressColumn(),
+                TimeElapsedColumn(),
                 console=progress_console,
             ) as progress:
                 main_task = progress.add_task(
                     "Evaluating tasks...", total=len(tasks_to_run), completed=0
                 )
+
+                # Create async tasks for all work items
+                async_tasks = [
+                    asyncio.create_task(run_with_progress_tracking(task, progress))
+                    for task in tasks_to_run
+                ]
 
                 for coro in asyncio.as_completed(async_tasks):
                     result = await coro
@@ -824,6 +904,12 @@ async def run_evaluation(
                             f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
                             f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
                         )
+                        # Cancel all pending tasks
+                        for task in async_tasks:
+                            if not task.done():
+                                task.cancel()
+                        # Wait for cancellation to complete
+                        await asyncio.gather(*async_tasks, return_exceptions=True)
                         break
     finally:
         await docker_manager.cleanup_all()
