@@ -172,7 +172,7 @@ class TestComputeConfigHash:
             model = "claude-3-5-sonnet"
             provider = "anthropic"
             agent_harness = "claude-code"
-            benchmark = "swe-bench"
+            benchmark = "swe-bench-lite"
             dataset = None
             timeout_seconds = 300
             max_iterations = 10
@@ -196,7 +196,7 @@ class TestComputeConfigHash:
             model = "claude-3-5-sonnet"
             provider = "anthropic"
             agent_harness = "claude-code"
-            benchmark = "swe-bench"
+            benchmark = "swe-bench-lite"
             dataset = None
             timeout_seconds = 300
             max_iterations = 10
@@ -209,7 +209,7 @@ class TestComputeConfigHash:
             model = "claude-3-5-haiku"
             provider = "anthropic"
             agent_harness = "claude-code"
-            benchmark = "swe-bench"
+            benchmark = "swe-bench-lite"
             dataset = None
             timeout_seconds = 300
             max_iterations = 10
@@ -397,7 +397,7 @@ class TestStateTracker:
             model = "claude-3-5-sonnet"
             provider = "anthropic"
             agent_harness = "claude-code"
-            benchmark = "swe-bench"
+            benchmark = "swe-bench-lite"
             dataset = None
             timeout_seconds = 300
             max_iterations = 10
@@ -410,7 +410,7 @@ class TestStateTracker:
             model = "claude-3-5-haiku"
             provider = "anthropic"
             agent_harness = "claude-code"
-            benchmark = "swe-bench"
+            benchmark = "swe-bench-lite"
             dataset = None
             timeout_seconds = 300
             max_iterations = 10

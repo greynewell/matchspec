@@ -28,7 +28,7 @@ def sample_config() -> HarnessConfig:
         ),
         model="claude-sonnet-4-5-20250929",
         provider="anthropic",
-        benchmark="swe-bench",
+        benchmark="swe-bench-lite",
     )
 
 
@@ -74,7 +74,7 @@ def test_cache_disabled():
         mcp_server=MCPServerConfig(command="test", args=[]),
         model="test",
         provider="anthropic",
-        benchmark="swe-bench",
+        benchmark="swe-bench-lite",
     )
     result = {"resolved": True}
 

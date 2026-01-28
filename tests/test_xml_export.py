@@ -20,7 +20,7 @@ def sample_results() -> EvaluationResults:
                 "model": "claude-sonnet-4-5-20250929",
                 "provider": "anthropic",
                 "agent_harness": "claude-code",
-                "benchmark": "swe-bench",
+                "benchmark": "swe-bench-lite",
                 "dataset": "SWE-bench/SWE-bench_Lite",
                 "sample_size": 2,
                 "timeout_seconds": 300,

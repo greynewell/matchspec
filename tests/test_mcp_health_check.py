@@ -22,7 +22,7 @@ def valid_mcp_config() -> dict:
         "model": "claude-sonnet-4-5-20250514",
         "provider": "anthropic",
         "agent_harness": "claude-code",
-        "benchmark": "swe-bench",
+        "benchmark": "swe-bench-lite",
         "dataset": "princeton-nlp/SWE-bench_Lite",
         "sample_size": 1,
         "timeout_seconds": 300,

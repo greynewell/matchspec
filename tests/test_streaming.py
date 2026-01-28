@@ -23,7 +23,7 @@ def metadata():
             "model": "claude-sonnet-4",
             "provider": "anthropic",
             "agent_harness": "claude-code",
-            "benchmark": "swe-bench",
+            "benchmark": "swe-bench-lite",
             "dataset": "princeton-nlp/SWE-bench_Lite",
             "sample_size": 5,
         },
