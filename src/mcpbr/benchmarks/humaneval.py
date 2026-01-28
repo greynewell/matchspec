@@ -33,7 +33,7 @@ class HumanEvalBenchmark:
         self,
         sample_size: int | None = None,
         task_ids: list[str] | None = None,
-        level: int | None = None,
+        _level: int | None = None,
         filter_difficulty: list[str] | None = None,
         filter_category: list[str] | None = None,
         filter_tags: list[str] | None = None,
@@ -223,12 +223,24 @@ class HumanEvalBenchmark:
 
         Args:
             env: Task environment.
+
+        Raises:
+            RuntimeError: If Python installation fails.
         """
-        # Install Python if not available (most Docker images should have it)
-        install_cmd = (
-            "apt-get update -qq && apt-get install -y -qq python3 python3-pip 2>&1 || true"
-        )
-        await env.exec_command(install_cmd, timeout=300)
+        # Check if Python is already available
+        exit_code, stdout, stderr = await env.exec_command("python3 --version", timeout=10)
+        if exit_code == 0:
+            # Python already available
+            return
+
+        # Install Python if not available
+        install_cmd = "apt-get update -qq && apt-get install -y -qq python3 python3-pip 2>&1"
+        exit_code, stdout, stderr = await env.exec_command(install_cmd, timeout=300)
+
+        # Verify installation succeeded
+        exit_code, stdout, stderr = await env.exec_command("python3 --version", timeout=10)
+        if exit_code != 0:
+            raise RuntimeError(f"Failed to install Python 3: {stderr}")
 
     async def evaluate(
         self,
@@ -271,10 +283,13 @@ class HumanEvalBenchmark:
                     "error": "No solution file found and could not extract code from solution",
                 }
 
-            # Write the solution to a file
+            # Write the solution to a file using base64 to avoid delimiter issues
+            import base64
+
             solution_file = "solution.py"
+            encoded_solution = base64.b64encode(solution_code.encode()).decode()
             exit_code, stdout, stderr = await env.exec_command(
-                f"cat > {solution_file} << 'SOLUTION_EOF'\n{solution_code}\nSOLUTION_EOF",
+                f"echo '{encoded_solution}' | base64 -d > {solution_file}",
                 timeout=10,
             )
             if exit_code != 0:
@@ -297,10 +312,13 @@ class HumanEvalBenchmark:
         # Create a test file combining the solution and test code
         test_file_content = f"{solution_content}\n\n{test_code}\n\ncheck({entry_point})\n"
 
-        # Write test file
+        # Write test file using base64 to avoid delimiter issues
+        import base64
+
         test_file = "test_solution.py"
+        encoded_test = base64.b64encode(test_file_content.encode()).decode()
         exit_code, stdout, stderr = await env.exec_command(
-            f"cat > {test_file} << 'TEST_EOF'\n{test_file_content}\nTEST_EOF",
+            f"echo '{encoded_test}' | base64 -d > {test_file}",
             timeout=10,
         )
         if exit_code != 0:
@@ -391,25 +409,31 @@ class HumanEvalBenchmark:
 
         # If solution looks like code directly (contains def keyword)
         if "def " in solution:
-            # Try to extract just the function definition
+            # Try to extract just the function definition, handling nested functions
             lines = solution.split("\n")
             code_lines = []
             in_function = False
+            base_indent = None
+
             for line in lines:
-                if line.strip().startswith("def "):
+                stripped = line.strip()
+                if stripped.startswith("def ") and not in_function:
+                    # Found the start of the target function
                     in_function = True
-                if in_function:
+                    # Calculate base indentation level (leading spaces)
+                    base_indent = len(line) - len(line.lstrip())
                     code_lines.append(line)
-                    # Stop at next function or class definition
-                    if (
-                        code_lines
-                        and len(code_lines) > 1
-                        and (line.strip().startswith("def ") or line.strip().startswith("class "))
-                        and not line == code_lines[0]
-                    ):
-                        # Remove the last line (next function/class)
-                        code_lines = code_lines[:-1]
-                        break
+                elif in_function:
+                    # Inside the function
+                    if stripped:  # Non-empty line
+                        line_indent = len(line) - len(line.lstrip())
+                        # Stop at next top-level (same or less indentation) def/class
+                        if line_indent <= base_indent and (
+                            stripped.startswith("def ") or stripped.startswith("class ")
+                        ):
+                            # Reached next top-level definition, stop
+                            break
+                    code_lines.append(line)
 
             if code_lines:
                 return "\n".join(code_lines)
