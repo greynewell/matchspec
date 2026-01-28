@@ -347,6 +347,11 @@ def main() -> None:
     help="Skip MCP server pre-flight health check",
 )
 @click.option(
+    "--skip-preflight",
+    is_flag=True,
+    help="Skip comprehensive pre-flight validation (use with caution)",
+)
+@click.option(
     "--output-dir",
     type=click.Path(path_type=Path),
     default=None,
@@ -391,6 +396,7 @@ def run(
     state_dir: Path | None,
     no_incremental: bool,
     skip_health_check: bool,
+    skip_preflight: bool,
     output_dir: Path | None,
 ) -> None:
     """Run benchmark evaluation with the configured MCP server.
@@ -585,8 +591,20 @@ To archive:
     run_baseline = not mcp_only
     verbose = verbosity > 0
 
-    # Run MCP pre-flight health check if MCP is enabled
-    if run_mcp and not skip_health_check:
+    # Run comprehensive pre-flight validation
+    if not skip_preflight:
+        from .preflight import display_preflight_results, run_comprehensive_preflight
+
+        checks, failures = run_comprehensive_preflight(config, config_path)
+        display_preflight_results(checks, failures)
+
+        if failures:
+            console.print(
+                "[yellow]Use --skip-preflight to proceed anyway (not recommended)[/yellow]"
+            )
+            sys.exit(1)
+    elif not skip_health_check and run_mcp:
+        # Fallback to old MCP-only check if pre-flight is skipped but health check is not
         from .smoke_test import run_mcp_preflight_check
 
         success, error_msg = asyncio.run(run_mcp_preflight_check(config_path))
