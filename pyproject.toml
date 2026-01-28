@@ -88,3 +88,8 @@ testpaths = ["tests"]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m not integration')",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

@@ -17,6 +17,28 @@ if TYPE_CHECKING:
     from .statistics import ComprehensiveStatistics
 
 
+def format_runtime(seconds: float) -> str:
+    """Format runtime in seconds to human-readable format.
+
+    Args:
+        seconds: Runtime in seconds.
+
+    Returns:
+        Formatted string (e.g., "45m 23s", "1h 5m 30s", "15s").
+    """
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{minutes}m {secs}s"
+    else:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        return f"{hours}h {minutes}m {secs}s"
+
+
 class ToolCoverageReport:
     """Analyzes tool coverage across evaluation runs.
 
@@ -204,6 +226,53 @@ def print_comprehensive_statistics(stats: "ComprehensiveStatistics", console: Co
     )
 
     console.print(iter_table)
+
+    # Runtime Statistics
+    if stats.mcp_runtime.total_runtime > 0 or stats.baseline_runtime.total_runtime > 0:
+        console.print()
+        console.print("[bold]Runtime Statistics[/bold]")
+        console.print()
+
+        runtime_table = Table(title="Runtime Comparison")
+        runtime_table.add_column("Metric", style="cyan")
+        runtime_table.add_column("MCP Agent", style="green", justify="right")
+        runtime_table.add_column("Baseline", style="yellow", justify="right")
+
+        runtime_table.add_row(
+            "Total Runtime",
+            format_runtime(stats.mcp_runtime.total_runtime),
+            format_runtime(stats.baseline_runtime.total_runtime),
+        )
+        runtime_table.add_row(
+            "Avg Runtime/Task",
+            format_runtime(stats.mcp_runtime.avg_runtime_per_task),
+            format_runtime(stats.baseline_runtime.avg_runtime_per_task),
+        )
+        if stats.mcp_runtime.runtime_per_resolved is not None:
+            mcp_runtime_resolved = format_runtime(stats.mcp_runtime.runtime_per_resolved)
+        else:
+            mcp_runtime_resolved = "N/A"
+        if stats.baseline_runtime.runtime_per_resolved is not None:
+            baseline_runtime_resolved = format_runtime(stats.baseline_runtime.runtime_per_resolved)
+        else:
+            baseline_runtime_resolved = "N/A"
+        runtime_table.add_row(
+            "Runtime/Resolved",
+            mcp_runtime_resolved,
+            baseline_runtime_resolved,
+        )
+        runtime_table.add_row(
+            "Min Runtime",
+            format_runtime(stats.mcp_runtime.min_runtime),
+            format_runtime(stats.baseline_runtime.min_runtime),
+        )
+        runtime_table.add_row(
+            "Max Runtime",
+            format_runtime(stats.mcp_runtime.max_runtime),
+            format_runtime(stats.baseline_runtime.max_runtime),
+        )
+
+        console.print(runtime_table)
 
     # MCP Tool Statistics
     if stats.mcp_tools.total_calls > 0:
@@ -555,6 +624,7 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
             CostStatistics,
             ErrorStatistics,
             IterationStatistics,
+            RuntimeStatistics,
             TokenStatistics,
             ToolStatistics,
         )
@@ -582,6 +652,10 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
         stats_obj.mcp_iterations = dict_to_stats(IterationStatistics, stats_dict["mcp_iterations"])
         stats_obj.baseline_iterations = dict_to_stats(
             IterationStatistics, stats_dict["baseline_iterations"]
+        )
+        stats_obj.mcp_runtime = dict_to_stats(RuntimeStatistics, stats_dict.get("mcp_runtime", {}))
+        stats_obj.baseline_runtime = dict_to_stats(
+            RuntimeStatistics, stats_dict.get("baseline_runtime", {})
         )
 
         print_comprehensive_statistics(stats_obj, console)
@@ -1029,6 +1103,43 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
             f"| Min Iterations | {mcp_iter['min_iterations']} | {base_iter['min_iterations']} |"
         )
         lines.append("")
+
+        # Runtime Statistics
+        mcp_runtime = comprehensive_stats.get("mcp_runtime", {})
+        base_runtime = comprehensive_stats.get("baseline_runtime", {})
+        if mcp_runtime.get("total_runtime", 0) > 0 or base_runtime.get("total_runtime", 0) > 0:
+            lines.append("### Runtime Statistics")
+            lines.append("")
+            lines.append("| Metric | MCP Agent | Baseline |")
+            lines.append("|--------|-----------|----------|")
+            lines.append(
+                f"| Total Runtime | {format_runtime(mcp_runtime.get('total_runtime', 0))} | "
+                f"{format_runtime(base_runtime.get('total_runtime', 0))} |"
+            )
+            lines.append(
+                f"| Avg Runtime/Task | {format_runtime(mcp_runtime.get('avg_runtime_per_task', 0))} | "
+                f"{format_runtime(base_runtime.get('avg_runtime_per_task', 0))} |"
+            )
+            mcp_runtime_resolved = (
+                format_runtime(mcp_runtime["runtime_per_resolved"])
+                if mcp_runtime.get("runtime_per_resolved")
+                else "N/A"
+            )
+            base_runtime_resolved = (
+                format_runtime(base_runtime["runtime_per_resolved"])
+                if base_runtime.get("runtime_per_resolved")
+                else "N/A"
+            )
+            lines.append(f"| Runtime/Resolved | {mcp_runtime_resolved} | {base_runtime_resolved} |")
+            lines.append(
+                f"| Min Runtime | {format_runtime(mcp_runtime.get('min_runtime', 0))} | "
+                f"{format_runtime(base_runtime.get('min_runtime', 0))} |"
+            )
+            lines.append(
+                f"| Max Runtime | {format_runtime(mcp_runtime.get('max_runtime', 0))} | "
+                f"{format_runtime(base_runtime.get('max_runtime', 0))} |"
+            )
+            lines.append("")
 
         # Iteration Distribution
         if mcp_iter.get("distribution"):

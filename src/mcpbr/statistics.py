@@ -152,6 +152,31 @@ class IterationStatistics:
 
 
 @dataclass
+class RuntimeStatistics:
+    """Runtime statistics for task execution."""
+
+    total_runtime: float = 0.0
+    avg_runtime_per_task: float = 0.0
+    runtime_per_resolved: float | None = None
+    min_runtime: float = 0.0
+    max_runtime: float = 0.0
+    per_task: dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "total_runtime": round(self.total_runtime, 2),
+            "avg_runtime_per_task": round(self.avg_runtime_per_task, 2),
+            "runtime_per_resolved": round(self.runtime_per_resolved, 2)
+            if self.runtime_per_resolved is not None
+            else None,
+            "min_runtime": round(self.min_runtime, 2),
+            "max_runtime": round(self.max_runtime, 2),
+            "per_task": {k: round(v, 2) for k, v in self.per_task.items()},
+        }
+
+
+@dataclass
 class ComprehensiveStatistics:
     """Complete statistics for an evaluation run."""
 
@@ -164,6 +189,8 @@ class ComprehensiveStatistics:
     baseline_errors: ErrorStatistics = field(default_factory=ErrorStatistics)
     mcp_iterations: IterationStatistics = field(default_factory=IterationStatistics)
     baseline_iterations: IterationStatistics = field(default_factory=IterationStatistics)
+    mcp_runtime: RuntimeStatistics = field(default_factory=RuntimeStatistics)
+    baseline_runtime: RuntimeStatistics = field(default_factory=RuntimeStatistics)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -177,6 +204,8 @@ class ComprehensiveStatistics:
             "baseline_errors": self.baseline_errors.to_dict(),
             "mcp_iterations": self.mcp_iterations.to_dict(),
             "baseline_iterations": self.baseline_iterations.to_dict(),
+            "mcp_runtime": self.mcp_runtime.to_dict(),
+            "baseline_runtime": self.baseline_runtime.to_dict(),
         }
 
 
@@ -450,6 +479,46 @@ def _calculate_iteration_stats(results: list[TaskResult], agent_type: str) -> It
     return stats
 
 
+def _calculate_runtime_stats(results: list[TaskResult], agent_type: str) -> RuntimeStatistics:
+    """Calculate runtime statistics for an agent type.
+
+    Args:
+        results: List of task results.
+        agent_type: "mcp" or "baseline".
+
+    Returns:
+        RuntimeStatistics object.
+    """
+    stats = RuntimeStatistics()
+    runtime_list = []
+    resolved_runtime_total = 0.0
+    resolved_count = 0
+
+    for task in results:
+        agent_data = task.mcp if agent_type == "mcp" else task.baseline
+        if not agent_data:
+            continue
+
+        runtime = agent_data.get("runtime_seconds", 0.0)
+        runtime_list.append(runtime)
+        stats.total_runtime += runtime
+        stats.per_task[task.instance_id] = runtime
+
+        if agent_data.get("resolved"):
+            resolved_count += 1
+            resolved_runtime_total += runtime
+
+    if runtime_list:
+        stats.avg_runtime_per_task = stats.total_runtime / len(runtime_list)
+        stats.max_runtime = max(runtime_list)
+        stats.min_runtime = min(runtime_list)
+
+    if resolved_count > 0:
+        stats.runtime_per_resolved = resolved_runtime_total / resolved_count
+
+    return stats
+
+
 def calculate_comprehensive_statistics(
     results: EvaluationResults,
 ) -> ComprehensiveStatistics:
@@ -481,5 +550,9 @@ def calculate_comprehensive_statistics(
     # Calculate iteration statistics
     stats.mcp_iterations = _calculate_iteration_stats(results.tasks, "mcp")
     stats.baseline_iterations = _calculate_iteration_stats(results.tasks, "baseline")
+
+    # Calculate runtime statistics
+    stats.mcp_runtime = _calculate_runtime_stats(results.tasks, "mcp")
+    stats.baseline_runtime = _calculate_runtime_stats(results.tasks, "baseline")
 
     return stats

@@ -1065,7 +1065,7 @@ wheels = [
 
 [[package]]
 name = "mcpbr"
-version = "0.3.28"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
@@ -1094,6 +1094,11 @@ docs = [
     { name = "mkdocstrings", extra = ["python"] },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.40.0" },
@@ -1116,6 +1121,9 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
 ]
 provides-extras = ["dev", "docs"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0.2" }]
 
 [[package]]
 name = "mdurl"
