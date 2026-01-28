@@ -351,6 +351,11 @@ def main() -> None:
     default=None,
     help="Directory for all outputs (logs, state, results). Default: .mcpbr_run_TIMESTAMP",
 )
+@click.option(
+    "--trial-mode",
+    is_flag=True,
+    help="Enable trial mode: isolated state, no caching (for repeated experiments)",
+)
 def run(
     config_path: Path,
     model_override: str | None,
@@ -391,6 +396,7 @@ def run(
     no_incremental: bool,
     skip_health_check: bool,
     output_dir: Path | None,
+    trial_mode: bool,
 ) -> None:
     """Run benchmark evaluation with the configured MCP server.
 
@@ -411,6 +417,11 @@ def run(
       mcpbr run -c config.yaml --from-task ID     # Resume from specific task
       mcpbr run -c config.yaml --reset-state      # Clear state and start fresh
       mcpbr run -c config.yaml --no-incremental   # Disable caching
+
+    \b
+    Trial Mode (for repeated experiments):
+      mcpbr run -c config.yaml --trial-mode -o trial_1.json
+      for i in {1..5}; do mcpbr run -c config.yaml --trial-mode -o trial_${i}.json; done
 
     \b
     Regression Detection:
@@ -484,6 +495,23 @@ def run(
             console.print("[red]Error: Budget must be positive[/red]")
             sys.exit(1)
         config.budget = budget
+
+    # Handle trial mode
+    if trial_mode:
+        # Override state settings for clean trials
+        no_incremental = True
+
+        # Generate unique state directory with microseconds for uniqueness
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        state_dir = Path(f".mcpbr_trial_{timestamp}")
+
+        console.print("[cyan]Trial mode enabled:[/cyan]")
+        console.print("  • State caching disabled")
+        console.print(f"  • Isolated state dir: {state_dir}")
+        console.print("  • Fresh evaluation guaranteed")
+        console.print()
 
     # Determine output directory AFTER all CLI overrides are applied
     import shutil
