@@ -68,7 +68,7 @@ class CostStatistics:
             "max_cost_per_task": round(self.max_cost_per_task, 4),
             "min_cost_per_task": round(self.min_cost_per_task, 4),
             "cost_per_resolved": round(self.cost_per_resolved, 4)
-            if self.cost_per_resolved
+            if self.cost_per_resolved is not None
             else None,
             "per_task": {k: round(v, 4) for k, v in self.per_task.items()},
         }

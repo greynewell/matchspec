@@ -550,7 +550,16 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
 
         # Helper to convert dict to dataclass
         def dict_to_stats(cls, data):
-            return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+            kwargs = {}
+            for k, v in data.items():
+                if k not in cls.__dataclass_fields__:
+                    continue
+                # Convert dict back to list of tuples for ToolStatistics fields
+                if cls == ToolStatistics and k in ("most_used_tools", "most_failed_tools"):
+                    kwargs[k] = list(v.items()) if isinstance(v, dict) else v
+                else:
+                    kwargs[k] = v
+            return cls(**kwargs)
 
         stats_obj.mcp_tokens = dict_to_stats(TokenStatistics, stats_dict["mcp_tokens"])
         stats_obj.baseline_tokens = dict_to_stats(TokenStatistics, stats_dict["baseline_tokens"])
@@ -1009,7 +1018,7 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
             lines.append("")
             lines.append("| Iterations | Task Count |")
             lines.append("|------------|------------|")
-            for iters, count in sorted(mcp_iter["distribution"].items()):
+            for iters, count in sorted(mcp_iter["distribution"].items(), key=lambda x: int(x[0])):
                 lines.append(f"| {iters} | {count} |")
             lines.append("")
 
