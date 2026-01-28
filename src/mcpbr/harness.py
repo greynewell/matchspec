@@ -1,6 +1,7 @@
 """Main evaluation harness orchestrating parallel task execution."""
 
 import asyncio
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -334,8 +335,6 @@ async def _run_mcp_evaluation(
             cached_result["cache_hit"] = True
             return cached_result
 
-    import time
-
     start_time = time.time()
     env: TaskEnvironment | None = None
     try:
@@ -445,8 +444,6 @@ async def _run_baseline_evaluation(
             # Add cache hit marker to result
             cached_result["cache_hit"] = True
             return cached_result
-
-    import time
 
     start_time = time.time()
     env: TaskEnvironment | None = None

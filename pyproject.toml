@@ -35,12 +35,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "ruff>=0.1.0",
-    "pre-commit>=3.0.0",
-]
 docs = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.5.0",
@@ -92,4 +86,7 @@ markers = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "pre-commit>=3.0.0",
 ]
