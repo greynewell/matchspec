@@ -70,7 +70,9 @@ class MCPToolBenchmark:
         if filter_difficulty:
             # For MCPToolBench++, difficulty can map to call_type
             # "easy" or "single" -> single-step tasks
-            # "hard" or "multi" -> multi-step tasks
+            # "hard", "multi", or "medium" -> multi-step tasks
+            # Note: MCPToolBench++ only has two complexity levels (single/multi),
+            # so "medium" maps to "multi" for backward compatibility
             call_types = set()
             for diff in filter_difficulty:
                 diff_lower = diff.lower()
@@ -101,6 +103,8 @@ class MCPToolBenchmark:
             tasks = filtered
 
         # Note: filter_tags not applicable to base MCPToolBench++ dataset
+        # Parameter required by Benchmark protocol
+        _ = filter_tags  # Silence unused parameter warning
 
         if sample_size and len(tasks) > sample_size:
             tasks = tasks[:sample_size]

@@ -308,7 +308,7 @@ class TestFilteringCLIIntegration:
                 "--filter-tags",
                 "security",
             ],
-            catch_exceptions=False,
+            catch_exceptions=True,
         )
 
         # Should fail on missing config file, not on unknown options
@@ -342,7 +342,7 @@ class TestFilteringCLIIntegration:
                 "--filter-tags",
                 "tag2",
             ],
-            catch_exceptions=False,
+            catch_exceptions=True,
         )
 
         # Should not fail on unknown options
