@@ -793,15 +793,23 @@ async def run_evaluation(
         try:
             result = await run_with_semaphore(task)
 
-            # Update progress to show completion
+            # Update progress to show completion or skip status
             if instance_id in task_progress_items:
-                progress.update(
-                    task_progress_items[instance_id],
-                    description=f"[green]✓ {instance_id}",
-                )
-                # Remove completed task to avoid clutter
-                progress.remove_task(task_progress_items[instance_id])
-                del task_progress_items[instance_id]
+                if result is not None:
+                    # Task completed successfully
+                    progress.update(
+                        task_progress_items[instance_id],
+                        description=f"[green]✓ {instance_id}",
+                    )
+                    # Remove completed task to avoid clutter
+                    progress.remove_task(task_progress_items[instance_id])
+                    del task_progress_items[instance_id]
+                else:
+                    # Task was skipped (budget exceeded)
+                    progress.update(
+                        task_progress_items[instance_id],
+                        description=f"[yellow]⊘ {instance_id} (skipped)",
+                    )
 
             return result
         except Exception as e:
@@ -825,7 +833,10 @@ async def run_evaluation(
                 console=progress_console,
             ) as progress:
                 # Create async tasks for all work items
-                async_tasks = [run_with_progress_tracking(task, progress) for task in tasks_to_run]
+                async_tasks = [
+                    asyncio.create_task(run_with_progress_tracking(task, progress))
+                    for task in tasks_to_run
+                ]
 
                 for coro in asyncio.as_completed(async_tasks):
                     result = await coro
@@ -846,6 +857,12 @@ async def run_evaluation(
                             f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
                             f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
                         )
+                        # Cancel all pending tasks
+                        for task in async_tasks:
+                            if not task.done():
+                                task.cancel()
+                        # Wait for cancellation to complete
+                        await asyncio.gather(*async_tasks, return_exceptions=True)
                         break
         else:
             # In non-verbose mode, show overall progress bar + per-task spinners
@@ -862,7 +879,10 @@ async def run_evaluation(
                 )
 
                 # Create async tasks for all work items
-                async_tasks = [run_with_progress_tracking(task, progress) for task in tasks_to_run]
+                async_tasks = [
+                    asyncio.create_task(run_with_progress_tracking(task, progress))
+                    for task in tasks_to_run
+                ]
 
                 for coro in asyncio.as_completed(async_tasks):
                     result = await coro
@@ -884,6 +904,12 @@ async def run_evaluation(
                             f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
                             f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
                         )
+                        # Cancel all pending tasks
+                        for task in async_tasks:
+                            if not task.done():
+                                task.cancel()
+                        # Wait for cancellation to complete
+                        await asyncio.gather(*async_tasks, return_exceptions=True)
                         break
     finally:
         await docker_manager.cleanup_all()
