@@ -17,6 +17,7 @@ from .harness import run_evaluation
 from .harnesses import list_available_harnesses
 from .junit_reporter import save_junit_xml
 from .models import list_supported_models
+from .output_validator import validate_output_file
 from .regression import (
     detect_regressions,
     format_regression_report,
@@ -665,9 +666,25 @@ To archive:
         save_json_results(results, output_path)
         console.print(f"\n[green]Results saved to {output_path}[/green]")
 
+        # Validate output file
+        valid, msg = validate_output_file(output_path)
+        if not valid:
+            console.print(f"[red]✗ {msg}[/red]")
+            console.print("[yellow]Check logs for errors during evaluation[/yellow]")
+            sys.exit(4)
+        console.print(f"[green]✓ Output validated: {msg}[/green]")
+
     if yaml_output:
         save_yaml_results(results, yaml_output)
         console.print(f"[green]YAML results saved to {yaml_output}[/green]")
+
+        # Validate YAML output file
+        valid, msg = validate_output_file(yaml_output)
+        if not valid:
+            console.print(f"[red]✗ {msg}[/red]")
+            console.print("[yellow]Check logs for errors during evaluation[/yellow]")
+            sys.exit(4)
+        console.print(f"[green]✓ Output validated: {msg}[/green]")
 
     if report_path:
         save_markdown_report(results, report_path)
