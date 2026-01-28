@@ -19,6 +19,7 @@ VALID_BENCHMARKS = (
     "swe-bench-verified",
     "swe-bench-full",
     "cybergym",
+    "humaneval",
     "mcptoolbench",
 )
 
