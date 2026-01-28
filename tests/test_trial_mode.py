@@ -61,11 +61,24 @@ mcp_server:
             mock_load_config.return_value = mock_config
 
             # Mock run_evaluation to capture the state_tracker parameter
-            mock_run.return_value = MagicMock(tasks=[])
+            mock_results = MagicMock()
+            mock_results.tasks = []
+            mock_results.summary = {
+                "mcp": {"total": 0, "resolved": 0},
+                "baseline": {"total": 0, "resolved": 0},
+            }
+            mock_run.return_value = mock_results
 
             result = runner.invoke(
                 main,
-                ["run", "-c", str(mock_config_path), "--trial-mode", "--skip-health-check"],
+                [
+                    "run",
+                    "-c",
+                    str(mock_config_path),
+                    "--trial-mode",
+                    "--skip-health-check",
+                    "--skip-preflight",
+                ],
                 catch_exceptions=False,
             )
 
@@ -96,11 +109,24 @@ mcp_server:
             mock_load_config.return_value = mock_config
 
             # Mock run_evaluation
-            mock_run.return_value = MagicMock(tasks=[])
+            mock_results = MagicMock()
+            mock_results.tasks = []
+            mock_results.summary = {
+                "mcp": {"total": 0, "resolved": 0},
+                "baseline": {"total": 0, "resolved": 0},
+            }
+            mock_run.return_value = mock_results
 
             result = runner.invoke(
                 main,
-                ["run", "-c", str(mock_config_path), "--trial-mode", "--skip-health-check"],
+                [
+                    "run",
+                    "-c",
+                    str(mock_config_path),
+                    "--trial-mode",
+                    "--skip-health-check",
+                    "--skip-preflight",
+                ],
                 catch_exceptions=False,
             )
 
@@ -128,7 +154,13 @@ mcp_server:
             mock_load_config.return_value = mock_config
 
             # Mock run_evaluation
-            mock_run.return_value = MagicMock(tasks=[])
+            mock_results = MagicMock()
+            mock_results.tasks = []
+            mock_results.summary = {
+                "mcp": {"total": 0, "resolved": 0},
+                "baseline": {"total": 0, "resolved": 0},
+            }
+            mock_run.return_value = mock_results
 
             result = runner.invoke(
                 main,
@@ -138,6 +170,7 @@ mcp_server:
                     str(mock_config_path),
                     "--trial-mode",
                     "--skip-health-check",
+                    "--skip-preflight",
                     "-M",  # MCP only
                     "-n",
                     "5",  # Sample size
@@ -171,7 +204,13 @@ mcp_server:
             mock_load_config.return_value = mock_config
 
             # Mock run_evaluation
-            mock_run.return_value = MagicMock(tasks=[])
+            mock_results = MagicMock()
+            mock_results.tasks = []
+            mock_results.summary = {
+                "mcp": {"total": 0, "resolved": 0},
+                "baseline": {"total": 0, "resolved": 0},
+            }
+            mock_run.return_value = mock_results
 
             # Mock StateTracker to verify it's not called in trial mode
             mock_tracker = MagicMock()
@@ -179,7 +218,14 @@ mcp_server:
 
             result = runner.invoke(
                 main,
-                ["run", "-c", str(mock_config_path), "--trial-mode", "--skip-health-check"],
+                [
+                    "run",
+                    "-c",
+                    str(mock_config_path),
+                    "--trial-mode",
+                    "--skip-health-check",
+                    "--skip-preflight",
+                ],
                 catch_exceptions=False,
             )
 
@@ -209,11 +255,24 @@ mcp_server:
             mock_load_config.return_value = mock_config
 
             # Mock run_evaluation
-            mock_run.return_value = MagicMock(tasks=[])
+            mock_results = MagicMock()
+            mock_results.tasks = []
+            mock_results.summary = {
+                "mcp": {"total": 0, "resolved": 0},
+                "baseline": {"total": 0, "resolved": 0},
+            }
+            mock_run.return_value = mock_results
 
             result = runner.invoke(
                 main,
-                ["run", "-c", str(mock_config_path), "--trial-mode", "--skip-health-check"],
+                [
+                    "run",
+                    "-c",
+                    str(mock_config_path),
+                    "--trial-mode",
+                    "--skip-health-check",
+                    "--skip-preflight",
+                ],
                 catch_exceptions=False,
             )
 
@@ -248,12 +307,25 @@ mcp_server:
             mock_load_config.return_value = mock_config
 
             # Mock run_evaluation
-            mock_run.return_value = MagicMock(tasks=[])
+            mock_results = MagicMock()
+            mock_results.tasks = []
+            mock_results.summary = {
+                "mcp": {"total": 0, "resolved": 0},
+                "baseline": {"total": 0, "resolved": 0},
+            }
+            mock_run.return_value = mock_results
 
             # Run first trial
             result1 = runner.invoke(
                 main,
-                ["run", "-c", str(mock_config_path), "--trial-mode", "--skip-health-check"],
+                [
+                    "run",
+                    "-c",
+                    str(mock_config_path),
+                    "--trial-mode",
+                    "--skip-health-check",
+                    "--skip-preflight",
+                ],
                 catch_exceptions=False,
             )
 
@@ -263,7 +335,14 @@ mcp_server:
             # Run second trial
             result2 = runner.invoke(
                 main,
-                ["run", "-c", str(mock_config_path), "--trial-mode", "--skip-health-check"],
+                [
+                    "run",
+                    "-c",
+                    str(mock_config_path),
+                    "--trial-mode",
+                    "--skip-health-check",
+                    "--skip-preflight",
+                ],
                 catch_exceptions=False,
             )
 
