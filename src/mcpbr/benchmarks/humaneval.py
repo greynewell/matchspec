@@ -216,6 +216,15 @@ class HumanEvalBenchmark:
         # Ensure Python 3 is available
         await self._setup_python_environment(env)
 
+        # Initialize git repository for change tracking
+        # The harness expects git changes to trigger evaluation
+        await env.exec_command("git init", timeout=10)
+        await env.exec_command("git config user.email 'mcpbr@example.com'", timeout=10)
+        await env.exec_command("git config user.name 'MCPBR'", timeout=10)
+        await env.exec_command(
+            "git add -A && git commit -m 'Initial commit' --allow-empty", timeout=30
+        )
+
         return env
 
     async def _setup_python_environment(self, env: TaskEnvironment) -> None:
@@ -229,18 +238,37 @@ class HumanEvalBenchmark:
         """
         # Check if Python is already available
         exit_code, stdout, stderr = await env.exec_command("python3 --version", timeout=10)
-        if exit_code == 0:
-            # Python already available
+        python_available = exit_code == 0
+
+        # Check if git is available
+        exit_code, stdout, stderr = await env.exec_command("git --version", timeout=10)
+        git_available = exit_code == 0
+
+        if python_available and git_available:
+            # Both already available
             return
 
-        # Install Python if not available
-        install_cmd = "apt-get update -qq && apt-get install -y -qq python3 python3-pip 2>&1"
+        # Install Python and git if not available
+        packages = []
+        if not python_available:
+            packages.extend(["python3", "python3-pip"])
+        if not git_available:
+            packages.append("git")
+
+        install_cmd = f"apt-get update -qq && apt-get install -y -qq {' '.join(packages)} 2>&1"
         exit_code, stdout, stderr = await env.exec_command(install_cmd, timeout=300)
 
-        # Verify installation succeeded
-        exit_code, stdout, stderr = await env.exec_command("python3 --version", timeout=10)
-        if exit_code != 0:
-            raise RuntimeError(f"Failed to install Python 3: {stderr}")
+        # Verify Python installation succeeded
+        if not python_available:
+            exit_code, stdout, stderr = await env.exec_command("python3 --version", timeout=10)
+            if exit_code != 0:
+                raise RuntimeError(f"Failed to install Python 3: {stderr}")
+
+        # Verify git installation succeeded
+        if not git_available:
+            exit_code, stdout, stderr = await env.exec_command("git --version", timeout=10)
+            if exit_code != 0:
+                raise RuntimeError(f"Failed to install git: {stderr}")
 
     async def evaluate(
         self,
