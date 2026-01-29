@@ -128,6 +128,11 @@ class HarnessConfig(BaseModel):
         description="Maximum agent iterations per task",
     )
 
+    thinking_budget: int | None = Field(
+        default=None,
+        description="Extended thinking token budget. Set to enable thinking mode (e.g., 10000)",
+    )
+
     use_prebuilt_images: bool = Field(
         default=True,
         description="Use pre-built SWE-bench Docker images when available",

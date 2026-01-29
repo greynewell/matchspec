@@ -459,6 +459,7 @@ class ClaudeCodeHarness:
         verbosity: int = 1,
         log_file: TextIO | InstanceLogWriter | None = None,
         mcp_logs_dir: Path | None = None,
+        thinking_budget: int | None = None,
     ) -> None:
         """Initialize Claude Code harness.
 
@@ -470,6 +471,7 @@ class ClaudeCodeHarness:
             verbosity: Verbosity level (0=silent, 1=summary, 2=detailed).
             log_file: Optional file handle for writing raw JSON logs.
             mcp_logs_dir: Directory for MCP server logs. Default: ~/.mcpbr_state/logs
+            thinking_budget: Extended thinking token budget. Set to enable thinking mode.
         """
         self.model = model
         self.mcp_server = mcp_server
@@ -480,6 +482,7 @@ class ClaudeCodeHarness:
         self.verbosity = verbosity
         self.log_file = log_file
         self.mcp_logs_dir = mcp_logs_dir
+        self.thinking_budget = thinking_budget
         self._console = Console()
 
     async def solve(
@@ -693,6 +696,11 @@ class ClaudeCodeHarness:
             docker_env["MCP_TIMEOUT"] = str(self.mcp_server.startup_timeout_ms)
             docker_env["MCP_TOOL_TIMEOUT"] = str(self.mcp_server.tool_timeout_ms)
 
+        # Add thinking budget to enable extended thinking
+        # See: https://code.claude.com/docs/en/common-workflows#use-extended-thinking-thinking-mode
+        if self.thinking_budget is not None:
+            docker_env["MAX_THINKING_TOKENS"] = str(self.thinking_budget)
+
         prompt_file = "/tmp/.mcpbr_prompt.txt"
         await env.exec_command(
             f"cat > {prompt_file} << 'MCPBR_PROMPT_EOF'\n{prompt}\nMCPBR_PROMPT_EOF",
@@ -722,6 +730,10 @@ class ClaudeCodeHarness:
                 # Sanitize key (must be valid shell identifier) and quote value
                 safe_key = key.replace("-", "_").replace(".", "_")
                 env_exports += f"export {safe_key}={shlex.quote(value)}\n"
+
+        # Add thinking budget to enable extended thinking
+        if self.thinking_budget is not None:
+            env_exports += f"export MAX_THINKING_TOKENS={shlex.quote(str(self.thinking_budget))}\n"
 
         await env.exec_command(
             f"cat > {env_file} << 'MCPBR_ENV_EOF'\n{env_exports}MCPBR_ENV_EOF",
@@ -1143,6 +1155,7 @@ def create_harness(
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
     mcp_logs_dir: Path | None = None,
+    thinking_budget: int | None = None,
 ) -> AgentHarness:
     """Factory function to create an agent harness.
 
@@ -1155,6 +1168,7 @@ def create_harness(
         verbosity: Verbosity level for logging (0=silent, 1=summary, 2=detailed).
         log_file: Optional file handle for writing raw JSON logs.
         mcp_logs_dir: Directory for MCP server logs.
+        thinking_budget: Extended thinking token budget. Set to enable thinking mode.
 
     Returns:
         AgentHarness instance.
@@ -1177,6 +1191,7 @@ def create_harness(
         verbosity=verbosity,
         log_file=log_file,
         mcp_logs_dir=mcp_logs_dir,
+        thinking_budget=thinking_budget,
     )
 
 
