@@ -97,6 +97,9 @@ extra:
       link: https://github.com/greynewell/mcpbr
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/mcpbr/
+    - icon: fontawesome/brands/npm
+      link: https://www.npmjs.com/package/mcpbr-cli
+      name: npm package
     - icon: fontawesome/solid/globe
       link: https://greynewell.com
       name: Grey Newell
