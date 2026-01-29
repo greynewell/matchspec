@@ -738,6 +738,58 @@ mcpbr cleanup -f
 
 </details>
 
+## Performance Profiling
+
+mcpbr includes comprehensive performance profiling to understand MCP server overhead and identify optimization opportunities.
+
+### Enable Profiling
+
+```bash
+# Via CLI flag
+mcpbr run -c config.yaml --profile
+
+# Or in config.yaml
+enable_profiling: true
+```
+
+### What Gets Measured
+
+- **Tool call latencies** with percentiles (p50, p95, p99)
+- **Memory usage** (peak and average RSS/VMS)
+- **Infrastructure overhead** (Docker and MCP server startup times)
+- **Tool discovery speed** (time to first tool use)
+- **Tool switching overhead** (time between tool calls)
+- **Automated insights** from profiling data
+
+### Example Profiling Output
+
+```json
+{
+  "profiling": {
+    "task_duration_seconds": 140.5,
+    "tool_call_latencies": {
+      "Read": {"count": 15, "avg_seconds": 0.8, "p95_seconds": 1.5},
+      "Bash": {"avg_seconds": 2.3, "p95_seconds": 5.1}
+    },
+    "memory_profile": {"peak_rss_mb": 512.3, "avg_rss_mb": 387.5},
+    "docker_startup_seconds": 2.1,
+    "mcp_server_startup_seconds": 1.8
+  }
+}
+```
+
+### Automated Insights
+
+The profiler automatically identifies performance issues:
+
+```
+- Bash is the slowest tool (avg: 2.3s, p95: 5.1s)
+- Docker startup adds 2.1s overhead per task
+- Fast tool discovery: first tool use in 8.3s
+```
+
+See [docs/profiling.md](docs/profiling.md) for complete profiling documentation.
+
 ## Example Run
 
 Here's what a typical evaluation looks like:

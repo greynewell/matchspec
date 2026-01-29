@@ -26,6 +26,7 @@ from .harnesses import AgentHarness, AgentResult, create_harness
 from .incremental_save import save_task_result_incremental
 from .log_formatter import InstanceLogWriter
 from .pricing import calculate_cost
+from .profiler import PerformanceProfiler
 
 console = Console()
 
@@ -342,12 +343,27 @@ async def _run_mcp_evaluation(
             cached_result["cache_hit"] = True
             return cached_result
 
+    # Initialize profiler if enabled
+    profiler = None
+    if config.enable_profiling:
+        profiler = PerformanceProfiler(enable_memory_profiling=True)
+        profiler.start_task()
+
     start_time = time.time()
     env: TaskEnvironment | None = None
     try:
+        # Track Docker environment creation time
+        docker_start = time.time()
         env = await benchmark.create_environment(task, docker_manager)
+        docker_end = time.time()
+        if profiler:
+            profiler.record_docker_startup(docker_end - docker_start)
 
         agent = _create_mcp_agent(config, benchmark, verbosity, log_file, mcp_logs_dir)
+
+        # Sample memory before agent execution
+        if profiler:
+            profiler.sample_memory()
 
         instance_id = task.get(
             "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
@@ -364,6 +380,10 @@ async def _run_mcp_evaluation(
             timeout=config.timeout_seconds + 60,
         )
 
+        # Sample memory after agent execution
+        if profiler:
+            profiler.sample_memory()
+
         if agent_result.patch:
             eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
             # Convert benchmark result format to EvaluationResult-like object
@@ -373,6 +393,14 @@ async def _run_mcp_evaluation(
 
         end_time = time.time()
         runtime_seconds = end_time - start_time
+
+        # Finalize profiling report
+        if profiler:
+            profiler.end_task()
+            # Use agent_result's profiling_report if available, otherwise generate from profiler
+            if not agent_result.profiling_report:
+                agent_result.profiling_report = profiler.generate_report()
+
         result = agent_result_to_dict(agent_result, eval_result, config.model, runtime_seconds)
 
         # Store in cache if enabled
@@ -415,7 +443,12 @@ async def _run_mcp_evaluation(
         }
     finally:
         if env:
+            # Track Docker teardown time
+            teardown_start = time.time()
             await env.cleanup()
+            if profiler:
+                teardown_end = time.time()
+                profiler.record_docker_teardown(teardown_end - teardown_start)
 
 
 async def _run_baseline_evaluation(
@@ -452,12 +485,27 @@ async def _run_baseline_evaluation(
             cached_result["cache_hit"] = True
             return cached_result
 
+    # Initialize profiler if enabled
+    profiler = None
+    if config.enable_profiling:
+        profiler = PerformanceProfiler(enable_memory_profiling=True)
+        profiler.start_task()
+
     start_time = time.time()
     env: TaskEnvironment | None = None
     try:
+        # Track Docker environment creation time
+        docker_start = time.time()
         env = await benchmark.create_environment(task, docker_manager)
+        docker_end = time.time()
+        if profiler:
+            profiler.record_docker_startup(docker_end - docker_start)
 
         agent = _create_baseline_agent(config, benchmark, verbosity, log_file)
+
+        # Sample memory before agent execution
+        if profiler:
+            profiler.sample_memory()
 
         instance_id = task.get(
             "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
@@ -474,6 +522,10 @@ async def _run_baseline_evaluation(
             timeout=config.timeout_seconds + 60,
         )
 
+        # Sample memory after agent execution
+        if profiler:
+            profiler.sample_memory()
+
         if agent_result.patch:
             eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
             # Convert benchmark result format to EvaluationResult-like object
@@ -483,6 +535,14 @@ async def _run_baseline_evaluation(
 
         end_time = time.time()
         runtime_seconds = end_time - start_time
+
+        # Finalize profiling report
+        if profiler:
+            profiler.end_task()
+            # Use agent_result's profiling_report if available, otherwise generate from profiler
+            if not agent_result.profiling_report:
+                agent_result.profiling_report = profiler.generate_report()
+
         result = agent_result_to_dict(agent_result, eval_result, config.model, runtime_seconds)
 
         # Store in cache if enabled
@@ -525,7 +585,12 @@ async def _run_baseline_evaluation(
         }
     finally:
         if env:
+            # Track Docker teardown time
+            teardown_start = time.time()
             await env.cleanup()
+            if profiler:
+                teardown_end = time.time()
+                profiler.record_docker_teardown(teardown_end - teardown_start)
 
 
 def _calculate_mcp_tool_stats(results: list[TaskResult]) -> dict[str, Any]:
