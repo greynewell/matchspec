@@ -19,6 +19,7 @@ Benchmark your MCP server against real GitHub issues. One command, hard numbers.
 **Model Context Protocol Benchmark Runner**
 
 [![PyPI version](https://badge.fury.io/py/mcpbr.svg)](https://pypi.org/project/mcpbr/)
+[![npm version](https://badge.fury.io/js/mcpbr-cli.svg)](https://www.npmjs.com/package/mcpbr-cli)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/greynewell/mcpbr/actions/workflows/ci.yml/badge.svg)](https://github.com/greynewell/mcpbr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -215,6 +216,8 @@ Run `mcpbr models` to see the full list.
 
 ### via npm
 
+[![npm package](https://img.shields.io/npm/v/mcpbr-cli.svg)](https://www.npmjs.com/package/mcpbr-cli)
+
 ```bash
 # Run with npx (no installation)
 npx mcpbr-cli run -c config.yaml
@@ -224,6 +227,8 @@ npm install -g mcpbr-cli
 mcpbr run -c config.yaml
 ```
 
+> **Package**: [`mcpbr-cli`](https://www.npmjs.com/package/mcpbr-cli) on npm
+>
 > **Note**: The npm package requires Python 3.11+ and the mcpbr Python package (`pip install mcpbr`)
 
 ### via pip

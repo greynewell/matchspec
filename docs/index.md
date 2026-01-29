@@ -25,6 +25,7 @@ Benchmark your MCP server against real GitHub issues. One command, hard numbers.
 **Model Context Protocol Benchmark Runner**
 
 [![PyPI version](https://badge.fury.io/py/mcpbr.svg)](https://pypi.org/project/mcpbr/)
+[![npm version](https://badge.fury.io/js/mcpbr-cli.svg)](https://www.npmjs.com/package/mcpbr-cli)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/greynewell/mcpbr/actions/workflows/ci.yml/badge.svg)](https://github.com/greynewell/mcpbr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
