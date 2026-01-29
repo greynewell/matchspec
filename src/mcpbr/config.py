@@ -128,6 +128,27 @@ class HarnessConfig(BaseModel):
         description="Maximum agent iterations per task",
     )
 
+    thinking_budget: int | None = Field(
+        default=None,
+        description="Extended thinking token budget. Set to enable thinking mode (e.g., 10000)",
+    )
+
+    @field_validator("thinking_budget")
+    @classmethod
+    def validate_thinking_budget(cls, v: int | None) -> int | None:
+        """Validate thinking_budget is within acceptable bounds.
+
+        Claude API requires budget_tokens >= 1024 and < max_tokens.
+        Claude Code caps thinking at 31999 tokens by default.
+        """
+        if v is None:
+            return v
+        if v < 1024:
+            raise ValueError("thinking_budget must be at least 1024 tokens (Claude API minimum)")
+        if v > 31999:
+            raise ValueError("thinking_budget cannot exceed 31999 tokens (Claude Code maximum)")
+        return v
+
     use_prebuilt_images: bool = Field(
         default=True,
         description="Use pre-built SWE-bench Docker images when available",

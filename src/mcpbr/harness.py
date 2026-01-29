@@ -197,6 +197,7 @@ def _create_mcp_agent(
         verbosity=verbosity,
         log_file=log_file,
         mcp_logs_dir=mcp_logs_dir,
+        thinking_budget=config.thinking_budget,
     )
 
 
@@ -228,6 +229,7 @@ def _create_baseline_agent(
         max_iterations=config.max_iterations,
         verbosity=verbosity,
         log_file=log_file,
+        thinking_budget=config.thinking_budget,
     )
 
 

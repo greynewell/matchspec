@@ -356,6 +356,64 @@ filter_tags:
 | `timeout_seconds` | `300` | Timeout per task in seconds |
 | `max_concurrent` | `4` | Maximum parallel task evaluations |
 | `max_iterations` | `10` | Maximum agent iterations (turns) per task |
+| `thinking_budget` | `null` | Extended thinking token budget (1024-31999) |
+
+#### Extended Thinking Mode
+
+The `thinking_budget` field enables Claude's extended thinking mode, allowing the model to reason through complex problems before responding. When enabled, Claude can use up to the specified token budget for internal reasoning (thinking tokens), separate from the response tokens.
+
+**Configuration:**
+
+```yaml
+# Enable extended thinking with 10,000 token budget
+thinking_budget: 10000
+```
+
+**Valid Range:**
+- Minimum: 1024 tokens (Claude API requirement)
+- Maximum: 31999 tokens (Claude Code default cap)
+- Default: `null` (disabled)
+
+**When to Use:**
+
+Extended thinking is particularly useful for:
+- Complex debugging tasks requiring deep analysis
+- Multi-step reasoning problems
+- Tasks where the model needs to explore multiple solution paths
+- Situations where upfront planning improves solution quality
+
+**Cost Considerations:**
+
+Thinking tokens are billed at a lower rate than regular input/output tokens. The exact pricing depends on your model tier. Extended thinking increases cost but may improve success rates on complex tasks, potentially reducing the number of attempts needed.
+
+**Example Configurations:**
+
+```yaml
+# Conservative thinking budget for simpler tasks
+thinking_budget: 5000
+
+# Moderate thinking budget for balanced performance
+thinking_budget: 10000
+
+# Maximum thinking budget for very complex tasks
+thinking_budget: 31999
+
+# Disabled (default) - omit the field or set to null
+thinking_budget: null
+```
+
+!!! warning "Configuration Only"
+    **Important**: `thinking_budget` can only be configured in the YAML file. There is no CLI override option for this parameter.
+
+    To disable thinking mode, omit the `thinking_budget` field entirely or explicitly set it to `null`:
+    ```yaml
+    # Thinking mode disabled (these are equivalent)
+    thinking_budget: null
+    # or simply omit the field
+    ```
+
+!!! note "Validation"
+    mcpbr validates thinking_budget at configuration load time. Invalid values (< 1024 or > 31999) will produce a clear error message before evaluation starts.
 
 ### Docker Configuration
 

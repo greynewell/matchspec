@@ -85,6 +85,30 @@ If Docker isn't running, start it from your system's application launcher or:
 pip install mcpbr
 ```
 
+### From npm
+
+[![npm package](https://img.shields.io/npm/v/mcpbr-cli.svg)](https://www.npmjs.com/package/mcpbr-cli)
+
+mcpbr is also available as an npm package for easy integration with Node.js workflows:
+
+```bash
+# Run with npx (no installation)
+npx mcpbr-cli run -c config.yaml
+
+# Or install globally
+npm install -g mcpbr-cli
+mcpbr run -c config.yaml
+```
+
+!!! info "Package Details"
+    **Package name**: [`mcpbr-cli`](https://www.npmjs.com/package/mcpbr-cli)
+
+    The npm package is a wrapper that requires Python 3.11+ and the mcpbr Python package to be installed separately:
+    ```bash
+    pip install mcpbr
+    npm install -g mcpbr-cli
+    ```
+
 ### From Source
 
 ```bash
