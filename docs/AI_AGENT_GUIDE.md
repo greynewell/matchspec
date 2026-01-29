@@ -4,44 +4,53 @@ This guide provides quick commands for AI agents (like Claude Code) to perform c
 
 ## Creating a Release
 
-**Always use the automated workflow:**
+**Workflow:** Release current version → Auto-bump to next patch → Commit to main
+
+### Standard Release (Patch Bump)
+
+For most releases (bug fixes, improvements, new features):
 
 ```bash
-# For bug fixes and minor improvements (most common)
-gh workflow run release.yml -f version_bump=patch
+# Release current version in pyproject.toml
+gh workflow run release.yml
 
-# For new features
-gh workflow run release.yml -f version_bump=minor
-
-# For breaking changes (rare)
-gh workflow run release.yml -f version_bump=major
+# With optional release notes
+gh workflow run release.yml -f release_notes="Special thanks to contributors!"
 ```
 
-**Almost there!** The workflow handles:
-- ✅ Version bump
-- ✅ File sync
-- ✅ Git commit & tag
-- ✅ GitHub release creation
+The workflow automatically:
+- ✅ Tags and releases current version
+- ✅ Bumps to next patch version (e.g., 0.4.1 → 0.4.2)
+- ✅ Syncs version across all files
+- ✅ Commits and pushes to main
+- ✅ Triggers PyPI and npm publication
 
-**Then manually trigger publication:**
+### Minor or Major Version Bumps
+
+For minor (new features) or major (breaking changes) releases, manually update the version **before** triggering the release:
+
 ```bash
-# Wait for release workflow to complete, then:
-gh workflow run publish.yml -f tag=vX.Y.Z
-gh workflow run publish-npm.yml -f tag=vX.Y.Z
+# For minor version bump (e.g., 0.4.2 → 0.5.0)
+# 1. Edit pyproject.toml
+sed -i 's/^version = .*/version = "0.5.0"/' pyproject.toml
+
+# 2. Sync and commit
+python3 scripts/sync_version.py
+git add pyproject.toml package.json .claude-plugin/
+git commit -m "chore: Bump version to 0.5.0"
+git push origin main
+
+# 3. Trigger release workflow
+gh workflow run release.yml
 ```
 
-Why? GitHub Actions security prevents workflows from auto-triggering other workflows.
+**Major version example:** Same process, use `1.0.0` for breaking changes.
 
-## Version Bump Decision Tree
+## Version Bump Strategy
 
-```
-Is it a breaking change? (API changes, removed features)
-├─ YES → major
-└─ NO
-   └─ Is it a new feature or enhancement?
-      ├─ YES → minor
-      └─ NO → patch (bug fixes, docs, deps)
-```
+- **Patch (automatic):** Bug fixes, documentation, dependencies (0.4.1 → 0.4.2)
+- **Minor (manual):** New features, enhancements (0.4.x → 0.5.0)
+- **Major (manual):** Breaking API changes, removed features (0.x.x → 1.0.0)
 
 ## Common Tasks
 
@@ -82,12 +91,14 @@ git push origin main
 When making a release:
 
 - [ ] Ensure PR is merged to main
-- [ ] Decide version bump type (patch/minor/major)
-- [ ] Run: `gh workflow run release.yml -f version_bump=TYPE`
+- [ ] For minor/major bumps: Manually update version in pyproject.toml, sync, commit, push
+- [ ] For patch bumps (most common): Version is already set in main
+- [ ] Run: `gh workflow run release.yml`
 - [ ] Wait ~2 minutes for completion
 - [ ] Verify release: `gh release view`
+- [ ] Check that version was auto-bumped on main after release
 - [ ] Verify PyPI: Check https://pypi.org/project/mcpbr/
-- [ ] Verify npm: Check https://www.npmjs.com/package/@greynewell/mcpbr
+- [ ] Verify npm: Check https://www.npmjs.com/package/mcpbr-cli
 
 ## What NOT to Do
 
@@ -131,23 +142,31 @@ For detailed information, see [RELEASE.md](./RELEASE.md)
 
 ## Examples
 
-### After fixing a bug
+### Standard patch release (most common)
 ```bash
-# PR #290 fixed Docker TypeError
-gh workflow run release.yml -f version_bump=patch
-# Creates v0.3.25
+# PR #290 fixed Docker TypeError and is merged to main
+# Version is already set in pyproject.toml (e.g., 0.4.1)
+gh workflow run release.yml
+# Releases v0.4.1, then auto-bumps main to 0.4.2
 ```
 
-### After adding a feature
+### Minor version release (new features)
 ```bash
-# Added new benchmark support
-gh workflow run release.yml -f version_bump=minor
-# Creates v0.4.0
+# Manually bump version first
+sed -i 's/^version = "0.4.2"/version = "0.5.0"/' pyproject.toml
+python3 scripts/sync_version.py
+git add pyproject.toml package.json .claude-plugin/
+git commit -m "chore: Bump version to 0.5.0"
+git push origin main
+
+# Trigger release
+gh workflow run release.yml
+# Releases v0.5.0, then auto-bumps main to 0.5.1
 ```
 
-### After breaking change
+### Major version release (breaking changes)
 ```bash
-# Redesigned CLI interface
+# Redesigned CLI interface - breaking change
 gh workflow run release.yml -f version_bump=major
 # Creates v1.0.0
 ```
