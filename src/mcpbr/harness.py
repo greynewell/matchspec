@@ -104,14 +104,18 @@ def agent_result_to_dict(
     if runtime_seconds is not None:
         data["runtime_seconds"] = runtime_seconds
 
-    # Calculate cost
-    cost = calculate_cost(
-        model_id=model_id,
-        input_tokens=result.tokens_input,
-        output_tokens=result.tokens_output,
-    )
-    if cost is not None:
-        data["cost"] = cost
+    # Use cost from API if available (includes cache tokens)
+    # Otherwise fall back to calculation for backward compatibility
+    if result.cost_usd is not None:
+        data["cost"] = result.cost_usd
+    else:
+        cost = calculate_cost(
+            model_id=model_id,
+            input_tokens=result.tokens_input,
+            output_tokens=result.tokens_output,
+        )
+        if cost is not None:
+            data["cost"] = cost
 
     if result.tool_usage:
         data["tool_usage"] = result.tool_usage

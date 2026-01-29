@@ -38,6 +38,7 @@ def test_parse_tool_usage_captures_partial_stream():
         tokens_in,
         tokens_out,
         result_subtype,
+        cost_usd,
     ) = _parse_tool_usage_from_stream(partial_stdout)
 
     # Verify tool call counting
@@ -65,6 +66,7 @@ def test_parse_tool_usage_captures_tool_failures():
         tokens_in,
         tokens_out,
         result_subtype,
+        cost_usd,
     ) = _parse_tool_usage_from_stream(partial_stdout)
 
     # Verify failure tracking
@@ -187,6 +189,7 @@ async def test_docker_timeout_captures_partial_stdout():
             tokens_in,
             tokens_out,
             result_subtype,
+            cost_usd,
         ) = _parse_tool_usage_from_stream(partial_stdout)
 
         # Verify that statistics were captured
@@ -232,6 +235,7 @@ def test_empty_partial_stdout_returns_zeros():
         tokens_in,
         tokens_out,
         result_subtype,
+        cost_usd,
     ) = _parse_tool_usage_from_stream("")
 
     assert total_tool_calls == 0
@@ -260,6 +264,7 @@ def test_malformed_json_handled_gracefully():
         tokens_in,
         tokens_out,
         result_subtype,
+        cost_usd,
     ) = _parse_tool_usage_from_stream(partial_stdout)
 
     # Should parse valid lines and skip invalid ones

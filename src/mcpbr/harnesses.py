@@ -35,6 +35,7 @@ class AgentResult:
     messages: list[dict[str, Any]] = field(default_factory=list)
     stdout: str = ""
     stderr: str = ""
+    cost_usd: float | None = None  # Total cost from API (includes cache tokens)
 
 
 @runtime_checkable
@@ -316,6 +317,7 @@ def _parse_tool_usage_from_stream(
     int,
     int,
     str | None,
+    float | None,
 ]:
     """Parse tool usage and metadata from stream-json output.
 
@@ -324,7 +326,7 @@ def _parse_tool_usage_from_stream(
 
     Returns:
         Tuple of (total_tool_calls, tool_usage_dict, tool_failures_dict,
-                  tool_errors_dict, num_turns, tokens_in, tokens_out, result_subtype).
+                  tool_errors_dict, num_turns, tokens_in, tokens_out, result_subtype, cost_usd).
     """
     tool_usage: dict[str, int] = {}
     tool_failures: dict[str, int] = {}
@@ -338,6 +340,7 @@ def _parse_tool_usage_from_stream(
     result_tokens_out = 0
     has_result = False
     result_subtype: str | None = None
+    cost_usd: float | None = None
 
     for line in stdout.split("\n"):
         if not line.strip():
@@ -403,6 +406,8 @@ def _parse_tool_usage_from_stream(
                 usage = event.get("usage", {})
                 result_tokens_in = usage.get("input_tokens", 0)
                 result_tokens_out = usage.get("output_tokens", 0)
+                # Extract total cost from API (includes cache tokens)
+                cost_usd = event.get("total_cost_usd")
 
         except json.JSONDecodeError:
             continue
@@ -420,6 +425,7 @@ def _parse_tool_usage_from_stream(
         tokens_in,
         tokens_out,
         result_subtype,
+        cost_usd,
     )
 
 
@@ -590,6 +596,7 @@ class ClaudeCodeHarness:
                 tokens_in,
                 tokens_out,
                 result_subtype,
+                cost_usd,
             ) = _parse_tool_usage_from_stream(stdout)
 
             if result_subtype == "error_max_turns" and num_turns > self.max_iterations:
@@ -616,6 +623,7 @@ class ClaudeCodeHarness:
                     tool_usage=tool_usage,
                     tool_failures=tool_failures,
                     tool_errors=tool_errors,
+                    cost_usd=cost_usd,
                 )
 
             if mcp_server_name:
@@ -640,6 +648,7 @@ class ClaudeCodeHarness:
                 tool_usage=tool_usage,
                 tool_failures=tool_failures,
                 tool_errors=tool_errors,
+                cost_usd=cost_usd,
             )
         except Exception:
             if mcp_server_name:
@@ -669,6 +678,7 @@ class ClaudeCodeHarness:
                 patch="",
                 success=False,
                 error="ANTHROPIC_API_KEY environment variable not set",
+                cost_usd=None,
             )
 
         docker_env = {
@@ -770,6 +780,7 @@ class ClaudeCodeHarness:
                         error=error_msg,
                         stdout=mcp_stdout,
                         stderr=mcp_stderr,
+                        cost_usd=None,
                     )
 
                 if verbose:
@@ -789,6 +800,7 @@ class ClaudeCodeHarness:
                     patch="",
                     success=False,
                     error=error_msg,
+                    cost_usd=None,
                 )
 
         try:
@@ -899,6 +911,7 @@ class ClaudeCodeHarness:
                 tokens_in,
                 tokens_out,
                 result_subtype,
+                cost_usd,
             ) = _parse_tool_usage_from_stream(stdout)
 
             if result_subtype == "error_max_turns" and num_turns > self.max_iterations:
@@ -946,6 +959,7 @@ class ClaudeCodeHarness:
                     tool_usage=tool_usage,
                     tool_failures=tool_failures,
                     tool_errors=tool_errors,
+                    cost_usd=cost_usd,
                 )
 
             if mcp_server_name:
@@ -1003,6 +1017,7 @@ class ClaudeCodeHarness:
                 tool_usage=tool_usage,
                 tool_failures=tool_failures,
                 tool_errors=tool_errors,
+                cost_usd=cost_usd,
             )
         except asyncio.TimeoutError:
             # Task execution timed out - but we may have partial stdout with tool usage stats
@@ -1036,6 +1051,7 @@ class ClaudeCodeHarness:
                 tokens_in,
                 tokens_out,
                 result_subtype,
+                cost_usd,
             ) = _parse_tool_usage_from_stream(partial_stdout)
 
             if mcp_server_name:
@@ -1079,6 +1095,7 @@ class ClaudeCodeHarness:
                 tool_failures=tool_failures,
                 tool_errors=tool_errors,
                 stdout=partial_stdout,
+                cost_usd=cost_usd,
             )
         except Exception:
             if mcp_server_name:
