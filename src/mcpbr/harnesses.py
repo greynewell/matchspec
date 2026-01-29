@@ -217,6 +217,7 @@ async def _get_git_diff(workdir: str) -> str:
     """
     await _run_cli_command(["git", "add", "-A"], workdir, timeout=30)
 
+    # Try with filter first (excludes debug scripts, test files)
     exit_code, stdout, stderr = await _run_cli_command(
         [
             "git",
@@ -225,6 +226,15 @@ async def _get_git_diff(workdir: str) -> str:
             "HEAD",
             "--diff-filter=M",
         ],
+        workdir,
+        timeout=30,
+    )
+    if exit_code == 0 and stdout.strip():
+        return stdout
+
+    # Fallback: try without filter if nothing found (for new files like HumanEval solution.py)
+    exit_code, stdout, stderr = await _run_cli_command(
+        ["git", "diff", "--cached", "HEAD"],
         workdir,
         timeout=30,
     )
