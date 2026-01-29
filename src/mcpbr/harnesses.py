@@ -562,6 +562,11 @@ class ClaudeCodeHarness:
 
             command.append(prompt)
 
+            # Prepare environment variables
+            claude_env: dict[str, str] | None = None
+            if self.thinking_budget is not None:
+                claude_env = {"MAX_THINKING_TOKENS": str(self.thinking_budget)}
+
             if verbose:
                 from .log_formatter import FormatterConfig
 
@@ -582,12 +587,14 @@ class ClaudeCodeHarness:
                     prefix=instance_id,
                     console=self._console,
                     formatter=formatter,
+                    env=claude_env,
                 )
             else:
                 exit_code, stdout, stderr = await _run_cli_command(
                     command,
                     workdir,
                     timeout,
+                    env=claude_env,
                 )
 
             (
