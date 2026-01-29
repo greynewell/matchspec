@@ -30,6 +30,7 @@ class TestToolFailureTracking:
             tokens_in,
             tokens_out,
             result_subtype,
+            cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         # Verify successful calls
@@ -64,6 +65,7 @@ class TestToolFailureTracking:
             tokens_in,
             tokens_out,
             result_subtype,
+            cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert total_calls == 1
@@ -92,6 +94,7 @@ class TestToolFailureTracking:
             tokens_in,
             tokens_out,
             result_subtype,
+            cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert total_calls == 3
@@ -200,6 +203,7 @@ class TestToolFailureTracking:
             tokens_in,
             tokens_out,
             result_subtype,
+            cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert tool_failures == {"Read": 1}
@@ -224,6 +228,7 @@ class TestToolFailureTracking:
             tokens_in,
             tokens_out,
             result_subtype,
+            cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert tool_failures == {"Read": 1}
@@ -277,6 +282,7 @@ class TestToolFailureTracking:
             tokens_in,
             tokens_out,
             result_subtype,
+            cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert tool_failures == {"Bash": 6}
