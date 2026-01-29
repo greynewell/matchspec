@@ -397,16 +397,19 @@ thinking_budget: 10000
 
 # Maximum thinking budget for very complex tasks
 thinking_budget: 31999
+
+# Disabled (default) - omit the field or set to null
+thinking_budget: null
 ```
 
-!!! tip "CLI Override"
-    Override thinking budget at runtime:
-    ```bash
-    # Enable thinking mode
-    mcpbr run -c config.yaml --thinking-budget 10000
+!!! warning "Configuration Only"
+    **Important**: `thinking_budget` can only be configured in the YAML file. There is no CLI override option for this parameter.
 
-    # Disable thinking mode
-    mcpbr run -c config.yaml --thinking-budget 0
+    To disable thinking mode, omit the `thinking_budget` field entirely or explicitly set it to `null`:
+    ```yaml
+    # Thinking mode disabled (these are equivalent)
+    thinking_budget: null
+    # or simply omit the field
     ```
 
 !!! note "Validation"
