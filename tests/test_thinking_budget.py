@@ -90,6 +90,81 @@ class TestThinkingBudgetConfig:
         )
         assert config3.thinking_budget == 5000
 
+    def test_thinking_budget_validation_minimum(self):
+        """Test that thinking_budget rejects values below 1024."""
+        from mcpbr.config import MCPServerConfig
+
+        mcp_server = MCPServerConfig(
+            name="filesystem",
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        )
+
+        # Test below minimum
+        with pytest.raises(ValueError, match="must be at least 1024 tokens"):
+            HarnessConfig(
+                benchmark="humaneval",
+                provider="anthropic",
+                agent_harness="claude-code",
+                model="sonnet",
+                thinking_budget=1023,  # Below minimum
+                mcp_server=mcp_server,
+            )
+
+        # Test zero
+        with pytest.raises(ValueError, match="must be at least 1024 tokens"):
+            HarnessConfig(
+                benchmark="humaneval",
+                provider="anthropic",
+                agent_harness="claude-code",
+                model="sonnet",
+                thinking_budget=0,
+                mcp_server=mcp_server,
+            )
+
+        # Test negative
+        with pytest.raises(ValueError, match="must be at least 1024 tokens"):
+            HarnessConfig(
+                benchmark="humaneval",
+                provider="anthropic",
+                agent_harness="claude-code",
+                model="sonnet",
+                thinking_budget=-1000,
+                mcp_server=mcp_server,
+            )
+
+    def test_thinking_budget_validation_maximum(self):
+        """Test that thinking_budget rejects values above 31999."""
+        from mcpbr.config import MCPServerConfig
+
+        mcp_server = MCPServerConfig(
+            name="filesystem",
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        )
+
+        # Test above maximum
+        with pytest.raises(ValueError, match="cannot exceed 31999 tokens"):
+            HarnessConfig(
+                benchmark="humaneval",
+                provider="anthropic",
+                agent_harness="claude-code",
+                model="sonnet",
+                thinking_budget=32000,  # Above maximum
+                mcp_server=mcp_server,
+            )
+
+        # Test way above maximum
+        with pytest.raises(ValueError, match="cannot exceed 31999 tokens"):
+            HarnessConfig(
+                benchmark="humaneval",
+                provider="anthropic",
+                agent_harness="claude-code",
+                model="sonnet",
+                thinking_budget=100000,
+                mcp_server=mcp_server,
+            )
+
 
 class TestThinkingBudgetHarnessCreation:
     """Tests for thinking_budget in harness creation."""
