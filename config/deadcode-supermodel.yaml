@@ -1,0 +1,55 @@
+# Dead Code Detection Benchmark - Supermodel Configuration
+# Uses pre-generated call graph for analysis (implements issue #82 concept)
+
+benchmark: "dead-code"
+sample_size: 3
+
+# Supermodel MCP - kept for potential API fallback
+mcp_server:
+  name: "supermodel"
+  command: "npx"
+  args:
+    - "-y"
+    - "@supermodeltools/mcp-server@latest"
+  env:
+    SUPERMODEL_API_KEY: "${SUPERMODEL_API_KEY}"
+    SUPERMODEL_BASE_URL: "${SUPERMODEL_BASE_URL}"
+
+provider: "anthropic"
+agent_harness: "claude-code"
+model: "claude-sonnet-4-20250514"
+
+timeout_seconds: 300
+max_concurrent: 1
+max_iterations: 25  # Extra headroom for Supermodel API calls
+
+# Custom prompt using pre-generated call graph
+agent_prompt: |
+  Analyze the codebase and identify ALL dead code (unused functions, classes, variables).
+
+  {problem_statement}
+
+  IMPORTANT: A pre-generated call graph is available at `.supermodel/graph.json`.
+  This file contains the complete call graph analysis - USE IT FIRST before any manual analysis.
+
+  APPROACH:
+  1. Read the call graph from .supermodel/graph.json
+  2. Parse the graph structure:
+     - "nodes": All functions/classes in the codebase with metadata
+     - "edges": Call relationships (which function calls which)
+     - "entry_points": Exported functions and module entry points
+  3. Find all nodes with NO incoming edges in the call graph that are NOT entry points
+  4. These are dead code - they're defined but never called
+
+  ALGORITHM:
+  - Build set of all node IDs that appear as "to" in edges (functions that are called)
+  - Build set of entry_points (these are NOT dead even if uncalled)
+  - Dead code = nodes NOT in called_set AND NOT in entry_points
+
+  Update REPORT.json with format:
+  {{
+    "dead_code": [
+      {{"file": "path/file.ts", "name": "functionName", "line": 10, "type": "function"}}
+    ],
+    "analysis_complete": true
+  }}

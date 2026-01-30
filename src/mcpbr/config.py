@@ -19,6 +19,7 @@ VALID_BENCHMARKS = (
     "swe-bench-verified",
     "swe-bench-full",
     "cybergym",
+    "dead-code",
     "gsm8k",
     "humaneval",
     "mcptoolbench",

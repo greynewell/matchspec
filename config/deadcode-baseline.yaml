@@ -1,0 +1,44 @@
+# Dead Code Detection Benchmark - Baseline Configuration
+# Uses only filesystem MCP (grep-based approach)
+
+benchmark: "dead-code"
+sample_size: 3
+
+# Filesystem MCP only - agent must use grep/search to find dead code
+mcp_server:
+  name: "filesystem"
+  command: "npx"
+  args:
+    - "-y"
+    - "@modelcontextprotocol/server-filesystem"
+    - "{workdir}"
+
+provider: "anthropic"
+agent_harness: "claude-code"
+model: "claude-sonnet-4-20250514"
+
+timeout_seconds: 300
+max_concurrent: 1
+max_iterations: 15
+
+# Custom prompt emphasizing grep/search approach
+agent_prompt: |
+  Analyze the codebase and identify ALL dead code (unused functions, classes, variables).
+
+  {problem_statement}
+
+  APPROACH:
+  1. List all files in the workspace
+  2. Read each file to understand the code structure
+  3. Search for function/class definitions
+  4. Search for usages of each function/class
+  5. Mark as "dead" any code that is:
+     - Not exported AND
+     - Not called by any other code
+
+  Output your findings to 'dead_code_report.json' with format:
+  {{
+    "dead_code": [
+      {{"file": "path/file.ts", "name": "functionName", "line": 10, "type": "function"}}
+    ]
+  }}

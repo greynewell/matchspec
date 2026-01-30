@@ -14,6 +14,7 @@ from .codecontests import CodeContestsBenchmark
 from .codereval import CoderEvalBenchmark
 from .custom import CustomBenchmark
 from .cybergym import CyberGymBenchmark
+from .deadcode import DeadCodeBenchmark
 from .gaia import GAIABenchmark
 from .gsm8k import GSM8KBenchmark
 from .hellaswag import HellaSwagBenchmark
@@ -38,6 +39,7 @@ __all__ = [
     "BenchmarkTask",
     "SWEBenchmark",
     "CyberGymBenchmark",
+    "DeadCodeBenchmark",
     "HumanEvalBenchmark",
     "MCPToolBenchmark",
     "GSM8KBenchmark",
@@ -76,6 +78,7 @@ BENCHMARK_REGISTRY: dict[str, type[Benchmark]] = {
     "swe-bench-verified": SWEBenchmark,
     "swe-bench-full": SWEBenchmark,
     "cybergym": CyberGymBenchmark,
+    "dead-code": DeadCodeBenchmark,
     "humaneval": HumanEvalBenchmark,
     "mcptoolbench": MCPToolBenchmark,
     "gsm8k": GSM8KBenchmark,
