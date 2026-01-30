@@ -65,23 +65,40 @@ Each task includes:
 - **F1 Score**: Harmonic mean of precision and recall
 - **Resolved**: True if precision ≥ 80% AND recall ≥ 80%
 
+## Pre-Generated Call Graphs
+
+Each benchmark task includes a pre-generated call graph at `.supermodel/graph.json`. This implements the concept from [supermodeltools/mcp#82](https://github.com/supermodeltools/mcp/issues/82) - providing local graph data to avoid burning agent iterations on API calls.
+
+The graph structure includes:
+- **nodes**: All functions/classes with metadata (file, name, line, type, exported)
+- **edges**: Call relationships between nodes
+- **entry_points**: Exported functions and module entry points
+
+The agent can read this file directly to determine which nodes have no incoming edges (potential dead code) vs which are reachable from entry points (alive code).
+
 ## Results
 
-### Initial Proof of Concept (2026-01-30)
+### With Pre-Generated Call Graphs (2026-01-30)
 
-| Task | Supermodel MCP | Baseline |
-|------|----------------|----------|
-| dead-code-001 (TS) | ✅ PASS | ✅ PASS |
-| dead-code-002 (Python) | ❌ FAIL* | ✅ PASS |
-| dead-code-003 (JS) | ✅ PASS | ✅ PASS |
+| Task | Call Graph Approach | Baseline (grep) |
+|------|---------------------|-----------------|
+| dead-code-001 (TS) | ✅ PASS (12 iter) | ✅ PASS (11 iter) |
+| dead-code-002 (Python) | ✅ PASS (13 iter) | ✅ PASS (9 iter) |
+| dead-code-003 (JS) | ✅ PASS (12 iter) | ✅ PASS (10 iter) |
 
-*The Supermodel agent correctly identified the dead code but ran out of iterations before writing results to REPORT.json. This is an agent efficiency issue, not a call graph accuracy issue.
+**Summary:**
+- Both approaches achieved 100% pass rate on synthetic tasks
+- Call graph approach: avg 12.3 iterations, $0.16/task
+- Baseline approach: avg 10.0 iterations, $0.15/task
+
+On simple synthetic tasks, both approaches work equally well. The call graph approach provides more value on larger, complex codebases where:
+1. Grep-based search produces false positives/negatives
+2. Call chains involve indirect dependencies
+3. Dynamic dispatch makes static analysis difficult
 
 ### Tool Usage
 
-Supermodel MCP agent used:
-- `mcp__supermodel__get_call_graph`: 3 calls (100% success)
-- `mcp__supermodel__get_parse_graph`: 3 calls (100% success)
+Call graph agent read `.supermodel/graph.json` directly, eliminating the need for API calls during the benchmark.
 
 ## Configuration Files
 
@@ -150,6 +167,7 @@ dataset: "/path/to/dataset.json"
 
 ## References
 
-- [supermodeltools/mcp#85](https://github.com/supermodeltools/mcp/issues/85) - Original issue
+- [supermodeltools/mcp#85](https://github.com/supermodeltools/mcp/issues/85) - Benchmark proposal issue
+- [supermodeltools/mcp#82](https://github.com/supermodeltools/mcp/issues/82) - Local graph.json feature proposal
 - [Supermodel API Documentation](https://docs.supermodeltools.com)
 - [mcpbr Documentation](https://github.com/greynewell/mcpbr)
