@@ -25,20 +25,20 @@ CALL_GRAPH_001 = """{
   },
   "nodes": [
     {"id": "src/index.ts::<module>", "file": "src/index.ts", "name": "<module>", "type": "module", "line": 1, "exported": true},
-    {"id": "src/utils.ts::usedFunction", "file": "src/utils.ts", "name": "usedFunction", "type": "function", "line": 1, "exported": true},
-    {"id": "src/utils.ts::helperFunction", "file": "src/utils.ts", "name": "helperFunction", "type": "function", "line": 6, "exported": false},
-    {"id": "src/utils.ts::neverCalled", "file": "src/utils.ts", "name": "neverCalled", "type": "function", "line": 10, "exported": false},
-    {"id": "src/utils.ts::alsoNeverCalled", "file": "src/utils.ts", "name": "alsoNeverCalled", "type": "function", "line": 14, "exported": false},
-    {"id": "src/utils.ts::unusedArrow", "file": "src/utils.ts", "name": "unusedArrow", "type": "variable", "line": 18, "exported": false},
-    {"id": "src/utils.ts::anotherUsedFunction", "file": "src/utils.ts", "name": "anotherUsedFunction", "type": "function", "line": 22, "exported": true}
+    {"id": "src/utils.ts::processAlpha", "file": "src/utils.ts", "name": "processAlpha", "type": "function", "line": 1, "exported": true},
+    {"id": "src/utils.ts::transformData", "file": "src/utils.ts", "name": "transformData", "type": "function", "line": 6, "exported": false},
+    {"id": "src/utils.ts::computeBeta", "file": "src/utils.ts", "name": "computeBeta", "type": "function", "line": 10, "exported": false},
+    {"id": "src/utils.ts::calculateGamma", "file": "src/utils.ts", "name": "calculateGamma", "type": "function", "line": 14, "exported": false},
+    {"id": "src/utils.ts::formatDelta", "file": "src/utils.ts", "name": "formatDelta", "type": "variable", "line": 18, "exported": false},
+    {"id": "src/utils.ts::handleEpsilon", "file": "src/utils.ts", "name": "handleEpsilon", "type": "function", "line": 22, "exported": true}
   ],
   "edges": [
-    {"from": "src/index.ts::<module>", "to": "src/utils.ts::usedFunction", "type": "call"},
-    {"from": "src/index.ts::<module>", "to": "src/utils.ts::anotherUsedFunction", "type": "call"},
-    {"from": "src/utils.ts::usedFunction", "to": "src/utils.ts::helperFunction", "type": "call"},
-    {"from": "src/utils.ts::anotherUsedFunction", "to": "src/utils.ts::usedFunction", "type": "call"}
+    {"from": "src/index.ts::<module>", "to": "src/utils.ts::processAlpha", "type": "call"},
+    {"from": "src/index.ts::<module>", "to": "src/utils.ts::handleEpsilon", "type": "call"},
+    {"from": "src/utils.ts::processAlpha", "to": "src/utils.ts::transformData", "type": "call"},
+    {"from": "src/utils.ts::handleEpsilon", "to": "src/utils.ts::processAlpha", "type": "call"}
   ],
-  "entry_points": ["src/index.ts::<module>", "src/utils.ts::usedFunction", "src/utils.ts::anotherUsedFunction"]
+  "entry_points": ["src/index.ts::<module>", "src/utils.ts::processAlpha", "src/utils.ts::handleEpsilon"]
 }
 """
 
@@ -51,20 +51,20 @@ CALL_GRAPH_002 = """{
   "nodes": [
     {"id": "app/main.py::<module>", "file": "app/main.py", "name": "<module>", "type": "module", "line": 1, "exported": true},
     {"id": "app/main.py::main", "file": "app/main.py", "name": "main", "type": "function", "line": 3, "exported": false},
-    {"id": "app/utils.py::process_data", "file": "app/utils.py", "name": "process_data", "type": "function", "line": 1, "exported": true},
-    {"id": "app/utils.py::validate_input", "file": "app/utils.py", "name": "validate_input", "type": "function", "line": 5, "exported": true},
-    {"id": "app/utils.py::format_output", "file": "app/utils.py", "name": "format_output", "type": "function", "line": 11, "exported": false},
-    {"id": "app/utils.py::deprecated_processor", "file": "app/utils.py", "name": "deprecated_processor", "type": "function", "line": 15, "exported": false},
-    {"id": "app/utils.py::legacy_validator", "file": "app/utils.py", "name": "legacy_validator", "type": "function", "line": 19, "exported": false},
-    {"id": "app/utils.py::UnusedClass", "file": "app/utils.py", "name": "UnusedClass", "type": "class", "line": 23, "exported": false}
+    {"id": "app/utils.py::process_record", "file": "app/utils.py", "name": "process_record", "type": "function", "line": 1, "exported": true},
+    {"id": "app/utils.py::check_params", "file": "app/utils.py", "name": "check_params", "type": "function", "line": 5, "exported": true},
+    {"id": "app/utils.py::serialize_result", "file": "app/utils.py", "name": "serialize_result", "type": "function", "line": 11, "exported": false},
+    {"id": "app/utils.py::transform_batch", "file": "app/utils.py", "name": "transform_batch", "type": "function", "line": 15, "exported": false},
+    {"id": "app/utils.py::verify_schema", "file": "app/utils.py", "name": "verify_schema", "type": "function", "line": 19, "exported": false},
+    {"id": "app/utils.py::DataCache", "file": "app/utils.py", "name": "DataCache", "type": "class", "line": 23, "exported": false}
   ],
   "edges": [
     {"from": "app/main.py::<module>", "to": "app/main.py::main", "type": "call"},
-    {"from": "app/main.py::main", "to": "app/utils.py::validate_input", "type": "call"},
-    {"from": "app/main.py::main", "to": "app/utils.py::process_data", "type": "call"},
-    {"from": "app/utils.py::process_data", "to": "app/utils.py::format_output", "type": "call"}
+    {"from": "app/main.py::main", "to": "app/utils.py::check_params", "type": "call"},
+    {"from": "app/main.py::main", "to": "app/utils.py::process_record", "type": "call"},
+    {"from": "app/utils.py::process_record", "to": "app/utils.py::serialize_result", "type": "call"}
   ],
-  "entry_points": ["app/main.py::<module>", "app/utils.py::process_data", "app/utils.py::validate_input"]
+  "entry_points": ["app/main.py::<module>", "app/utils.py::process_record", "app/utils.py::check_params"]
 }
 """
 
@@ -78,13 +78,13 @@ CALL_GRAPH_003 = """{
     {"id": "src/api/routes.js::<module>", "file": "src/api/routes.js", "name": "<module>", "type": "module", "line": 1, "exported": true},
     {"id": "src/api/handlers.js::handleUser", "file": "src/api/handlers.js", "name": "handleUser", "type": "function", "line": 3, "exported": true},
     {"id": "src/api/handlers.js::handleAuth", "file": "src/api/handlers.js", "name": "handleAuth", "type": "function", "line": 9, "exported": true},
-    {"id": "src/api/handlers.js::handleLegacyEndpoint", "file": "src/api/handlers.js", "name": "handleLegacyEndpoint", "type": "function", "line": 12, "exported": false},
-    {"id": "src/api/handlers.js::handleDeprecatedAuth", "file": "src/api/handlers.js", "name": "handleDeprecatedAuth", "type": "function", "line": 16, "exported": false},
+    {"id": "src/api/handlers.js::handleMetrics", "file": "src/api/handlers.js", "name": "handleMetrics", "type": "function", "line": 12, "exported": false},
+    {"id": "src/api/handlers.js::handleSession", "file": "src/api/handlers.js", "name": "handleSession", "type": "function", "line": 16, "exported": false},
     {"id": "src/utils/helpers.js::validateToken", "file": "src/utils/helpers.js", "name": "validateToken", "type": "function", "line": 1, "exported": true},
     {"id": "src/utils/helpers.js::formatResponse", "file": "src/utils/helpers.js", "name": "formatResponse", "type": "function", "line": 5, "exported": true},
-    {"id": "src/utils/helpers.js::logRequest", "file": "src/utils/helpers.js", "name": "logRequest", "type": "function", "line": 9, "exported": false},
-    {"id": "src/utils/helpers.js::formatLegacyResponse", "file": "src/utils/helpers.js", "name": "formatLegacyResponse", "type": "function", "line": 13, "exported": false},
-    {"id": "src/utils/helpers.js::generateId", "file": "src/utils/helpers.js", "name": "generateId", "type": "function", "line": 17, "exported": false}
+    {"id": "src/utils/helpers.js::trackEvent", "file": "src/utils/helpers.js", "name": "trackEvent", "type": "function", "line": 9, "exported": false},
+    {"id": "src/utils/helpers.js::buildPayload", "file": "src/utils/helpers.js", "name": "buildPayload", "type": "function", "line": 13, "exported": false},
+    {"id": "src/utils/helpers.js::createHash", "file": "src/utils/helpers.js", "name": "createHash", "type": "function", "line": 17, "exported": false}
   ],
   "edges": [
     {"from": "src/api/routes.js::<module>", "to": "src/api/handlers.js::handleUser", "type": "reference"},
@@ -163,58 +163,58 @@ class DeadCodeBenchmark:
                 "repo_content": {
                     "REPORT.json": REPORT_PLACEHOLDER,
                     ".supermodel/graph.json": CALL_GRAPH_001,
-                    "src/utils.ts": """export function usedFunction() {
-  console.log("I am used");
-  helperFunction();
+                    "src/utils.ts": """export function processAlpha() {
+  console.log("Processing alpha");
+  transformData();
 }
 
-function helperFunction() {
-  console.log("I am a helper");
+function transformData() {
+  console.log("Transforming data");
 }
 
-function neverCalled() {
-  console.log("Nobody calls me");
+function computeBeta() {
+  console.log("Computing beta");
 }
 
-function alsoNeverCalled(x: number) {
+function calculateGamma(x: number) {
   return x * 2;
 }
 
-const unusedArrow = () => {
-  console.log("I am unused");
+const formatDelta = () => {
+  console.log("Formatting delta");
 };
 
-export function anotherUsedFunction() {
-  usedFunction();
+export function handleEpsilon() {
+  processAlpha();
 }
 """,
-                    "src/index.ts": """import { usedFunction, anotherUsedFunction } from "./utils";
+                    "src/index.ts": """import { processAlpha, handleEpsilon } from "./utils";
 
-usedFunction();
-anotherUsedFunction();
+processAlpha();
+handleEpsilon();
 """,
                 },
                 "dead_code": [
-                    {"file": "src/utils.ts", "name": "neverCalled", "line": 10, "type": "function"},
+                    {"file": "src/utils.ts", "name": "computeBeta", "line": 10, "type": "function"},
                     {
                         "file": "src/utils.ts",
-                        "name": "alsoNeverCalled",
+                        "name": "calculateGamma",
                         "line": 14,
                         "type": "function",
                     },
-                    {"file": "src/utils.ts", "name": "unusedArrow", "line": 18, "type": "variable"},
+                    {"file": "src/utils.ts", "name": "formatDelta", "line": 18, "type": "variable"},
                 ],
                 "alive_code": [
-                    {"file": "src/utils.ts", "name": "usedFunction", "line": 1, "type": "function"},
+                    {"file": "src/utils.ts", "name": "processAlpha", "line": 1, "type": "function"},
                     {
                         "file": "src/utils.ts",
-                        "name": "helperFunction",
+                        "name": "transformData",
                         "line": 6,
                         "type": "function",
                     },
                     {
                         "file": "src/utils.ts",
-                        "name": "anotherUsedFunction",
+                        "name": "handleEpsilon",
                         "line": 22,
                         "type": "function",
                     },
@@ -227,40 +227,40 @@ anotherUsedFunction();
                 "repo_content": {
                     "REPORT.json": REPORT_PLACEHOLDER,
                     ".supermodel/graph.json": CALL_GRAPH_002,
-                    "app/main.py": """from app.utils import process_data, validate_input
+                    "app/main.py": """from app.utils import process_record, check_params
 
 def main():
-    data = validate_input({"key": "value"})
-    result = process_data(data)
+    data = check_params({"key": "value"})
+    result = process_record(data)
     print(result)
 
 if __name__ == "__main__":
     main()
 """,
-                    "app/utils.py": '''def process_data(data: dict) -> str:
-    """Process the input data."""
-    return format_output(data)
+                    "app/utils.py": '''def process_record(data: dict) -> str:
+    """Process the input record."""
+    return serialize_result(data)
 
-def validate_input(data: dict) -> dict:
-    """Validate input data."""
+def check_params(data: dict) -> dict:
+    """Check input parameters."""
     if not isinstance(data, dict):
         raise ValueError("Expected dict")
     return data
 
-def format_output(data: dict) -> str:
-    """Format data for output."""
+def serialize_result(data: dict) -> str:
+    """Serialize data for output."""
     return str(data)
 
-def deprecated_processor(data):
-    """Old processor - no longer used."""
+def transform_batch(data):
+    """Transform a batch of records."""
     return data
 
-def legacy_validator(data):
-    """Legacy validation - replaced by validate_input."""
+def verify_schema(data):
+    """Verify data matches schema."""
     return bool(data)
 
-class UnusedClass:
-    """This class is never instantiated."""
+class DataCache:
+    """Cache for processed data."""
     def __init__(self):
         self.value = 0
 
@@ -272,29 +272,29 @@ class UnusedClass:
                 "dead_code": [
                     {
                         "file": "app/utils.py",
-                        "name": "deprecated_processor",
+                        "name": "transform_batch",
                         "line": 15,
                         "type": "function",
                     },
                     {
                         "file": "app/utils.py",
-                        "name": "legacy_validator",
+                        "name": "verify_schema",
                         "line": 19,
                         "type": "function",
                     },
-                    {"file": "app/utils.py", "name": "UnusedClass", "line": 23, "type": "class"},
+                    {"file": "app/utils.py", "name": "DataCache", "line": 23, "type": "class"},
                 ],
                 "alive_code": [
-                    {"file": "app/utils.py", "name": "process_data", "line": 1, "type": "function"},
+                    {"file": "app/utils.py", "name": "process_record", "line": 1, "type": "function"},
                     {
                         "file": "app/utils.py",
-                        "name": "validate_input",
+                        "name": "check_params",
                         "line": 5,
                         "type": "function",
                     },
                     {
                         "file": "app/utils.py",
-                        "name": "format_output",
+                        "name": "serialize_result",
                         "line": 11,
                         "type": "function",
                     },
@@ -328,12 +328,12 @@ function handleAuth(req, res) {
   return res.json({ authenticated: true });
 }
 
-function handleLegacyEndpoint(req, res) {
-  return res.json({ legacy: true });
+function handleMetrics(req, res) {
+  return res.json({ metrics: true });
 }
 
-function handleDeprecatedAuth(req, res) {
-  console.log('Deprecated');
+function handleSession(req, res) {
+  console.log('Session handler');
   return res.status(410).send('Gone');
 }
 
@@ -347,15 +347,15 @@ function formatResponse(data) {
   return { success: true, data };
 }
 
-function logRequest(req) {
+function trackEvent(req) {
   console.log(req.url);
 }
 
-function formatLegacyResponse(data) {
+function buildPayload(data) {
   return { result: data };
 }
 
-function generateId() {
+function createHash() {
   return Math.random().toString(36);
 }
 
@@ -365,31 +365,31 @@ module.exports = { validateToken, formatResponse };
                 "dead_code": [
                     {
                         "file": "src/api/handlers.js",
-                        "name": "handleLegacyEndpoint",
+                        "name": "handleMetrics",
                         "line": 12,
                         "type": "function",
                     },
                     {
                         "file": "src/api/handlers.js",
-                        "name": "handleDeprecatedAuth",
+                        "name": "handleSession",
                         "line": 16,
                         "type": "function",
                     },
                     {
                         "file": "src/utils/helpers.js",
-                        "name": "logRequest",
+                        "name": "trackEvent",
                         "line": 9,
                         "type": "function",
                     },
                     {
                         "file": "src/utils/helpers.js",
-                        "name": "formatLegacyResponse",
+                        "name": "buildPayload",
                         "line": 13,
                         "type": "function",
                     },
                     {
                         "file": "src/utils/helpers.js",
-                        "name": "generateId",
+                        "name": "createHash",
                         "line": 17,
                         "type": "function",
                     },
