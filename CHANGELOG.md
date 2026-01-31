@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Django test runner support** (#93): Detect Django test format and use `./tests/runtests.py` instead of pytest
+  - Django tasks in SWE-bench previously had 0% success rate due to wrong test runner
+  - Detects both parenthesized format (`test_method (module.tests.TestClass)`) and dot-separated format (`module.tests.TestClass.test_method`)
+
 ## [0.4.3] - 2026-02-01
 
 ### Added
