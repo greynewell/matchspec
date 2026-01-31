@@ -1,7 +1,7 @@
 """Test parsing of malformed SWE-bench task data."""
 
-import ast
 import json
+
 import pytest
 
 from mcpbr.evaluation import parse_test_list
