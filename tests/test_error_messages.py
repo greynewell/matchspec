@@ -1,7 +1,5 @@
 """Tests for error message accuracy and helpfulness."""
 
-import pytest
-
 from mcpbr.harnesses import _generate_no_patch_error_message
 
 
