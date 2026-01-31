@@ -360,12 +360,35 @@ class DockerEnvironmentManager:
         self._fallback_image_built = True
 
     def _use_fallback_image(self) -> None:
-        """Tag python:3.11-slim as our image if Dockerfile not found."""
+        """Build a minimal fallback image with git if Dockerfile not found."""
         try:
-            img = self.client.images.get("python:3.11-slim")
-            img.tag(self.FALLBACK_IMAGE)
+            # Build a minimal image with git installed
+            # This ensures git is available for Claude Code's /commit command
+            dockerfile_content = """
+FROM python:3.11-slim
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
+"""
+            import tempfile
+            import os
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                dockerfile_path = os.path.join(tmpdir, "Dockerfile")
+                with open(dockerfile_path, "w") as f:
+                    f.write(dockerfile_content)
+
+                self.client.images.build(
+                    path=tmpdir,
+                    tag=self.FALLBACK_IMAGE,
+                    rm=True,
+                )
         except Exception:
-            pass
+            # Last resort: just tag the base image
+            try:
+                img = self.client.images.get("python:3.11-slim")
+                img.tag(self.FALLBACK_IMAGE)
+            except Exception:
+                pass
 
     async def create_environment(
         self,
