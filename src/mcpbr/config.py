@@ -3,7 +3,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from rich.console import Console
@@ -22,6 +22,45 @@ VALID_BENCHMARKS = (
     "gsm8k",
     "humaneval",
     "mcptoolbench",
+)
+VALID_INFRASTRUCTURE_MODES = ("local", "azure")
+
+# Valid Azure regions (common ones)
+VALID_AZURE_REGIONS = (
+    "eastus",
+    "eastus2",
+    "westus",
+    "westus2",
+    "westus3",
+    "centralus",
+    "northcentralus",
+    "southcentralus",
+    "westcentralus",
+    "northeurope",
+    "westeurope",
+    "uksouth",
+    "ukwest",
+    "francecentral",
+    "francesouth",
+    "germanywestcentral",
+    "swedencentral",
+    "switzerlandnorth",
+    "norwayeast",
+    "eastasia",
+    "southeastasia",
+    "japaneast",
+    "japanwest",
+    "australiaeast",
+    "australiasoutheast",
+    "australiacentral",
+    "brazilsouth",
+    "canadacentral",
+    "canadaeast",
+    "southafricanorth",
+    "southindia",
+    "centralindia",
+    "koreacentral",
+    "koreasouth",
 )
 
 
@@ -69,6 +108,131 @@ class MCPServerConfig(BaseModel):
             expanded = re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), ""), value)
             result[key] = expanded
         return result
+
+
+class AzureConfig(BaseModel):
+    """Configuration for Azure infrastructure."""
+
+    resource_group: str = Field(
+        description="Azure resource group name (alphanumeric, dash, underscore only)"
+    )
+    location: str = Field(
+        default="eastus",
+        description="Azure region (e.g., eastus, westus2, northeurope)",
+    )
+    vm_size: str | None = Field(
+        default=None,
+        description="Azure VM size (e.g., Standard_D4s_v3). Alternative to cpu_cores/memory_gb.",
+    )
+    cpu_cores: int = Field(
+        default=8,
+        description="Number of CPU cores (used if vm_size not specified)",
+    )
+    memory_gb: int = Field(
+        default=32,
+        description="Memory in GB (used if vm_size not specified)",
+    )
+    disk_gb: int = Field(
+        default=250,
+        description="Disk size in GB",
+    )
+    auto_shutdown: bool = Field(
+        default=True,
+        description="Automatically shutdown VM after evaluation completes",
+    )
+    preserve_on_error: bool = Field(
+        default=True,
+        description="Keep VM running if evaluation fails for debugging",
+    )
+    env_keys_to_export: list[str] = Field(
+        default_factory=lambda: ["ANTHROPIC_API_KEY"],
+        description="Environment variables to export to Azure VM",
+    )
+    ssh_key_path: Path | None = Field(
+        default=None,
+        description="Path to SSH key for VM access (optional, auto-generated if not provided)",
+    )
+    python_version: str = Field(
+        default="3.11",
+        description="Python version to install on VM",
+    )
+
+    @field_validator("resource_group")
+    @classmethod
+    def validate_resource_group(cls, v: str) -> str:
+        """Validate resource group name format.
+
+        Azure resource groups must be 1-90 characters and contain only
+        alphanumeric characters, dashes, and underscores.
+        """
+        if not re.match(r"^[a-zA-Z0-9_-]{1,90}$", v):
+            raise ValueError(
+                "resource_group must be 1-90 characters and contain only "
+                "alphanumeric characters, dashes, and underscores"
+            )
+        return v
+
+    @field_validator("location")
+    @classmethod
+    def validate_location(cls, v: str) -> str:
+        """Validate Azure region."""
+        if v not in VALID_AZURE_REGIONS:
+            raise ValueError(
+                f"Invalid Azure region: {v}. Must be one of: {', '.join(VALID_AZURE_REGIONS)}"
+            )
+        return v
+
+    @field_validator("cpu_cores")
+    @classmethod
+    def validate_cpu_cores(cls, v: int) -> int:
+        """Validate CPU cores is at least 1."""
+        if v < 1:
+            raise ValueError("cpu_cores must be at least 1")
+        return v
+
+    @field_validator("memory_gb")
+    @classmethod
+    def validate_memory_gb(cls, v: int) -> int:
+        """Validate memory is at least 1 GB."""
+        if v < 1:
+            raise ValueError("memory_gb must be at least 1")
+        return v
+
+    @field_validator("disk_gb")
+    @classmethod
+    def validate_disk_gb(cls, v: int) -> int:
+        """Validate disk size is at least 30 GB."""
+        if v < 30:
+            raise ValueError("disk_gb must be at least 30 GB")
+        return v
+
+    @field_validator("env_keys_to_export")
+    @classmethod
+    def validate_env_keys(cls, v: list[str]) -> list[str]:
+        """Validate env_keys_to_export is a list of strings."""
+        if not all(isinstance(key, str) for key in v):
+            raise ValueError("env_keys_to_export must be a list of strings")
+        return v
+
+
+class InfrastructureConfig(BaseModel):
+    """Configuration for infrastructure mode."""
+
+    mode: Literal["local", "azure"] = Field(
+        default="local",
+        description="Infrastructure mode: local or azure",
+    )
+    azure: AzureConfig | None = Field(
+        default=None,
+        description="Azure configuration (required when mode=azure)",
+    )
+
+    @model_validator(mode="after")
+    def validate_azure_config(self) -> "InfrastructureConfig":
+        """Ensure azure config is provided when mode is azure."""
+        if self.mode == "azure" and self.azure is None:
+            raise ValueError("azure configuration is required when mode=azure")
+        return self
 
 
 class HarnessConfig(BaseModel):
@@ -210,6 +374,11 @@ class HarnessConfig(BaseModel):
     enable_profiling: bool = Field(
         default=False,
         description="Enable comprehensive performance profiling (tool latency, memory, overhead)",
+    )
+
+    infrastructure: InfrastructureConfig = Field(
+        default_factory=InfrastructureConfig,
+        description="Infrastructure configuration (local or azure)",
     )
 
     @field_validator("provider")

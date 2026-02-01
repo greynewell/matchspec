@@ -332,6 +332,56 @@ max_concurrent: 4
 mcpbr run --config config.yaml
 ```
 
+## Infrastructure Modes
+
+mcpbr supports running evaluations on different infrastructure platforms, allowing you to scale evaluations or offload compute-intensive tasks to cloud VMs.
+
+### Local (Default)
+
+Run evaluations on your local machine:
+
+```yaml
+infrastructure:
+  mode: local  # default
+```
+
+This is the default mode - evaluations run directly on your machine using local Docker containers.
+
+### Azure VM
+
+Run evaluations on Azure Virtual Machines with automatic provisioning and cleanup:
+
+```yaml
+infrastructure:
+  mode: azure
+  azure:
+    resource_group: mcpbr-benchmarks
+    location: eastus
+    cpu_cores: 10
+    memory_gb: 40
+```
+
+**Key features:**
+- Zero manual VM setup - provisioned automatically from config
+- Automatic Docker, Python, and mcpbr installation
+- Test task validation before full evaluation
+- Auto-cleanup after completion (configurable)
+- Cost-optimized with automatic VM deletion
+
+**Example usage:**
+```bash
+# Run evaluation on Azure VM
+mcpbr run -c azure-config.yaml
+
+# VM is automatically created, evaluation runs, results are downloaded, VM is deleted
+```
+
+See [docs/infrastructure/azure.md](docs/infrastructure/azure.md) for full documentation including:
+- Prerequisites and authentication
+- VM sizing and cost estimation
+- Debugging with `preserve_on_error`
+- Troubleshooting guide
+
 ## Side-by-Side Server Comparison
 
 Compare two MCP servers head-to-head in a single evaluation run to see which implementation performs better.
