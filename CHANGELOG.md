@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **21 new benchmark implementations** (#6, #7, #18, #19, #20, #22, #24, #25, #26, #27, #28, #33, #34, #35, #37, #38, #40, #45, #46, #49): Initial stub implementations for all planned benchmarks
+  - **Code generation**: MBPP, APPS, CodeContests, BigCodeBench, LeetCode, CoderEval
+  - **Math/reasoning**: MATH, BigBench-Hard
+  - **Knowledge/QA**: TruthfulQA, HellaSwag, ARC
+  - **Agent/interactive**: GAIA, AgentBench, WebArena, TerminalBench, MLAgentBench, InterCode
+  - **Tool-use**: ToolBench
+  - **Code editing**: Aider Polyglot
+  - **Repository understanding**: RepoQA
+  - All benchmarks implement the full `Benchmark` protocol with `load_tasks`, `normalize_task`, `create_environment`, `evaluate`, `get_prebuilt_image`, and `get_prompt_template`
+
 ## [0.4.4] - 2026-02-01
 
 ### Added

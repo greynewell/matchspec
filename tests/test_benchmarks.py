@@ -3,12 +3,32 @@
 import pytest
 
 from mcpbr.benchmarks import (
+    AgentBenchBenchmark,
+    AiderPolyglotBenchmark,
+    APPSBenchmark,
+    ARCBenchmark,
     Benchmark,
+    BigBenchHardBenchmark,
+    BigCodeBenchBenchmark,
+    CodeContestsBenchmark,
+    CoderEvalBenchmark,
     CyberGymBenchmark,
+    GAIABenchmark,
     GSM8KBenchmark,
+    HellaSwagBenchmark,
     HumanEvalBenchmark,
+    InterCodeBenchmark,
+    LeetCodeBenchmark,
+    MATHBenchmark,
+    MBPPBenchmark,
     MCPToolBenchmark,
+    MLAgentBenchBenchmark,
+    RepoQABenchmark,
     SWEBenchmark,
+    TerminalBenchBenchmark,
+    ToolBenchBenchmark,
+    TruthfulQABenchmark,
+    WebArenaBenchmark,
     create_benchmark,
     list_benchmarks,
 )
@@ -27,7 +47,27 @@ class TestBenchmarkRegistry:
         assert "humaneval" in benchmarks
         assert "mcptoolbench" in benchmarks
         assert "gsm8k" in benchmarks
-        assert len(benchmarks) >= 7
+        assert "mbpp" in benchmarks
+        assert "math" in benchmarks
+        assert "truthfulqa" in benchmarks
+        assert "bigbench-hard" in benchmarks
+        assert "hellaswag" in benchmarks
+        assert "arc" in benchmarks
+        assert "apps" in benchmarks
+        assert "codecontests" in benchmarks
+        assert "bigcodebench" in benchmarks
+        assert "leetcode" in benchmarks
+        assert "codereval" in benchmarks
+        assert "repoqa" in benchmarks
+        assert "toolbench" in benchmarks
+        assert "aider-polyglot" in benchmarks
+        assert "terminalbench" in benchmarks
+        assert "gaia" in benchmarks
+        assert "agentbench" in benchmarks
+        assert "webarena" in benchmarks
+        assert "mlagentbench" in benchmarks
+        assert "intercode" in benchmarks
+        assert len(benchmarks) >= 27
 
     def test_create_swebench_lite(self) -> None:
         """Test creating SWE-bench Lite benchmark."""
@@ -805,3 +845,853 @@ class TestGSM8KBenchmark:
         _ = benchmark._extract_answer(text)
         # We don't assert specific behavior since scientific notation
         # could be added in the future
+
+
+class TestMBPPBenchmark:
+    """Tests for MBPP benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test MBPP initialization."""
+        benchmark = MBPPBenchmark()
+        assert benchmark.name == "mbpp"
+        assert benchmark.dataset == "google-research-datasets/mbpp"
+
+    def test_custom_dataset(self) -> None:
+        """Test MBPP with custom dataset."""
+        benchmark = MBPPBenchmark(dataset="custom/dataset")
+        assert benchmark.dataset == "custom/dataset"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing MBPP task."""
+        benchmark = MBPPBenchmark()
+        task = {
+            "instance_id": "mbpp_1",
+            "task_id": 1,
+            "text": "Write a function to add two numbers",
+            "code": "def add(a, b): return a + b",
+            "test_list": ["assert add(1, 2) == 3"],
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "mbpp_1"
+        assert "add two numbers" in normalized.problem_statement
+        assert normalized.repo == "mbpp/code"
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = MBPPBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_get_prebuilt_image(self) -> None:
+        """Test getting pre-built image (should be None)."""
+        benchmark = MBPPBenchmark()
+        assert benchmark.get_prebuilt_image({}) is None
+
+    def test_create_via_factory(self) -> None:
+        """Test creating MBPP via factory."""
+        benchmark = create_benchmark("mbpp")
+        assert isinstance(benchmark, MBPPBenchmark)
+
+    def test_mbpp_in_list(self) -> None:
+        """Test MBPP appears in benchmark list."""
+        assert "mbpp" in list_benchmarks()
+
+
+class TestMATHBenchmark:
+    """Tests for MATH benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test MATH initialization."""
+        benchmark = MATHBenchmark()
+        assert benchmark.name == "math"
+        assert benchmark.dataset == "hendrycks/competition_math"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing MATH task."""
+        benchmark = MATHBenchmark()
+        task = {
+            "instance_id": "math_0",
+            "problem": "Find the value of x if 2x + 3 = 7",
+            "solution": "2x = 4, so x = \\boxed{2}",
+            "level": "Level 1",
+            "type": "Algebra",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "math_0"
+        assert "2x + 3 = 7" in normalized.problem_statement
+
+    def test_extract_boxed_answer(self) -> None:
+        """Test extracting boxed answers."""
+        benchmark = MATHBenchmark()
+        assert benchmark._extract_boxed_answer("The answer is \\boxed{42}") == "42"
+        assert benchmark._extract_boxed_answer("\\boxed{\\frac{1}{2}}") == "\\frac{1}{2}"
+
+    def test_normalize_answer(self) -> None:
+        """Test answer normalization."""
+        benchmark = MATHBenchmark()
+        assert benchmark._normalize_answer(" 42 ") == "42"
+        assert benchmark._normalize_answer("\\left(1\\right)") == "(1)"
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = MATHBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+        assert "\\boxed" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating MATH via factory."""
+        benchmark = create_benchmark("math")
+        assert isinstance(benchmark, MATHBenchmark)
+
+
+class TestTruthfulQABenchmark:
+    """Tests for TruthfulQA benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test TruthfulQA initialization."""
+        benchmark = TruthfulQABenchmark()
+        assert benchmark.name == "truthfulqa"
+        assert benchmark.dataset == "truthfulqa/truthful_qa"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing TruthfulQA task."""
+        benchmark = TruthfulQABenchmark()
+        task = {
+            "instance_id": "truthfulqa_0",
+            "question": "What happens if you eat watermelon seeds?",
+            "category": "Health",
+            "best_answer": "Nothing bad happens",
+            "correct_answers": ["Nothing bad happens", "They pass through your body"],
+            "incorrect_answers": ["A watermelon grows in your stomach"],
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "truthfulqa_0"
+        assert "watermelon seeds" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = TruthfulQABenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+        assert "truthful" in prompt.lower()
+
+    def test_create_via_factory(self) -> None:
+        """Test creating TruthfulQA via factory."""
+        benchmark = create_benchmark("truthfulqa")
+        assert isinstance(benchmark, TruthfulQABenchmark)
+
+
+class TestBigBenchHardBenchmark:
+    """Tests for BigBench-Hard benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test BBH initialization."""
+        benchmark = BigBenchHardBenchmark()
+        assert benchmark.name == "bigbench-hard"
+        assert benchmark.dataset == "lukaemon/bbh"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing BBH task."""
+        benchmark = BigBenchHardBenchmark()
+        task = {
+            "instance_id": "bbh_boolean_expressions_0",
+            "input": "Evaluate: True and False",
+            "target": "False",
+            "subtask": "boolean_expressions",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "bbh_boolean_expressions_0"
+        assert "True and False" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = BigBenchHardBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating BBH via factory."""
+        benchmark = create_benchmark("bigbench-hard")
+        assert isinstance(benchmark, BigBenchHardBenchmark)
+
+
+class TestHellaSwagBenchmark:
+    """Tests for HellaSwag benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test HellaSwag initialization."""
+        benchmark = HellaSwagBenchmark()
+        assert benchmark.name == "hellaswag"
+        assert benchmark.dataset == "Rowan/hellaswag"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing HellaSwag task."""
+        benchmark = HellaSwagBenchmark()
+        task = {
+            "instance_id": "hellaswag_0",
+            "ctx": "A person is cooking dinner.",
+            "endings": ["They eat.", "They fly.", "They sleep.", "They swim."],
+            "label": "0",
+            "activity_label": "cooking",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "hellaswag_0"
+        assert "cooking dinner" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = HellaSwagBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating HellaSwag via factory."""
+        benchmark = create_benchmark("hellaswag")
+        assert isinstance(benchmark, HellaSwagBenchmark)
+
+
+class TestARCBenchmark:
+    """Tests for ARC benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test ARC initialization."""
+        benchmark = ARCBenchmark()
+        assert benchmark.name == "arc"
+        assert benchmark.dataset == "allenai/ai2_arc"
+        assert benchmark.subset == "ARC-Challenge"
+
+    def test_custom_subset(self) -> None:
+        """Test ARC with custom subset."""
+        benchmark = ARCBenchmark(subset="ARC-Easy")
+        assert benchmark.subset == "ARC-Easy"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing ARC task."""
+        benchmark = ARCBenchmark()
+        task = {
+            "instance_id": "arc_123",
+            "id": "123",
+            "question": "What causes seasons on Earth?",
+            "choices": {
+                "label": ["A", "B", "C", "D"],
+                "text": ["The Moon", "Earth's tilt", "The Sun", "Wind"],
+            },
+            "answerKey": "B",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "arc_123"
+        assert "seasons" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = ARCBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating ARC via factory."""
+        benchmark = create_benchmark("arc")
+        assert isinstance(benchmark, ARCBenchmark)
+
+
+class TestAPPSBenchmark:
+    """Tests for APPS benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test APPS initialization."""
+        benchmark = APPSBenchmark()
+        assert benchmark.name == "apps"
+        assert benchmark.dataset == "codeparrot/apps"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing APPS task."""
+        benchmark = APPSBenchmark()
+        task = {
+            "instance_id": "apps_0",
+            "question": "Read N integers and print their sum.",
+            "difficulty": "introductory",
+            "input_output": '{"inputs": ["3\\n1 2 3"], "outputs": ["6"]}',
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "apps_0"
+        assert "sum" in normalized.problem_statement.lower()
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = APPSBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating APPS via factory."""
+        benchmark = create_benchmark("apps")
+        assert isinstance(benchmark, APPSBenchmark)
+
+
+class TestCodeContestsBenchmark:
+    """Tests for CodeContests benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test CodeContests initialization."""
+        benchmark = CodeContestsBenchmark()
+        assert benchmark.name == "codecontests"
+        assert benchmark.dataset == "deepmind/code_contests"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing CodeContests task."""
+        benchmark = CodeContestsBenchmark()
+        task = {
+            "instance_id": "codecontests_abc123",
+            "name": "abc123",
+            "description": "Find the shortest path in a graph.",
+            "difficulty": 3,
+            "source": "codeforces",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "codecontests_abc123"
+        assert "shortest path" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = CodeContestsBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating CodeContests via factory."""
+        benchmark = create_benchmark("codecontests")
+        assert isinstance(benchmark, CodeContestsBenchmark)
+
+
+class TestBigCodeBenchBenchmark:
+    """Tests for BigCodeBench benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test BigCodeBench initialization."""
+        benchmark = BigCodeBenchBenchmark()
+        assert benchmark.name == "bigcodebench"
+        assert benchmark.dataset == "bigcode/bigcodebench"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing BigCodeBench task."""
+        benchmark = BigCodeBenchBenchmark()
+        task = {
+            "instance_id": "bigcodebench_task_0",
+            "task_id": "task_0",
+            "instruct_prompt": "Implement a function that sorts a list",
+            "libs": ["numpy", "pandas"],
+            "test": "assert sort_list([3,1,2]) == [1,2,3]",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "bigcodebench_task_0"
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = BigCodeBenchBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating BigCodeBench via factory."""
+        benchmark = create_benchmark("bigcodebench")
+        assert isinstance(benchmark, BigCodeBenchBenchmark)
+
+
+class TestLeetCodeBenchmark:
+    """Tests for LeetCode benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test LeetCode initialization."""
+        benchmark = LeetCodeBenchmark()
+        assert benchmark.name == "leetcode"
+        assert benchmark.dataset == "greengerong/leetcode"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing LeetCode task."""
+        benchmark = LeetCodeBenchmark()
+        task = {
+            "instance_id": "leetcode_1",
+            "id": "1",
+            "title": "Two Sum",
+            "content": "Given an array of integers...",
+            "difficulty": "Easy",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "leetcode_1"
+        assert "Two Sum" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = LeetCodeBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating LeetCode via factory."""
+        benchmark = create_benchmark("leetcode")
+        assert isinstance(benchmark, LeetCodeBenchmark)
+
+
+class TestCoderEvalBenchmark:
+    """Tests for CoderEval benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test CoderEval initialization."""
+        benchmark = CoderEvalBenchmark()
+        assert benchmark.name == "codereval"
+        assert benchmark.dataset == "CoderEval/CoderEval"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing CoderEval task."""
+        benchmark = CoderEvalBenchmark()
+        task = {
+            "instance_id": "codereval_0",
+            "task_id": "0",
+            "function_name": "parse_config",
+            "language": "Python",
+            "repo": "example/repo",
+            "commit": "abc123",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "codereval_0"
+        assert "parse_config" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = CoderEvalBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating CoderEval via factory."""
+        benchmark = create_benchmark("codereval")
+        assert isinstance(benchmark, CoderEvalBenchmark)
+
+
+class TestRepoQABenchmark:
+    """Tests for RepoQA benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test RepoQA initialization."""
+        benchmark = RepoQABenchmark()
+        assert benchmark.name == "repoqa"
+        assert benchmark.dataset == "evaluating/RepoQA"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing RepoQA task."""
+        benchmark = RepoQABenchmark()
+        task = {
+            "instance_id": "repoqa_0",
+            "function_name": "calculate_metrics",
+            "language": "Python",
+            "description": "Calculates evaluation metrics",
+            "repo": "example/repo",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "repoqa_0"
+        assert (
+            "calculate_metrics" in normalized.problem_statement
+            or "evaluation" in normalized.problem_statement.lower()
+        )
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = RepoQABenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating RepoQA via factory."""
+        benchmark = create_benchmark("repoqa")
+        assert isinstance(benchmark, RepoQABenchmark)
+
+
+class TestToolBenchBenchmark:
+    """Tests for ToolBench benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test ToolBench initialization."""
+        benchmark = ToolBenchBenchmark()
+        assert benchmark.name == "toolbench"
+        assert benchmark.dataset == "ToolBench/ToolBench"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing ToolBench task."""
+        benchmark = ToolBenchBenchmark()
+        task = {
+            "instance_id": "toolbench_0",
+            "id": "0",
+            "query": "Get the weather for New York",
+            "tools": [{"name": "get_weather", "description": "Get weather data"}],
+            "category": "weather",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "toolbench_0"
+        assert "weather" in normalized.problem_statement.lower()
+
+    def test_extract_tool_calls_json(self) -> None:
+        """Test extracting tool calls from JSON."""
+        benchmark = ToolBenchBenchmark()
+        solution = '[{"name": "get_weather", "parameters": {"city": "NYC"}}]'
+        calls = benchmark._extract_tool_calls(solution)
+        assert len(calls) == 1
+        assert calls[0]["name"] == "get_weather"
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = ToolBenchBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating ToolBench via factory."""
+        benchmark = create_benchmark("toolbench")
+        assert isinstance(benchmark, ToolBenchBenchmark)
+
+
+class TestAiderPolyglotBenchmark:
+    """Tests for Aider Polyglot benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test Aider Polyglot initialization."""
+        benchmark = AiderPolyglotBenchmark()
+        assert benchmark.name == "aider-polyglot"
+        assert benchmark.dataset == "aider-ai/polyglot-benchmark"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing Aider Polyglot task."""
+        benchmark = AiderPolyglotBenchmark()
+        task = {
+            "instance_id": "aider_0",
+            "task_id": "0",
+            "exercise": "hello-world",
+            "language": "python",
+            "source_file": "hello_world.py",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "aider_0"
+        assert "hello-world" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = AiderPolyglotBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating Aider Polyglot via factory."""
+        benchmark = create_benchmark("aider-polyglot")
+        assert isinstance(benchmark, AiderPolyglotBenchmark)
+
+
+class TestTerminalBenchBenchmark:
+    """Tests for TerminalBench benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test TerminalBench initialization."""
+        benchmark = TerminalBenchBenchmark()
+        assert benchmark.name == "terminalbench"
+        assert benchmark.dataset == "TerminalBench/TerminalBench"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing TerminalBench task."""
+        benchmark = TerminalBenchBenchmark()
+        task = {
+            "instance_id": "terminalbench_0",
+            "task_id": "0",
+            "instruction": "Create a directory named 'test'",
+            "category": "file_operations",
+            "validation_command": "test -d test",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "terminalbench_0"
+        assert "directory" in normalized.problem_statement.lower()
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = TerminalBenchBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating TerminalBench via factory."""
+        benchmark = create_benchmark("terminalbench")
+        assert isinstance(benchmark, TerminalBenchBenchmark)
+
+
+class TestGAIABenchmark:
+    """Tests for GAIA benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test GAIA initialization."""
+        benchmark = GAIABenchmark()
+        assert benchmark.name == "gaia"
+        assert benchmark.dataset == "gaia-benchmark/GAIA"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing GAIA task."""
+        benchmark = GAIABenchmark()
+        task = {
+            "instance_id": "gaia_0",
+            "task_id": "0",
+            "Question": "What is the capital of France?",
+            "Level": 1,
+            "Final answer": "Paris",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "gaia_0"
+        assert "capital of France" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = GAIABenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating GAIA via factory."""
+        benchmark = create_benchmark("gaia")
+        assert isinstance(benchmark, GAIABenchmark)
+
+
+class TestAgentBenchBenchmark:
+    """Tests for AgentBench benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test AgentBench initialization."""
+        benchmark = AgentBenchBenchmark()
+        assert benchmark.name == "agentbench"
+        assert benchmark.dataset == "THUDM/AgentBench"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing AgentBench task."""
+        benchmark = AgentBenchBenchmark()
+        task = {
+            "instance_id": "agentbench_0",
+            "task_id": "0",
+            "environment": "os",
+            "instruction": "List all files in the current directory",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "agentbench_0"
+        assert "os" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = AgentBenchBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating AgentBench via factory."""
+        benchmark = create_benchmark("agentbench")
+        assert isinstance(benchmark, AgentBenchBenchmark)
+
+
+class TestWebArenaBenchmark:
+    """Tests for WebArena benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test WebArena initialization."""
+        benchmark = WebArenaBenchmark()
+        assert benchmark.name == "webarena"
+        assert benchmark.dataset == "WebArena/WebArena"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing WebArena task."""
+        benchmark = WebArenaBenchmark()
+        task = {
+            "instance_id": "webarena_0",
+            "task_id": "0",
+            "intent": "Find the cheapest laptop on the shopping site",
+            "sites": ["shopping"],
+            "eval": {"eval_types": ["string_match"], "reference_answers": "Laptop X"},
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "webarena_0"
+        assert "laptop" in normalized.problem_statement.lower()
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = WebArenaBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating WebArena via factory."""
+        benchmark = create_benchmark("webarena")
+        assert isinstance(benchmark, WebArenaBenchmark)
+
+
+class TestMLAgentBenchBenchmark:
+    """Tests for MLAgentBench benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test MLAgentBench initialization."""
+        benchmark = MLAgentBenchBenchmark()
+        assert benchmark.name == "mlagentbench"
+        assert benchmark.dataset == "MLAgentBench/MLAgentBench"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing MLAgentBench task."""
+        benchmark = MLAgentBenchBenchmark()
+        task = {
+            "instance_id": "mlagentbench_0",
+            "task_id": "0",
+            "research_problem": "Improve model accuracy on CIFAR-10",
+            "domain": "cv",
+            "metric": "accuracy",
+            "baseline_score": 0.85,
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "mlagentbench_0"
+        assert "CIFAR-10" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = MLAgentBenchBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating MLAgentBench via factory."""
+        benchmark = create_benchmark("mlagentbench")
+        assert isinstance(benchmark, MLAgentBenchBenchmark)
+
+
+class TestInterCodeBenchmark:
+    """Tests for InterCode benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test InterCode initialization."""
+        benchmark = InterCodeBenchmark()
+        assert benchmark.name == "intercode"
+        assert benchmark.dataset == "intercode-benchmark/intercode"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing InterCode task."""
+        benchmark = InterCodeBenchmark()
+        task = {
+            "instance_id": "intercode_0",
+            "task_id": "0",
+            "query": "Find all .py files in the current directory",
+            "environment": "bash",
+            "gold_solution": "find . -name '*.py'",
+        }
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "intercode_0"
+        assert "bash" in normalized.problem_statement
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = InterCodeBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+
+    def test_create_via_factory(self) -> None:
+        """Test creating InterCode via factory."""
+        benchmark = create_benchmark("intercode")
+        assert isinstance(benchmark, InterCodeBenchmark)
+
+
+class TestNewBenchmarkProtocol:
+    """Tests for protocol compliance of all new benchmarks."""
+
+    @pytest.mark.parametrize(
+        "benchmark_class",
+        [
+            MBPPBenchmark,
+            MATHBenchmark,
+            TruthfulQABenchmark,
+            BigBenchHardBenchmark,
+            HellaSwagBenchmark,
+            ARCBenchmark,
+            APPSBenchmark,
+            CodeContestsBenchmark,
+            BigCodeBenchBenchmark,
+            LeetCodeBenchmark,
+            CoderEvalBenchmark,
+            RepoQABenchmark,
+            ToolBenchBenchmark,
+            AiderPolyglotBenchmark,
+            TerminalBenchBenchmark,
+            GAIABenchmark,
+            AgentBenchBenchmark,
+            WebArenaBenchmark,
+            MLAgentBenchBenchmark,
+            InterCodeBenchmark,
+        ],
+    )
+    def test_implements_protocol(self, benchmark_class: type) -> None:
+        """Test that benchmark implements the Benchmark protocol."""
+        benchmark = benchmark_class()
+        assert isinstance(benchmark, Benchmark)
+        assert hasattr(benchmark, "name")
+        assert hasattr(benchmark, "load_tasks")
+        assert hasattr(benchmark, "normalize_task")
+        assert hasattr(benchmark, "create_environment")
+        assert hasattr(benchmark, "evaluate")
+        assert hasattr(benchmark, "get_prebuilt_image")
+        assert hasattr(benchmark, "get_prompt_template")
+
+    @pytest.mark.parametrize(
+        "benchmark_name",
+        [
+            "mbpp",
+            "math",
+            "truthfulqa",
+            "bigbench-hard",
+            "hellaswag",
+            "arc",
+            "apps",
+            "codecontests",
+            "bigcodebench",
+            "leetcode",
+            "codereval",
+            "repoqa",
+            "toolbench",
+            "aider-polyglot",
+            "terminalbench",
+            "gaia",
+            "agentbench",
+            "webarena",
+            "mlagentbench",
+            "intercode",
+        ],
+    )
+    def test_in_registry(self, benchmark_name: str) -> None:
+        """Test that benchmark is registered and listed."""
+        benchmarks = list_benchmarks()
+        assert benchmark_name in benchmarks
+
+    @pytest.mark.parametrize(
+        "benchmark_name",
+        [
+            "mbpp",
+            "math",
+            "truthfulqa",
+            "bigbench-hard",
+            "hellaswag",
+            "arc",
+            "apps",
+            "codecontests",
+            "bigcodebench",
+            "leetcode",
+            "codereval",
+            "repoqa",
+            "toolbench",
+            "aider-polyglot",
+            "terminalbench",
+            "gaia",
+            "agentbench",
+            "webarena",
+            "mlagentbench",
+            "intercode",
+        ],
+    )
+    def test_factory_creates(self, benchmark_name: str) -> None:
+        """Test that factory creates the benchmark correctly."""
+        benchmark = create_benchmark(benchmark_name)
+        assert isinstance(benchmark, Benchmark)
+        assert hasattr(benchmark, "name")
