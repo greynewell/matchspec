@@ -432,7 +432,8 @@ class DockerEnvironmentManager:
                     return container
                 except docker.errors.APIError as e:
                     # Only retry on 500 errors (transient Docker daemon issues)
-                    if hasattr(e, "response") and e.response.status_code == 500:
+                    response = getattr(e, "response", None)
+                    if response is not None and getattr(response, "status_code", None) == 500:
                         if attempt < max_retries:
                             delay = base_delay * (2**attempt)  # Exponential backoff: 1s, 2s, 4s
                             logger.warning(

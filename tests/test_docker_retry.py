@@ -19,7 +19,7 @@ def mock_docker_client():
 
 
 @pytest.fixture
-def manager(mock_docker_client):
+def manager(mock_docker_client):  # noqa: ARG001
     """Create a DockerEnvironmentManager instance."""
     return DockerEnvironmentManager()
 
