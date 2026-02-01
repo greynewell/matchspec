@@ -404,9 +404,6 @@ RUN pip install --no-cache-dir \\
 
 CMD ["/bin/bash"]
 """
-            import tempfile
-            import os
-
             with tempfile.TemporaryDirectory() as tmpdir:
                 dockerfile_path = os.path.join(tmpdir, "Dockerfile")
                 with open(dockerfile_path, "w") as f:
@@ -417,13 +414,17 @@ CMD ["/bin/bash"]
                     tag=self.FALLBACK_IMAGE,
                     rm=True,
                 )
-        except Exception:
+        except Exception as e:
             # Last resort: just tag the base image
+            logger.warning(
+                f"Failed to build comprehensive fallback image: {e}. "
+                f"Falling back to tagging python:3.11-slim as {self.FALLBACK_IMAGE}"
+            )
             try:
                 img = self.client.images.get("python:3.11-slim")
                 img.tag(self.FALLBACK_IMAGE)
-            except Exception:
-                pass
+            except Exception as tag_error:
+                logger.error(f"Failed to create fallback image {self.FALLBACK_IMAGE}: {tag_error}")
 
     async def create_environment(
         self,
