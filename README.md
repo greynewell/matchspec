@@ -352,7 +352,7 @@ mcpbr run -c comparison-config.yaml -o results.json
 
 ### Results Output
 
-```
+```text
 Side-by-Side MCP Server Comparison
 
 ┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┓

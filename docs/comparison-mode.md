@@ -48,7 +48,7 @@ mcpbr run -c comparison.yaml -o results.json
 
 The output will show:
 
-```
+```text
 Side-by-Side MCP Server Comparison
 
 ┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┓
@@ -284,7 +284,7 @@ mcp_server_b:
 
 - **2x Execution Time**: Each task runs twice (once per server)
 - **2x API Costs**: Both servers make independent API calls
-- **2x Compute**: Both servers run simultaneously (sequential execution)
+- **2x Compute**: Both servers run sequentially (no parallel execution)
 
 ### Budget Tracking
 
