@@ -1,5 +1,7 @@
 """APPS benchmark implementation."""
 
+import base64
+import json
 from typing import Any
 
 from datasets import load_dataset
@@ -162,7 +164,12 @@ class APPSBenchmark:
         Returns:
             Dictionary with evaluation results including 'resolved' boolean.
         """
-        import json
+        # Write solution to container
+        encoded_solution = base64.b64encode(solution.encode()).decode()
+        await env.exec_command(
+            f"printf '%s' '{encoded_solution}' | base64 -d > solution.py",
+            timeout=10,
+        )
 
         input_output = task.get("input_output", "")
         if not input_output:
@@ -182,11 +189,9 @@ class APPSBenchmark:
         passed = 0
         total = min(len(inputs), len(outputs))
 
-        for inp, expected in zip(inputs[:total], outputs[:total]):
-            import base64
-
+        for inp, expected in zip(inputs[:total], outputs[:total], strict=False):
             encoded_input = base64.b64encode(str(inp).encode()).decode()
-            exit_code, stdout, stderr = await env.exec_command(
+            exit_code, stdout, _stderr = await env.exec_command(
                 f"echo '{encoded_input}' | base64 -d | python3 solution.py",
                 timeout=10,
             )
@@ -201,7 +206,7 @@ class APPSBenchmark:
             "pass_rate": passed / total if total > 0 else 0.0,
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:

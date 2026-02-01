@@ -16,8 +16,8 @@ class RepoQABenchmark:
     The "Searching Needle Function" task requires identifying a target function
     from a full repository context.
 
-    Evaluation uses cosine similarity between the model's description
-    and the ground truth function description.
+    Evaluation checks if the model correctly identifies the target function
+    by name (substring match).
     """
 
     name = "repoqa"
@@ -174,11 +174,11 @@ class RepoQABenchmark:
             "function_found": resolved,
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: RepoQA task dictionary.
+            _task: RepoQA task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

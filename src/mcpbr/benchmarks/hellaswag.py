@@ -1,5 +1,6 @@
 """HellaSwag benchmark implementation."""
 
+import re
 from typing import Any
 
 from datasets import load_dataset
@@ -167,9 +168,6 @@ class HellaSwagBenchmark:
 
         correct_label = str(label)
 
-        # Extract the selected option from the solution
-        import re
-
         # Look for a single digit that represents the answer
         matches = re.findall(r"\b([0-3])\b", solution)
         if not matches:
@@ -185,11 +183,11 @@ class HellaSwagBenchmark:
             "correct_label": correct_label,
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: HellaSwag task dictionary.
+            _task: HellaSwag task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

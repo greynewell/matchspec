@@ -196,8 +196,8 @@ class MATHBenchmark:
         if not text:
             return None
 
-        # Try \\boxed{...} pattern (handles nested braces)
-        match = re.search(r"\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}", text)
+        # Try \\boxed{...} pattern (handles nested braces up to 2 levels)
+        match = re.search(r"\\boxed\{([^{}]*(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\}[^{}]*)*)\}", text)
         if match:
             return match.group(1).strip()
 
@@ -224,11 +224,11 @@ class MATHBenchmark:
         normalized = normalized.replace("\\,", "")
         return normalized
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: MATH task dictionary.
+            _task: MATH task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

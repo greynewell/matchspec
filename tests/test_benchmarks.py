@@ -415,7 +415,7 @@ class TestHumanEvalBenchmark:
         }
 
         normalized = benchmark.normalize_task(task)
-        assert normalized.task_id == "HumanEval/0"
+        assert normalized.task_id == "HumanEval_0"
         assert "Complete the following Python function" in normalized.problem_statement
         assert normalized.repo == "openai/humaneval"
         assert normalized.commit == "HEAD"

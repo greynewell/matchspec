@@ -1,5 +1,6 @@
 """CodeContests benchmark implementation."""
 
+import base64
 import json
 from typing import Any
 
@@ -137,7 +138,7 @@ class CodeContestsBenchmark:
             outputs = public_tests.get("output", [])
             if inputs and outputs:
                 statement += "\n\nSample test cases:\n"
-                for i, (inp, out) in enumerate(zip(inputs[:3], outputs[:3])):
+                for i, (inp, out) in enumerate(zip(inputs[:3], outputs[:3], strict=False)):
                     statement += f"\nInput {i + 1}:\n{inp}\nExpected Output {i + 1}:\n{out}\n"
 
         return statement
@@ -182,7 +183,12 @@ class CodeContestsBenchmark:
         Returns:
             Dictionary with evaluation results including 'resolved' boolean.
         """
-        import base64
+        # Write solution to container
+        encoded_solution = base64.b64encode(solution.encode()).decode()
+        await env.exec_command(
+            f"printf '%s' '{encoded_solution}' | base64 -d > solution.py",
+            timeout=10,
+        )
 
         # Gather test cases from both public and generated tests
         all_inputs: list[str] = []
@@ -205,9 +211,9 @@ class CodeContestsBenchmark:
         passed = 0
         total = min(len(all_inputs), len(all_outputs))
 
-        for inp, expected in zip(all_inputs[:total], all_outputs[:total]):
+        for inp, expected in zip(all_inputs[:total], all_outputs[:total], strict=False):
             encoded_input = base64.b64encode(str(inp).encode()).decode()
-            exit_code, stdout, stderr = await env.exec_command(
+            exit_code, stdout, _stderr = await env.exec_command(
                 f"echo '{encoded_input}' | base64 -d | timeout 10 python3 solution.py",
                 timeout=15,
             )
@@ -222,11 +228,11 @@ class CodeContestsBenchmark:
             "pass_rate": passed / total if total > 0 else 0.0,
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: CodeContests task dictionary.
+            _task: CodeContests task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

@@ -1,5 +1,6 @@
 """ARC (AI2 Reasoning Challenge) benchmark implementation."""
 
+import re
 from typing import Any
 
 from datasets import load_dataset
@@ -123,7 +124,7 @@ class ARCBenchmark:
         texts = choices.get("text", [])
         if labels and texts:
             statement += "Options:\n"
-            for label, text in zip(labels, texts):
+            for label, text in zip(labels, texts, strict=True):
                 statement += f"  ({label}) {text}\n"
 
         statement += "\nProvide only the letter of the correct answer."
@@ -173,9 +174,6 @@ class ARCBenchmark:
         if not answer_key:
             return {"resolved": False, "error": "No answer key available"}
 
-        # Extract the answer letter from the solution
-        import re
-
         # Look for a single letter answer (A, B, C, D, E or 1, 2, 3, 4)
         matches = re.findall(r"\b([A-E1-5])\b", solution.upper())
         if not matches:
@@ -190,11 +188,11 @@ class ARCBenchmark:
             "correct_answer": answer_key,
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: ARC task dictionary.
+            _task: ARC task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

@@ -186,11 +186,11 @@ class AiderPolyglotBenchmark:
             "stderr": stderr[:1000] if stderr else "",
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: Aider Polyglot task dictionary.
+            _task: Aider Polyglot task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

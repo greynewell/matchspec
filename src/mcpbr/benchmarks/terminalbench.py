@@ -149,7 +149,9 @@ class TerminalBenchBenchmark:
         # Run setup commands if provided
         setup_cmd = task.get("setup_command", "")
         if setup_cmd:
-            await env.exec_command(setup_cmd, timeout=60)
+            exit_code, _stdout, stderr = await env.exec_command(setup_cmd, timeout=60)
+            if exit_code != 0:
+                raise RuntimeError(f"Setup command failed (exit {exit_code}): {stderr[:500]}")
 
         return env
 
@@ -188,11 +190,11 @@ class TerminalBenchBenchmark:
             "stderr": stderr[:1000] if stderr else "",
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: TerminalBench task dictionary.
+            _task: TerminalBench task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

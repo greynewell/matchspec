@@ -186,11 +186,11 @@ class WebArenaBenchmark:
             "reference": str(reference)[:500],
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: WebArena task dictionary.
+            _task: WebArena task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

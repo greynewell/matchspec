@@ -170,11 +170,11 @@ class AgentBenchBenchmark:
             "expected_output": expected,
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: AgentBench task dictionary.
+            _task: AgentBench task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

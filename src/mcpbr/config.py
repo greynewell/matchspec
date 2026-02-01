@@ -297,7 +297,7 @@ class HarnessConfig(BaseModel):
 
     benchmark: str = Field(
         default="swe-bench-verified",
-        description="Benchmark to run (swe-bench-lite, swe-bench-verified, swe-bench-full, cybergym, gsm8k, humaneval, mcptoolbench)",
+        description="Benchmark to run (use `mcpbr benchmarks` for the full list).",
     )
 
     cybergym_level: int = Field(

@@ -1,5 +1,6 @@
 """InterCode benchmark implementation."""
 
+import base64
 from typing import Any
 
 from datasets import load_dataset
@@ -161,34 +162,62 @@ class InterCodeBenchmark:
     ) -> dict[str, Any]:
         """Evaluate a solution for InterCode task.
 
-        Checks if the agent achieved the correct state.
+        Checks if the agent achieved the correct state by comparing
+        gold solution output with agent output.
 
         Args:
             env: Task environment.
             task: InterCode task dictionary.
-            solution: Solution to evaluate.
+            solution: Agent's solution output (read from output.txt).
 
         Returns:
             Dictionary with evaluation results including 'resolved' boolean.
         """
+        _ = solution  # Agent output is read from output.txt in the environment
+
         gold_solution = task.get("gold_solution", "")
         environment = task.get("environment", "bash")
 
         if not gold_solution:
             return {"resolved": False, "error": "No gold solution available"}
 
-        # Run gold solution and compare output
-        if environment == "bash":
-            cmd = gold_solution
-        elif environment == "sql":
-            cmd = f'echo "{gold_solution}" | sqlite3 database.db'
-        elif environment == "python":
-            cmd = f'python3 -c "{gold_solution}"'
-        else:
-            cmd = gold_solution
+        # Write gold solution to a temp file and execute it (avoids shell injection)
+        encoded_gold = base64.b64encode(gold_solution.encode()).decode()
 
-        exit_code_gold, stdout_gold, _ = await env.exec_command(cmd, timeout=30)
-        exit_code_agent, stdout_agent, _ = await env.exec_command(
+        if environment == "bash":
+            await env.exec_command(
+                f"printf '%s' '{encoded_gold}' | base64 -d > /tmp/gold_solution.sh",
+                timeout=10,
+            )
+            _exit_code_gold, stdout_gold, _ = await env.exec_command(
+                "bash /tmp/gold_solution.sh", timeout=30
+            )
+        elif environment == "sql":
+            await env.exec_command(
+                f"printf '%s' '{encoded_gold}' | base64 -d > /tmp/gold_solution.sql",
+                timeout=10,
+            )
+            _exit_code_gold, stdout_gold, _ = await env.exec_command(
+                "sqlite3 database.db < /tmp/gold_solution.sql", timeout=30
+            )
+        elif environment == "python":
+            await env.exec_command(
+                f"printf '%s' '{encoded_gold}' | base64 -d > /tmp/gold_solution.py",
+                timeout=10,
+            )
+            _exit_code_gold, stdout_gold, _ = await env.exec_command(
+                "python3 /tmp/gold_solution.py", timeout=30
+            )
+        else:
+            await env.exec_command(
+                f"printf '%s' '{encoded_gold}' | base64 -d > /tmp/gold_solution.sh",
+                timeout=10,
+            )
+            _exit_code_gold, stdout_gold, _ = await env.exec_command(
+                "bash /tmp/gold_solution.sh", timeout=30
+            )
+
+        _exit_code_agent, stdout_agent, _ = await env.exec_command(
             "cat output.txt 2>/dev/null || echo ''",
             timeout=10,
         )
@@ -200,11 +229,11 @@ class InterCodeBenchmark:
             "agent_output": stdout_agent[:500],
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: InterCode task dictionary.
+            _task: InterCode task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

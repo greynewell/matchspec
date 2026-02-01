@@ -1,5 +1,6 @@
 """MBPP (Mostly Basic Python Problems) benchmark implementation."""
 
+import base64
 from typing import Any
 
 from datasets import load_dataset
@@ -165,8 +166,6 @@ class MBPPBenchmark:
             return {"resolved": False, "error": "No test cases provided"}
 
         # Write solution and test file
-        import base64
-
         test_code = f"{solution}\n\n"
         for test in test_list:
             test_code += f"{test}\n"
@@ -186,11 +185,11 @@ class MBPPBenchmark:
             "stderr": stderr[:1000] if stderr else "",
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name for MBPP task.
 
         Args:
-            task: MBPP task dictionary.
+            _task: MBPP task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

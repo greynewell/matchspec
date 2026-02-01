@@ -1,5 +1,6 @@
 """LeetCode benchmark implementation."""
 
+import base64
 from typing import Any
 
 from datasets import load_dataset
@@ -176,8 +177,6 @@ class LeetCodeBenchmark:
         """
         # LeetCode evaluation depends on test case format
         # Basic approach: look for test assertions in the solution
-        import base64
-
         test_code = solution + "\n\nprint('SOLUTION_EXECUTED')\n"
         encoded = base64.b64encode(test_code.encode()).decode()
 
@@ -194,11 +193,11 @@ class LeetCodeBenchmark:
             "stderr": stderr[:1000] if stderr else "",
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: LeetCode task dictionary.
+            _task: LeetCode task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

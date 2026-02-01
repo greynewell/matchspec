@@ -1,5 +1,6 @@
 """BigBench-Hard benchmark implementation."""
 
+import logging
 from typing import Any
 
 from datasets import load_dataset
@@ -7,11 +8,13 @@ from datasets import load_dataset
 from ..docker_env import DockerEnvironmentManager, TaskEnvironment
 from .base import BenchmarkTask
 
+logger = logging.getLogger(__name__)
+
 
 class BigBenchHardBenchmark:
     """BigBench-Hard benchmark implementation.
 
-    BigBench-Hard (BBH) consists of 23 challenging tasks from the BIG-Bench
+    BigBench-Hard (BBH) consists of 27 challenging tasks from the BIG-Bench
     suite where prior language model evaluations fell below average human
     performance. Tasks include boolean expressions, causal judgement,
     date understanding, disambiguation QA, formal fallacies, and more.
@@ -55,17 +58,21 @@ class BigBenchHardBenchmark:
         _ = filter_difficulty
         _ = filter_tags
 
-        # BBH has multiple subtasks; load a default or filter by category
+        # All 27 official BBH subtasks
         subtasks = [
             "boolean_expressions",
             "causal_judgement",
             "date_understanding",
             "disambiguation_qa",
+            "dyck_languages",
             "formal_fallacies",
             "geometric_shapes",
             "hyperbaton",
             "logical_deduction_five_objects",
+            "logical_deduction_seven_objects",
+            "logical_deduction_three_objects",
             "movie_recommendation",
+            "multistep_arithmetic_two",
             "navigate",
             "object_counting",
             "penguins_in_a_table",
@@ -76,6 +83,8 @@ class BigBenchHardBenchmark:
             "sports_understanding",
             "temporal_sequences",
             "tracking_shuffled_objects_five_objects",
+            "tracking_shuffled_objects_seven_objects",
+            "tracking_shuffled_objects_three_objects",
             "web_of_lies",
             "word_sorting",
         ]
@@ -84,6 +93,7 @@ class BigBenchHardBenchmark:
             subtasks = [s for s in subtasks if s in filter_category]
 
         all_tasks: list[dict[str, Any]] = []
+        errors: list[str] = []
         for subtask in subtasks:
             try:
                 ds = load_dataset(self.dataset, subtask, split="test")
@@ -93,7 +103,13 @@ class BigBenchHardBenchmark:
                     task["instance_id"] = f"bbh_{subtask}_{idx}"
                     all_tasks.append(task)
             except Exception:
+                errors.append(subtask)
+                logger.warning("Failed to load BBH subtask '%s' from '%s'", subtask, self.dataset)
                 continue
+
+        if not all_tasks:
+            msg = f"No BBH subtasks loaded from '{self.dataset}'. Failed: {errors}"
+            raise RuntimeError(msg)
 
         if task_ids:
             task_id_set = set(task_ids)
@@ -171,16 +187,16 @@ class BigBenchHardBenchmark:
 
     async def evaluate(
         self,
-        env: TaskEnvironment,
+        _env: TaskEnvironment,
         task: dict[str, Any],
         solution: str,
     ) -> dict[str, Any]:
         """Evaluate a solution for BBH task.
 
-        Uses exact match on the extracted answer.
+        Uses exact match on the extracted answer (last non-empty line).
 
         Args:
-            env: Task environment.
+            _env: Task environment (unused for answer-matching evaluation).
             task: BBH task dictionary.
             solution: Solution to evaluate.
 
@@ -191,23 +207,24 @@ class BigBenchHardBenchmark:
         if not target:
             return {"resolved": False, "error": "No target answer available"}
 
-        # Normalize both for comparison
         target_norm = target.strip().lower()
-        solution_norm = solution.strip().lower()
 
-        # Check if target appears in solution (exact substring match)
-        resolved = target_norm in solution_norm
+        # Extract the last non-empty line as the agent's final answer
+        lines = [line.strip() for line in solution.strip().splitlines() if line.strip()]
+        agent_answer = lines[-1].lower() if lines else ""
+
+        resolved = agent_answer == target_norm
         return {
             "resolved": resolved,
             "agent_answer": solution[:500],
             "target": target,
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: BBH task dictionary.
+            _task: BBH task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

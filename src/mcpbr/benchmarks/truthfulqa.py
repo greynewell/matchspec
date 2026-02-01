@@ -194,11 +194,11 @@ class TruthfulQABenchmark:
             "best_answer": best_answer,
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: TruthfulQA task dictionary.
+            _task: TruthfulQA task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

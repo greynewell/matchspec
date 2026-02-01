@@ -1,5 +1,6 @@
 """MLAgentBench benchmark implementation."""
 
+import re
 from typing import Any
 
 from datasets import load_dataset
@@ -176,21 +177,20 @@ class MLAgentBenchBenchmark:
                 "error": f"Evaluation script failed: {stderr[:500]}",
             }
 
-        # Parse score from output
-        import re
-
         score_match = re.search(r"(?:score|accuracy|loss|metric)\s*[=:]\s*([0-9.]+)", stdout, re.I)
         if score_match:
             score = float(score_match.group(1))
             baseline = task.get("baseline_score", 0)
-            if isinstance(baseline, (int, float)):
-                resolved = score > baseline
-            else:
+            try:
+                baseline_val = float(baseline) if baseline else 0.0
+                resolved = score > baseline_val
+            except (ValueError, TypeError):
+                baseline_val = 0.0
                 resolved = True
             return {
                 "resolved": resolved,
                 "score": score,
-                "baseline": baseline,
+                "baseline": baseline_val,
             }
 
         return {
@@ -198,11 +198,11 @@ class MLAgentBenchBenchmark:
             "stdout": stdout[:1000],
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: MLAgentBench task dictionary.
+            _task: MLAgentBench task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

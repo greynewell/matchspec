@@ -1,6 +1,7 @@
 """ToolBench benchmark implementation."""
 
 import json
+import re
 from typing import Any
 
 from datasets import load_dataset
@@ -82,8 +83,7 @@ class ToolBenchBenchmark:
         augmented_tasks = []
         for idx, task in enumerate(tasks):
             augmented = dict(task)
-            task_id = task.get("id", str(idx))
-            augmented["instance_id"] = f"toolbench_{task_id}"
+            augmented["instance_id"] = f"toolbench_{idx}"
             augmented["problem_statement"] = self._generate_problem_statement(augmented)
             augmented_tasks.append(augmented)
 
@@ -223,8 +223,6 @@ class ToolBenchBenchmark:
             pass
 
         # Try extracting from markdown code blocks
-        import re
-
         json_blocks = re.findall(r"```(?:json)?\s*\n(.*?)\n```", solution, re.DOTALL)
         for block in json_blocks:
             try:
@@ -238,11 +236,11 @@ class ToolBenchBenchmark:
 
         return []
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: ToolBench task dictionary.
+            _task: ToolBench task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

@@ -1,5 +1,6 @@
 """CoderEval benchmark implementation."""
 
+import base64
 from typing import Any
 
 from datasets import load_dataset
@@ -127,7 +128,10 @@ class CoderEvalBenchmark:
             statement += f"Documentation:\n{docstring}\n\n"
         if context:
             statement += f"Context (surrounding code):\n```\n{context[:2000]}\n```\n\n"
-        statement += "Save your implementation to a file named 'solution.py'."
+        extensions = {"python": "py", "java": "java", "c": "c", "cpp": "cpp", "go": "go"}
+        ext = extensions.get(language.lower(), "py")
+        filename = f"solution.{ext}"
+        statement += f"Save your implementation to a file named '{filename}'."
         return statement
 
     async def create_environment(
@@ -174,8 +178,6 @@ class CoderEvalBenchmark:
         if not test_code:
             return {"resolved": False, "error": "No test code provided"}
 
-        import base64
-
         full_test = f"{solution}\n\n{test_code}\n"
         encoded = base64.b64encode(full_test.encode()).decode()
 
@@ -192,7 +194,7 @@ class CoderEvalBenchmark:
             "stderr": stderr[:1000] if stderr else "",
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:

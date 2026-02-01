@@ -1,5 +1,6 @@
 """BigCodeBench benchmark implementation."""
 
+import base64
 from typing import Any
 
 from datasets import load_dataset
@@ -173,8 +174,6 @@ class BigCodeBenchBenchmark:
         if not test_code:
             return {"resolved": False, "error": "No test code provided"}
 
-        import base64
-
         # Combine solution and test code
         full_test = f"{solution}\n\n{test_code}\n"
         encoded = base64.b64encode(full_test.encode()).decode()
@@ -192,11 +191,11 @@ class BigCodeBenchBenchmark:
             "stderr": stderr[:1000] if stderr else "",
         }
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name.
 
         Args:
-            task: BigCodeBench task dictionary.
+            _task: BigCodeBench task dictionary (unused).
 
         Returns:
             None (no pre-built images available).

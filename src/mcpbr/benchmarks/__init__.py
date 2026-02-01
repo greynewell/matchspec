@@ -63,7 +63,7 @@ __all__ = [
 ]
 
 
-BENCHMARK_REGISTRY: dict[str, type] = {
+BENCHMARK_REGISTRY: dict[str, type[Benchmark]] = {
     "swe-bench-lite": SWEBenchmark,
     "swe-bench-verified": SWEBenchmark,
     "swe-bench-full": SWEBenchmark,

@@ -1,5 +1,6 @@
 """HumanEval benchmark implementation."""
 
+import base64
 from typing import Any
 
 from datasets import load_dataset
@@ -95,18 +96,18 @@ class HumanEvalBenchmark:
         Raises:
             ValueError: If task_id is missing from task.
         """
-        task_id = task.get("task_id")
-        if not task_id:
-            # Fallback to instance_id if available
-            task_id = task.get("instance_id")
+        instance_id = task.get("instance_id")
+        if not instance_id:
+            task_id = task.get("task_id")
             if not task_id:
-                msg = f"Task missing required 'task_id' field: {task.keys()}"
+                msg = f"Task missing required 'task_id' or 'instance_id' field: {task.keys()}"
                 raise ValueError(msg)
+            instance_id = task_id.replace("/", "_")
 
         problem_statement = self._generate_problem_statement(task)
 
         return BenchmarkTask(
-            task_id=task_id,
+            task_id=instance_id,
             problem_statement=problem_statement,
             repo="openai/humaneval",
             commit="HEAD",
@@ -334,8 +335,6 @@ class HumanEvalBenchmark:
                 }
 
             # Write the solution to a file using base64 to avoid delimiter issues
-            import base64
-
             solution_file = "solution.py"
             encoded_solution = base64.b64encode(solution_code.encode()).decode()
             exit_code, stdout, stderr = await env.exec_command(
@@ -363,8 +362,6 @@ class HumanEvalBenchmark:
         test_file_content = f"{solution_content}\n\n{test_code}\n\ncheck({entry_point})\n"
 
         # Write test file using base64 to avoid delimiter issues
-        import base64
-
         test_file = "test_solution.py"
         encoded_test = base64.b64encode(test_file_content.encode()).decode()
         exit_code, stdout, stderr = await env.exec_command(
@@ -490,13 +487,13 @@ class HumanEvalBenchmark:
 
         return None
 
-    def get_prebuilt_image(self, task: dict[str, Any]) -> str | None:
+    def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name for HumanEval task.
 
         HumanEval doesn't use pre-built images - uses minimal Python environments.
 
         Args:
-            task: HumanEval task dictionary.
+            _task: HumanEval task dictionary (unused).
 
         Returns:
             None (no pre-built images available).
