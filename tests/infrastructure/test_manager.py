@@ -35,15 +35,18 @@ class TestInfrastructureManager:
         with pytest.raises(ValueError, match="Unknown infrastructure mode: unknown_mode"):
             InfrastructureManager.create_provider(mock_config)
 
-    def test_create_provider_raises_error_for_azure_mode(self) -> None:
-        """Test that create_provider() raises NotImplementedError for azure mode."""
+    def test_create_provider_azure_mode(self) -> None:
+        """Test that create_provider() returns AzureProvider for azure mode."""
+        from mcpbr.infrastructure.azure import AzureProvider
+
         mock_config = MagicMock()
         mock_infra = MagicMock()
         mock_infra.mode = "azure"
         mock_config.infrastructure = mock_infra
 
-        with pytest.raises(NotImplementedError, match="Azure provider not yet implemented"):
-            InfrastructureManager.create_provider(mock_config)
+        provider = InfrastructureManager.create_provider(mock_config)
+
+        assert isinstance(provider, AzureProvider)
 
     def test_create_provider_default_mode(self) -> None:
         """Test that create_provider() defaults to local when mode not specified."""

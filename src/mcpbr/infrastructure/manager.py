@@ -40,11 +40,9 @@ class InfrastructureManager:
         if mode == "local":
             return LocalProvider()
         elif mode == "azure":
-            # Azure provider will be implemented in Phase 3
-            raise NotImplementedError(
-                "Azure provider not yet implemented. "
-                "This will be available in Phase 3 of the Azure infrastructure integration."
-            )
+            from .azure import AzureProvider
+
+            return AzureProvider(config)
         else:
             raise ValueError(f"Unknown infrastructure mode: {mode}")
 
