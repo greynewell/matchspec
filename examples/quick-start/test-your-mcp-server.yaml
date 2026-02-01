@@ -29,8 +29,7 @@ agent_harness: "claude-code"
 # Use Sonnet for good testing balance
 model: "sonnet"
 
-benchmark: "swe-bench"
-dataset: "SWE-bench/SWE-bench_Lite"
+benchmark: "swe-bench-lite"
 
 # Single task for quick validation
 sample_size: 1

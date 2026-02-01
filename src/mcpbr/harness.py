@@ -1,13 +1,21 @@
 """Main evaluation harness orchestrating parallel task execution."""
 
 import asyncio
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TextIO
 
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from .benchmarks import Benchmark, create_benchmark
 from .cache import ResultCache
@@ -18,6 +26,7 @@ from .harnesses import AgentHarness, AgentResult, create_harness
 from .incremental_save import save_task_result_incremental
 from .log_formatter import InstanceLogWriter
 from .pricing import calculate_cost
+from .profiler import PerformanceProfiler
 
 console = Console()
 
@@ -52,8 +61,15 @@ class TaskResult:
     """Result for a single task."""
 
     instance_id: str
-    mcp: dict[str, Any] | None = None
+    mcp: dict[str, Any] | None = None  # Legacy single server
+    mcp_server_a: dict[str, Any] | None = None  # Comparison mode: first server
+    mcp_server_b: dict[str, Any] | None = None  # Comparison mode: second server
     baseline: dict[str, Any] | None = None
+
+    @property
+    def comparison_mode(self) -> bool:
+        """Check if this result is from comparison mode."""
+        return self.mcp_server_a is not None and self.mcp_server_b is not None
 
 
 @dataclass
@@ -66,7 +82,10 @@ class EvaluationResults:
 
 
 def agent_result_to_dict(
-    result: AgentResult, eval_result: EvaluationResult | None, model_id: str
+    result: AgentResult,
+    eval_result: EvaluationResult | None,
+    model_id: str,
+    runtime_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Convert agent and evaluation results to dictionary.
 
@@ -74,6 +93,7 @@ def agent_result_to_dict(
         result: Agent result with token usage.
         eval_result: Evaluation result (if patch was generated).
         model_id: Model ID for cost calculation.
+        runtime_seconds: Wall-clock runtime in seconds (optional).
 
     Returns:
         Dictionary with agent results including cost information.
@@ -88,14 +108,22 @@ def agent_result_to_dict(
         "tool_calls": result.tool_calls,
     }
 
-    # Calculate cost
-    cost = calculate_cost(
-        model_id=model_id,
-        input_tokens=result.tokens_input,
-        output_tokens=result.tokens_output,
-    )
-    if cost is not None:
-        data["cost"] = cost
+    # Add runtime if provided
+    if runtime_seconds is not None:
+        data["runtime_seconds"] = runtime_seconds
+
+    # Use cost from API if available (includes cache tokens)
+    # Otherwise fall back to calculation for backward compatibility
+    if result.cost_usd is not None:
+        data["cost"] = result.cost_usd
+    else:
+        cost = calculate_cost(
+            model_id=model_id,
+            input_tokens=result.tokens_input,
+            output_tokens=result.tokens_output,
+        )
+        if cost is not None:
+            data["cost"] = cost
 
     if result.tool_usage:
         data["tool_usage"] = result.tool_usage
@@ -105,6 +133,9 @@ def agent_result_to_dict(
 
     if result.tool_errors:
         data["tool_errors"] = result.tool_errors
+
+    if result.profiling_report:
+        data["profiling"] = result.profiling_report
 
     if result.error:
         data["error"] = result.error
@@ -116,8 +147,10 @@ def agent_result_to_dict(
         data["messages"] = result.messages
 
     if eval_result:
-        data["resolved"] = eval_result.resolved
-        data["patch_applied"] = eval_result.patch_applied
+        data["resolved"] = getattr(eval_result, "resolved", False)
+        data["patch_applied"] = getattr(
+            eval_result, "patch_applied", True
+        )  # Default True for successful evals
 
         if getattr(eval_result, "fail_to_pass", None):
             data["fail_to_pass"] = {
@@ -146,6 +179,7 @@ def _create_mcp_agent(
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
     mcp_logs_dir: Path | None = None,
+    mcp_server_config: Any = None,
 ) -> AgentHarness:
     """Create the agent harness based on config.
 
@@ -155,6 +189,7 @@ def _create_mcp_agent(
         verbosity: Verbosity level (0=silent, 1=summary, 2=detailed).
         log_file: Optional file handle for writing raw JSON logs.
         mcp_logs_dir: Directory for MCP server logs.
+        mcp_server_config: Optional explicit MCP server config (for comparison mode).
 
     Returns:
         Configured AgentHarness.
@@ -162,15 +197,19 @@ def _create_mcp_agent(
     # Use custom prompt if provided, otherwise use benchmark's default prompt
     prompt = config.agent_prompt if config.agent_prompt else benchmark.get_prompt_template()
 
+    # Use explicit server config if provided, otherwise fall back to config.mcp_server
+    server_config = mcp_server_config if mcp_server_config is not None else config.mcp_server
+
     return create_harness(
         config.agent_harness,
         model=config.model,
-        mcp_server=config.mcp_server,
+        mcp_server=server_config,
         prompt=prompt,
         max_iterations=config.max_iterations,
         verbosity=verbosity,
         log_file=log_file,
         mcp_logs_dir=mcp_logs_dir,
+        thinking_budget=config.thinking_budget,
     )
 
 
@@ -202,6 +241,7 @@ def _create_baseline_agent(
         max_iterations=config.max_iterations,
         verbosity=verbosity,
         log_file=log_file,
+        thinking_budget=config.thinking_budget,
     )
 
 
@@ -242,24 +282,71 @@ async def run_single_task(
     result = TaskResult(instance_id=instance_id)
 
     if run_mcp:
-        mcp_log_writer: InstanceLogWriter | None = None
-        if log_dir:
-            mcp_log_writer = InstanceLogWriter(log_dir, instance_id, "mcp")
-        try:
-            result.mcp = await _run_mcp_evaluation(
-                task,
-                config,
-                docker_manager,
-                benchmark,
-                verbose,
-                verbosity,
-                mcp_log_writer if mcp_log_writer else log_file,
-                cache,
-                mcp_logs_dir,
-            )
-        finally:
-            if mcp_log_writer:
-                mcp_log_writer.close()
+        if config.comparison_mode:
+            # Run both servers in comparison mode
+            # Run server A
+            mcp_log_writer_a: InstanceLogWriter | None = None
+            if log_dir:
+                mcp_log_writer_a = InstanceLogWriter(log_dir, instance_id, "mcp_server_a")
+            try:
+                result.mcp_server_a = await _run_mcp_evaluation(
+                    task,
+                    config,
+                    docker_manager,
+                    benchmark,
+                    verbose,
+                    verbosity,
+                    mcp_log_writer_a if mcp_log_writer_a else log_file,
+                    cache,
+                    mcp_logs_dir,
+                    mcp_server_config=config.mcp_server_a,
+                    server_name="server_a",
+                )
+            finally:
+                if mcp_log_writer_a:
+                    mcp_log_writer_a.close()
+
+            # Run server B
+            mcp_log_writer_b: InstanceLogWriter | None = None
+            if log_dir:
+                mcp_log_writer_b = InstanceLogWriter(log_dir, instance_id, "mcp_server_b")
+            try:
+                result.mcp_server_b = await _run_mcp_evaluation(
+                    task,
+                    config,
+                    docker_manager,
+                    benchmark,
+                    verbose,
+                    verbosity,
+                    mcp_log_writer_b if mcp_log_writer_b else log_file,
+                    cache,
+                    mcp_logs_dir,
+                    mcp_server_config=config.mcp_server_b,
+                    server_name="server_b",
+                )
+            finally:
+                if mcp_log_writer_b:
+                    mcp_log_writer_b.close()
+        else:
+            # Single server mode (legacy)
+            mcp_log_writer: InstanceLogWriter | None = None
+            if log_dir:
+                mcp_log_writer = InstanceLogWriter(log_dir, instance_id, "mcp")
+            try:
+                result.mcp = await _run_mcp_evaluation(
+                    task,
+                    config,
+                    docker_manager,
+                    benchmark,
+                    verbose,
+                    verbosity,
+                    mcp_log_writer if mcp_log_writer else log_file,
+                    cache,
+                    mcp_logs_dir,
+                )
+            finally:
+                if mcp_log_writer:
+                    mcp_log_writer.close()
 
     if run_baseline:
         baseline_log_writer: InstanceLogWriter | None = None
@@ -293,6 +380,8 @@ async def _run_mcp_evaluation(
     log_file: TextIO | InstanceLogWriter | None = None,
     cache: ResultCache | None = None,
     mcp_logs_dir: Path | None = None,
+    mcp_server_config: Any = None,
+    server_name: str = "mcp",
 ) -> dict[str, Any]:
     """Run MCP agent evaluation with optional caching.
 
@@ -306,6 +395,8 @@ async def _run_mcp_evaluation(
         log_file: Optional log file writer.
         cache: Optional result cache.
         mcp_logs_dir: Directory for MCP server logs.
+        mcp_server_config: Optional explicit MCP server config (for comparison mode).
+        server_name: Server name for logging/identification (default: "mcp").
 
     Returns:
         Dictionary with evaluation results.
@@ -319,11 +410,29 @@ async def _run_mcp_evaluation(
             cached_result["cache_hit"] = True
             return cached_result
 
+    # Initialize profiler if enabled
+    profiler = None
+    if config.enable_profiling:
+        profiler = PerformanceProfiler(enable_memory_profiling=True)
+        profiler.start_task()
+
+    start_time = time.time()
     env: TaskEnvironment | None = None
     try:
+        # Track Docker environment creation time
+        docker_start = time.time()
         env = await benchmark.create_environment(task, docker_manager)
+        docker_end = time.time()
+        if profiler:
+            profiler.record_docker_startup(docker_end - docker_start)
 
-        agent = _create_mcp_agent(config, benchmark, verbosity, log_file, mcp_logs_dir)
+        agent = _create_mcp_agent(
+            config, benchmark, verbosity, log_file, mcp_logs_dir, mcp_server_config
+        )
+
+        # Sample memory before agent execution
+        if profiler:
+            profiler.sample_memory()
 
         instance_id = task.get(
             "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
@@ -334,11 +443,15 @@ async def _run_mcp_evaluation(
                 env.host_workdir,
                 timeout=config.timeout_seconds,
                 verbose=verbose,
-                task_id=f"{instance_id}:mcp",
+                task_id=f"{instance_id}:{server_name}",
                 env=env,  # Pass Docker environment for in-container execution
             ),
             timeout=config.timeout_seconds + 60,
         )
+
+        # Sample memory after agent execution
+        if profiler:
+            profiler.sample_memory()
 
         if agent_result.patch:
             eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
@@ -347,7 +460,17 @@ async def _run_mcp_evaluation(
         else:
             eval_result = None
 
-        result = agent_result_to_dict(agent_result, eval_result, config.model)
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
+
+        # Finalize profiling report
+        if profiler:
+            profiler.end_task()
+            # Use agent_result's profiling_report if available, otherwise generate from profiler
+            if not agent_result.profiling_report:
+                agent_result.profiling_report = profiler.generate_report()
+
+        result = agent_result_to_dict(agent_result, eval_result, config.model, runtime_seconds)
 
         # Store in cache if enabled
         if cache and cache.enabled:
@@ -359,6 +482,8 @@ async def _run_mcp_evaluation(
     except asyncio.TimeoutError:
         # Note: The agent harness should have captured partial statistics in the AgentResult
         # before raising TimeoutError, but this is a fallback for unexpected timeout locations
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
@@ -369,8 +494,11 @@ async def _run_mcp_evaluation(
             "iterations": 0,
             "tool_calls": 0,
             "cost": cost if cost is not None else 0.0,
+            "runtime_seconds": runtime_seconds,
         }
     except Exception as e:
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
@@ -380,10 +508,16 @@ async def _run_mcp_evaluation(
             "iterations": 0,
             "tool_calls": 0,
             "cost": cost if cost is not None else 0.0,
+            "runtime_seconds": runtime_seconds,
         }
     finally:
         if env:
+            # Track Docker teardown time
+            teardown_start = time.time()
             await env.cleanup()
+            if profiler:
+                teardown_end = time.time()
+                profiler.record_docker_teardown(teardown_end - teardown_start)
 
 
 async def _run_baseline_evaluation(
@@ -420,11 +554,27 @@ async def _run_baseline_evaluation(
             cached_result["cache_hit"] = True
             return cached_result
 
+    # Initialize profiler if enabled
+    profiler = None
+    if config.enable_profiling:
+        profiler = PerformanceProfiler(enable_memory_profiling=True)
+        profiler.start_task()
+
+    start_time = time.time()
     env: TaskEnvironment | None = None
     try:
+        # Track Docker environment creation time
+        docker_start = time.time()
         env = await benchmark.create_environment(task, docker_manager)
+        docker_end = time.time()
+        if profiler:
+            profiler.record_docker_startup(docker_end - docker_start)
 
         agent = _create_baseline_agent(config, benchmark, verbosity, log_file)
+
+        # Sample memory before agent execution
+        if profiler:
+            profiler.sample_memory()
 
         instance_id = task.get(
             "instance_id", f"{task.get('project', 'unknown')}_{task.get('bug_id', 'unknown')}"
@@ -441,6 +591,10 @@ async def _run_baseline_evaluation(
             timeout=config.timeout_seconds + 60,
         )
 
+        # Sample memory after agent execution
+        if profiler:
+            profiler.sample_memory()
+
         if agent_result.patch:
             eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
             # Convert benchmark result format to EvaluationResult-like object
@@ -448,7 +602,17 @@ async def _run_baseline_evaluation(
         else:
             eval_result = None
 
-        result = agent_result_to_dict(agent_result, eval_result, config.model)
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
+
+        # Finalize profiling report
+        if profiler:
+            profiler.end_task()
+            # Use agent_result's profiling_report if available, otherwise generate from profiler
+            if not agent_result.profiling_report:
+                agent_result.profiling_report = profiler.generate_report()
+
+        result = agent_result_to_dict(agent_result, eval_result, config.model, runtime_seconds)
 
         # Store in cache if enabled
         if cache and cache.enabled:
@@ -460,6 +624,8 @@ async def _run_baseline_evaluation(
     except asyncio.TimeoutError:
         # Note: The agent harness should have captured partial statistics in the AgentResult
         # before raising TimeoutError, but this is a fallback for unexpected timeout locations
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
@@ -470,8 +636,11 @@ async def _run_baseline_evaluation(
             "iterations": 0,
             "tool_calls": 0,
             "cost": cost if cost is not None else 0.0,
+            "runtime_seconds": runtime_seconds,
         }
     except Exception as e:
+        end_time = time.time()
+        runtime_seconds = end_time - start_time
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
@@ -481,10 +650,16 @@ async def _run_baseline_evaluation(
             "iterations": 0,
             "tool_calls": 0,
             "cost": cost if cost is not None else 0.0,
+            "runtime_seconds": runtime_seconds,
         }
     finally:
         if env:
+            # Track Docker teardown time
+            teardown_start = time.time()
             await env.cleanup()
+            if profiler:
+                teardown_end = time.time()
+                profiler.record_docker_teardown(teardown_end - teardown_start)
 
 
 def _calculate_mcp_tool_stats(results: list[TaskResult]) -> dict[str, Any]:
@@ -563,6 +738,73 @@ def _calculate_mcp_tool_stats(results: list[TaskResult]) -> dict[str, Any]:
     }
 
 
+def _aggregate_comparison_results(results: list[TaskResult]) -> dict[str, Any]:
+    """Aggregate results for side-by-side comparison.
+
+    Args:
+        results: List of task results from comparison mode evaluation.
+
+    Returns:
+        Dictionary with aggregated comparison statistics.
+    """
+    stats_a = {"total": 0, "resolved": 0, "cost": 0.0, "tool_calls": 0}
+    stats_b = {"total": 0, "resolved": 0, "cost": 0.0, "tool_calls": 0}
+
+    a_unique_wins: list[str] = []  # Tasks where only A resolved
+    b_unique_wins: list[str] = []  # Tasks where only B resolved
+    both_wins: list[str] = []  # Tasks where both resolved
+    both_fail: list[str] = []  # Tasks where both failed
+
+    for r in results:
+        if r.mcp_server_a:
+            stats_a["total"] += 1
+            if r.mcp_server_a.get("resolved"):
+                stats_a["resolved"] += 1
+            stats_a["cost"] += r.mcp_server_a.get("cost", 0.0)
+            stats_a["tool_calls"] += r.mcp_server_a.get("tool_calls", 0)
+
+        if r.mcp_server_b:
+            stats_b["total"] += 1
+            if r.mcp_server_b.get("resolved"):
+                stats_b["resolved"] += 1
+            stats_b["cost"] += r.mcp_server_b.get("cost", 0.0)
+            stats_b["tool_calls"] += r.mcp_server_b.get("tool_calls", 0)
+
+        # Categorize outcomes
+        a_resolved = r.mcp_server_a and r.mcp_server_a.get("resolved")
+        b_resolved = r.mcp_server_b and r.mcp_server_b.get("resolved")
+
+        if a_resolved and not b_resolved:
+            a_unique_wins.append(r.instance_id)
+        elif b_resolved and not a_resolved:
+            b_unique_wins.append(r.instance_id)
+        elif a_resolved and b_resolved:
+            both_wins.append(r.instance_id)
+        elif r.mcp_server_a and r.mcp_server_b:
+            both_fail.append(r.instance_id)
+
+    # Calculate rates and improvements
+    rate_a = stats_a["resolved"] / stats_a["total"] if stats_a["total"] > 0 else 0
+    rate_b = stats_b["resolved"] / stats_b["total"] if stats_b["total"] > 0 else 0
+
+    improvement_pct = 0.0
+    if rate_b > 0:
+        improvement_pct = ((rate_a - rate_b) / rate_b) * 100
+
+    return {
+        "stats_a": stats_a,
+        "stats_b": stats_b,
+        "resolution_rate_a": rate_a,
+        "resolution_rate_b": rate_b,
+        "a_vs_b_delta": stats_a["resolved"] - stats_b["resolved"],
+        "a_vs_b_improvement_pct": improvement_pct,
+        "a_unique_wins": a_unique_wins,
+        "b_unique_wins": b_unique_wins,
+        "both_wins": both_wins,
+        "both_fail": both_fail,
+    }
+
+
 async def run_evaluation(
     config: HarnessConfig,
     run_mcp: bool = True,
@@ -598,26 +840,22 @@ async def run_evaluation(
     """
     # Create benchmark instance
     benchmark_kwargs: dict[str, Any] = {}
-    if config.dataset:
-        # Only pass dataset if it's compatible with the benchmark
-        # CyberGym should use its own default dataset, not SWE-bench
-        if config.benchmark == "cybergym" and "cybergym" not in config.dataset.lower():
-            pass  # Don't pass SWE-bench dataset to CyberGym
-        else:
-            benchmark_kwargs["dataset"] = config.dataset
     if config.benchmark == "cybergym":
         benchmark_kwargs["level"] = config.cybergym_level
 
     benchmark = create_benchmark(config.benchmark, **benchmark_kwargs)
 
-    # Determine which dataset we're actually using (benchmark's dataset, not config)
-    dataset_name = getattr(benchmark, "dataset", config.dataset or "unknown")
-    console.print(f"[dim]Loading dataset: {dataset_name}[/dim]")
+    # Display benchmark name
+    dataset_name = getattr(benchmark, "dataset", "unknown")
+    console.print(f"[dim]Loading benchmark: {config.benchmark} (dataset: {dataset_name})[/dim]")
 
     # Load tasks from benchmark
     tasks = benchmark.load_tasks(
         sample_size=config.sample_size,
         task_ids=task_ids,
+        filter_difficulty=config.filter_difficulty,
+        filter_category=config.filter_category,
+        filter_tags=config.filter_tags,
     )
 
     # Apply state tracker filtering and resume logic
@@ -703,12 +941,26 @@ async def run_evaluation(
                 "sample_size": len(tasks),
                 "timeout_seconds": config.timeout_seconds,
                 "max_concurrent": config.max_concurrent,
-            },
-            "mcp_server": {
-                "command": config.mcp_server.command,
-                "args": config.mcp_server.args,
+                "comparison_mode": config.comparison_mode,
             },
         }
+        # Add MCP server config based on mode
+        if config.comparison_mode:
+            metadata_for_save["mcp_server_a"] = {
+                "name": config.mcp_server_a.name if config.mcp_server_a else "unknown",
+                "command": config.mcp_server_a.command if config.mcp_server_a else "",
+                "args": config.mcp_server_a.args if config.mcp_server_a else [],
+            }
+            metadata_for_save["mcp_server_b"] = {
+                "name": config.mcp_server_b.name if config.mcp_server_b else "unknown",
+                "command": config.mcp_server_b.command if config.mcp_server_b else "",
+                "args": config.mcp_server_b.args if config.mcp_server_b else [],
+            }
+        else:
+            metadata_for_save["mcp_server"] = {
+                "command": config.mcp_server.command if config.mcp_server else "",
+                "args": config.mcp_server.args if config.mcp_server else [],
+            }
 
     docker_manager = DockerEnvironmentManager(use_prebuilt=config.use_prebuilt_images)
 
@@ -745,8 +997,14 @@ async def run_evaluation(
             )
 
             # Update current cost
-            if result.mcp and result.mcp.get("cost"):
-                current_cost += result.mcp.get("cost", 0.0)
+            if config.comparison_mode:
+                if result.mcp_server_a and result.mcp_server_a.get("cost"):
+                    current_cost += result.mcp_server_a.get("cost", 0.0)
+                if result.mcp_server_b and result.mcp_server_b.get("cost"):
+                    current_cost += result.mcp_server_b.get("cost", 0.0)
+            else:
+                if result.mcp and result.mcp.get("cost"):
+                    current_cost += result.mcp.get("cost", 0.0)
             if result.baseline and result.baseline.get("cost"):
                 current_cost += result.baseline.get("cost", 0.0)
 
@@ -774,42 +1032,115 @@ async def run_evaluation(
 
     progress_console = Console(force_terminal=True)
 
-    async_tasks = []
-    for task in tasks_to_run:
-        async_tasks.append(run_with_semaphore(task))
+    # Track currently running tasks with progress indicators
+    task_progress_items: dict[str, Any] = {}
+
+    async def run_with_progress_tracking(
+        task: dict[str, Any], progress: Progress
+    ) -> TaskResult | None:
+        """Run a task with progress tracking."""
+        instance_id = task["instance_id"]
+
+        # Add progress indicator for this specific task
+        task_progress = progress.add_task(
+            f"[cyan]Running {instance_id}...",
+            total=None,  # Indeterminate progress for individual tasks
+        )
+        task_progress_items[instance_id] = task_progress
+
+        try:
+            result = await run_with_semaphore(task)
+
+            # Update progress to show completion or skip status
+            if instance_id in task_progress_items:
+                if result is not None:
+                    # Task completed successfully
+                    progress.update(
+                        task_progress_items[instance_id],
+                        description=f"[green]✓ {instance_id}",
+                    )
+                    # Remove completed task to avoid clutter
+                    progress.remove_task(task_progress_items[instance_id])
+                    del task_progress_items[instance_id]
+                else:
+                    # Task was skipped (budget exceeded)
+                    progress.update(
+                        task_progress_items[instance_id],
+                        description=f"[yellow]⊘ {instance_id} (skipped)",
+                    )
+
+            return result
+        except Exception as e:
+            # Update progress to show error
+            if instance_id in task_progress_items:
+                progress.update(
+                    task_progress_items[instance_id],
+                    description=f"[red]✗ {instance_id}: {str(e)[:50]}",
+                )
+                progress.remove_task(task_progress_items[instance_id])
+                del task_progress_items[instance_id]
+            raise
 
     try:
         if verbose:
-            for coro in asyncio.as_completed(async_tasks):
-                result = await coro
-                if result is not None:
-                    results.append(result)
+            # In verbose mode, show per-task progress with spinners (no overall bar)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                TimeElapsedColumn(),
+                console=progress_console,
+            ) as progress:
+                # Create async tasks for all work items
+                async_tasks = [
+                    asyncio.create_task(run_with_progress_tracking(task, progress))
+                    for task in tasks_to_run
+                ]
 
-                    # Save result incrementally for crash recovery
-                    if incremental_save_path:
-                        save_task_result_incremental(
-                            result, incremental_save_path, metadata_for_save
+                for coro in asyncio.as_completed(async_tasks):
+                    result = await coro
+                    if result is not None:
+                        results.append(result)
+
+                        # Save result incrementally for crash recovery
+                        if incremental_save_path:
+                            save_task_result_incremental(
+                                result, incremental_save_path, metadata_for_save
+                            )
+                            # Only include metadata on first save
+                            metadata_for_save = None
+
+                    if budget_exceeded:
+                        progress.stop()
+                        console.print(
+                            f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
+                            f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
                         )
-                        # Only include metadata on first save
-                        metadata_for_save = None
-
-                if budget_exceeded:
-                    console.print(
-                        f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
-                        f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
-                    )
-                    break
+                        # Cancel all pending tasks
+                        for task in async_tasks:
+                            if not task.done():
+                                task.cancel()
+                        # Wait for cancellation to complete
+                        await asyncio.gather(*async_tasks, return_exceptions=True)
+                        break
         else:
+            # In non-verbose mode, show overall progress bar + per-task spinners
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TaskProgressColumn(),
+                TimeElapsedColumn(),
                 console=progress_console,
             ) as progress:
                 main_task = progress.add_task(
                     "Evaluating tasks...", total=len(tasks_to_run), completed=0
                 )
+
+                # Create async tasks for all work items
+                async_tasks = [
+                    asyncio.create_task(run_with_progress_tracking(task, progress))
+                    for task in tasks_to_run
+                ]
 
                 for coro in asyncio.as_completed(async_tasks):
                     result = await coro
@@ -831,61 +1162,81 @@ async def run_evaluation(
                             f"\n[yellow]Budget limit of ${config.budget:.2f} reached. "
                             f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
                         )
+                        # Cancel all pending tasks
+                        for task in async_tasks:
+                            if not task.done():
+                                task.cancel()
+                        # Wait for cancellation to complete
+                        await asyncio.gather(*async_tasks, return_exceptions=True)
                         break
     finally:
         await docker_manager.cleanup_all()
 
-    mcp_resolved = 0
-    baseline_resolved = 0
-    mcp_total = 0
-    baseline_total = 0
-    mcp_cost = 0.0
-    baseline_cost = 0.0
-
-    for r in results:
-        if r.mcp:
-            mcp_total += 1
-            if r.mcp.get("resolved"):
-                mcp_resolved += 1
-            if r.mcp.get("cost"):
-                mcp_cost += r.mcp.get("cost", 0.0)
-        if r.baseline:
-            baseline_total += 1
-            if r.baseline.get("resolved"):
-                baseline_resolved += 1
-            if r.baseline.get("cost"):
-                baseline_cost += r.baseline.get("cost", 0.0)
-
-    mcp_rate = mcp_resolved / mcp_total if mcp_total > 0 else 0
-    baseline_rate = baseline_resolved / baseline_total if baseline_total > 0 else 0
-
-    if baseline_rate > 0:
-        improvement = ((mcp_rate - baseline_rate) / baseline_rate) * 100
-        improvement_str = f"{improvement:+.1f}%"
+    # Check if we're in comparison mode
+    if config.comparison_mode:
+        # Use comparison aggregation
+        comparison_summary = _aggregate_comparison_results(results)
     else:
-        improvement_str = "N/A"
+        # Standard single-server aggregation
+        mcp_resolved = 0
+        baseline_resolved = 0
+        mcp_total = 0
+        baseline_total = 0
+        mcp_cost = 0.0
+        baseline_cost = 0.0
 
-    # Calculate cost-effectiveness metrics
+        for r in results:
+            if r.mcp:
+                mcp_total += 1
+                if r.mcp.get("resolved"):
+                    mcp_resolved += 1
+                if r.mcp.get("cost"):
+                    mcp_cost += r.mcp.get("cost", 0.0)
+            if r.baseline:
+                baseline_total += 1
+                if r.baseline.get("resolved"):
+                    baseline_resolved += 1
+                if r.baseline.get("cost"):
+                    baseline_cost += r.baseline.get("cost", 0.0)
+
+        mcp_rate = mcp_resolved / mcp_total if mcp_total > 0 else 0
+        baseline_rate = baseline_resolved / baseline_total if baseline_total > 0 else 0
+
+        if baseline_rate > 0:
+            improvement = ((mcp_rate - baseline_rate) / baseline_rate) * 100
+            improvement_str = f"{improvement:+.1f}%"
+        else:
+            improvement_str = "N/A"
+
+    # Calculate cost-effectiveness metrics and statistics
     from .pricing import calculate_cost_effectiveness
     from .reporting import calculate_tool_coverage
+    from .statistics import calculate_comprehensive_statistics
 
-    cost_effectiveness = calculate_cost_effectiveness(
-        mcp_cost=mcp_cost,
-        baseline_cost=baseline_cost,
-        mcp_resolved=mcp_resolved,
-        baseline_resolved=baseline_resolved,
-    )
-
-    # Create temporary results object for coverage calculation
+    # Create temporary results object for coverage and stats calculation
     temp_results = EvaluationResults(
         metadata={},
         summary={},
         tasks=results,
     )
-    tool_coverage = calculate_tool_coverage(temp_results)
 
-    # Calculate MCP tool failure statistics
-    mcp_tool_stats = _calculate_mcp_tool_stats(results)
+    if not config.comparison_mode:
+        cost_effectiveness = calculate_cost_effectiveness(
+            mcp_cost=mcp_cost,
+            baseline_cost=baseline_cost,
+            mcp_resolved=mcp_resolved,
+            baseline_resolved=baseline_resolved,
+        )
+        tool_coverage = calculate_tool_coverage(temp_results)
+        comprehensive_stats = calculate_comprehensive_statistics(temp_results)
+        mcp_tool_stats = _calculate_mcp_tool_stats(results)
+    else:
+        # For comparison mode, we'll skip some of these advanced stats for now
+        # They can be added later if needed
+        cost_effectiveness = None
+        tool_coverage = None
+        comprehensive_stats = None
+        mcp_tool_stats = None
 
     # Build metadata with incremental evaluation stats
     metadata = {
@@ -902,13 +1253,30 @@ async def run_evaluation(
             "cybergym_level": config.cybergym_level if config.benchmark == "cybergym" else None,
             "budget": config.budget,
             "budget_exceeded": budget_exceeded,
-        },
-        "mcp_server": {
-            "command": config.mcp_server.command,
-            "args": config.mcp_server.args,
-            "args_note": "{workdir} is replaced with task repository path at runtime",
+            "comparison_mode": config.comparison_mode,
         },
     }
+
+    # Add MCP server config(s) to metadata
+    if config.comparison_mode:
+        metadata["mcp_server_a"] = {
+            "name": config.mcp_server_a.name if config.mcp_server_a else "unknown",
+            "command": config.mcp_server_a.command if config.mcp_server_a else "",
+            "args": config.mcp_server_a.args if config.mcp_server_a else [],
+            "args_note": "{workdir} is replaced with task repository path at runtime",
+        }
+        metadata["mcp_server_b"] = {
+            "name": config.mcp_server_b.name if config.mcp_server_b else "unknown",
+            "command": config.mcp_server_b.command if config.mcp_server_b else "",
+            "args": config.mcp_server_b.args if config.mcp_server_b else [],
+            "args_note": "{workdir} is replaced with task repository path at runtime",
+        }
+    else:
+        metadata["mcp_server"] = {
+            "command": config.mcp_server.command if config.mcp_server else "",
+            "args": config.mcp_server.args if config.mcp_server else [],
+            "args_note": "{workdir} is replaced with task repository path at runtime",
+        }
 
     # Add incremental evaluation stats if state tracker was used
     if state_tracker:
@@ -924,9 +1292,38 @@ async def run_evaluation(
             "enabled": False,
         }
 
-    return EvaluationResults(
-        metadata=metadata,
-        summary={
+    # Build summary based on mode
+    if config.comparison_mode:
+        # Comparison mode summary
+        summary = {
+            "mcp_server_a": {
+                "name": config.mcp_server_a.name if config.mcp_server_a else "unknown",
+                "resolved": comparison_summary["stats_a"]["resolved"],
+                "total": comparison_summary["stats_a"]["total"],
+                "resolution_rate": comparison_summary["resolution_rate_a"],
+                "cost": comparison_summary["stats_a"]["cost"],
+                "tool_calls": comparison_summary["stats_a"]["tool_calls"],
+            },
+            "mcp_server_b": {
+                "name": config.mcp_server_b.name if config.mcp_server_b else "unknown",
+                "resolved": comparison_summary["stats_b"]["resolved"],
+                "total": comparison_summary["stats_b"]["total"],
+                "resolution_rate": comparison_summary["resolution_rate_b"],
+                "cost": comparison_summary["stats_b"]["cost"],
+                "tool_calls": comparison_summary["stats_b"]["tool_calls"],
+            },
+            "comparison": {
+                "a_vs_b_delta": comparison_summary["a_vs_b_delta"],
+                "a_vs_b_improvement_pct": comparison_summary["a_vs_b_improvement_pct"],
+                "a_unique_wins": comparison_summary["a_unique_wins"],
+                "b_unique_wins": comparison_summary["b_unique_wins"],
+                "both_wins": comparison_summary["both_wins"],
+                "both_fail": comparison_summary["both_fail"],
+            },
+        }
+    else:
+        # Single server mode summary (original)
+        summary = {
             "mcp": {
                 "resolved": mcp_resolved,
                 "total": mcp_total,
@@ -952,6 +1349,11 @@ async def run_evaluation(
             },
             "tool_coverage": tool_coverage,
             "mcp_tool_stats": mcp_tool_stats,
-        },
+            "comprehensive_stats": comprehensive_stats.to_dict(),
+        }
+
+    return EvaluationResults(
+        metadata=metadata,
+        summary=summary,
         tasks=results,
     )

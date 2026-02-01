@@ -35,6 +35,8 @@ class AgentResult:
     messages: list[dict[str, Any]] = field(default_factory=list)
     stdout: str = ""
     stderr: str = ""
+    profiling_report: dict[str, Any] | None = None
+    cost_usd: float | None = None  # Total cost from API (includes cache tokens)
 
 
 @runtime_checkable
@@ -215,6 +217,7 @@ async def _get_git_diff(workdir: str) -> str:
     """
     await _run_cli_command(["git", "add", "-A"], workdir, timeout=30)
 
+    # Try with filter first (excludes debug scripts, test files)
     exit_code, stdout, stderr = await _run_cli_command(
         [
             "git",
@@ -223,6 +226,15 @@ async def _get_git_diff(workdir: str) -> str:
             "HEAD",
             "--diff-filter=M",
         ],
+        workdir,
+        timeout=30,
+    )
+    if exit_code == 0 and stdout.strip():
+        return stdout
+
+    # Fallback: try without filter if nothing found (for new files like HumanEval solution.py)
+    exit_code, stdout, stderr = await _run_cli_command(
+        ["git", "diff", "--cached", "HEAD"],
         workdir,
         timeout=30,
     )
@@ -316,6 +328,7 @@ def _parse_tool_usage_from_stream(
     int,
     int,
     str | None,
+    float | None,
 ]:
     """Parse tool usage and metadata from stream-json output.
 
@@ -324,7 +337,7 @@ def _parse_tool_usage_from_stream(
 
     Returns:
         Tuple of (total_tool_calls, tool_usage_dict, tool_failures_dict,
-                  tool_errors_dict, num_turns, tokens_in, tokens_out, result_subtype).
+                  tool_errors_dict, num_turns, tokens_in, tokens_out, result_subtype, cost_usd).
     """
     tool_usage: dict[str, int] = {}
     tool_failures: dict[str, int] = {}
@@ -338,6 +351,7 @@ def _parse_tool_usage_from_stream(
     result_tokens_out = 0
     has_result = False
     result_subtype: str | None = None
+    cost_usd: float | None = None
 
     for line in stdout.split("\n"):
         if not line.strip():
@@ -403,6 +417,8 @@ def _parse_tool_usage_from_stream(
                 usage = event.get("usage", {})
                 result_tokens_in = usage.get("input_tokens", 0)
                 result_tokens_out = usage.get("output_tokens", 0)
+                # Extract total cost from API (includes cache tokens)
+                cost_usd = event.get("total_cost_usd")
 
         except json.JSONDecodeError:
             continue
@@ -420,6 +436,7 @@ def _parse_tool_usage_from_stream(
         tokens_in,
         tokens_out,
         result_subtype,
+        cost_usd,
     )
 
 
@@ -441,6 +458,64 @@ MCP_PROMPT_SUFFIX = (
 )
 
 
+def _generate_no_patch_error_message(
+    git_status: str,
+    git_stderr: str,
+    buggy_line: str,
+    tool_usage: dict[str, int],
+) -> str:
+    """Generate accurate error message when no patch is produced.
+
+    Args:
+        git_status: Output from 'git status --short'
+        git_stderr: Stderr from git command (may contain 'command not found')
+        buggy_line: Result from buggy line check (empty if not present)
+        tool_usage: Dictionary of tool names to call counts
+
+    Returns:
+        Human-readable error message describing what actually happened
+    """
+    # Check if git is missing
+    if git_stderr and "command not found" in git_stderr:
+        return (
+            "git command not found - ensure git is installed in the environment "
+            "or use prebuilt Docker images with git pre-installed"
+        )
+
+    # Check if files were changed according to git
+    if git_status.strip():
+        return f"Files changed but no valid patch: {git_status.strip()}"
+
+    # Check if any Edit/Write tools were actually called
+    edit_tools = {"Edit", "Write", "NotebookEdit"}
+    tools_used = set(tool_usage.keys())
+    edit_tools_used = tools_used & edit_tools
+
+    # If buggy line is not present (empty), it might have been fixed
+    if not buggy_line:
+        if edit_tools_used:
+            # Edit tools were used but no git changes detected
+            tools_str = ", ".join(sorted(edit_tools_used))
+            return (
+                f"{tools_str} tool(s) used but no changes detected - "
+                "file may be unchanged or changes were reverted"
+            )
+        else:
+            # No edit tools used and buggy line not found
+            # Agent may have completed without making changes
+            if tools_used:
+                tools_list = ", ".join(sorted(tools_used))
+                return (
+                    f"No patches applied - agent completed without making changes. "
+                    f"Tools used: {tools_list}"
+                )
+            else:
+                return "No patches applied - agent made no tool calls"
+    else:
+        # Buggy line is still present
+        return f"Buggy line still present: {buggy_line}"
+
+
 class ClaudeCodeHarness:
     """Harness that uses Claude Code CLI (claude) for solving tasks."""
 
@@ -453,6 +528,7 @@ class ClaudeCodeHarness:
         verbosity: int = 1,
         log_file: TextIO | InstanceLogWriter | None = None,
         mcp_logs_dir: Path | None = None,
+        thinking_budget: int | None = None,
     ) -> None:
         """Initialize Claude Code harness.
 
@@ -464,6 +540,7 @@ class ClaudeCodeHarness:
             verbosity: Verbosity level (0=silent, 1=summary, 2=detailed).
             log_file: Optional file handle for writing raw JSON logs.
             mcp_logs_dir: Directory for MCP server logs. Default: ~/.mcpbr_state/logs
+            thinking_budget: Extended thinking token budget. Set to enable thinking mode.
         """
         self.model = model
         self.mcp_server = mcp_server
@@ -474,6 +551,7 @@ class ClaudeCodeHarness:
         self.verbosity = verbosity
         self.log_file = log_file
         self.mcp_logs_dir = mcp_logs_dir
+        self.thinking_budget = thinking_budget
         self._console = Console()
 
     async def solve(
@@ -553,6 +631,11 @@ class ClaudeCodeHarness:
 
             command.append(prompt)
 
+            # Prepare environment variables
+            claude_env: dict[str, str] | None = None
+            if self.thinking_budget is not None:
+                claude_env = {"MAX_THINKING_TOKENS": str(self.thinking_budget)}
+
             if verbose:
                 from .log_formatter import FormatterConfig
 
@@ -573,12 +656,14 @@ class ClaudeCodeHarness:
                     prefix=instance_id,
                     console=self._console,
                     formatter=formatter,
+                    env=claude_env,
                 )
             else:
                 exit_code, stdout, stderr = await _run_cli_command(
                     command,
                     workdir,
                     timeout,
+                    env=claude_env,
                 )
 
             (
@@ -590,6 +675,7 @@ class ClaudeCodeHarness:
                 tokens_in,
                 tokens_out,
                 result_subtype,
+                cost_usd,
             ) = _parse_tool_usage_from_stream(stdout)
 
             if result_subtype == "error_max_turns" and num_turns > self.max_iterations:
@@ -616,6 +702,7 @@ class ClaudeCodeHarness:
                     tool_usage=tool_usage,
                     tool_failures=tool_failures,
                     tool_errors=tool_errors,
+                    cost_usd=cost_usd,
                 )
 
             if mcp_server_name:
@@ -625,12 +712,29 @@ class ClaudeCodeHarness:
                     timeout=10,
                 )
 
+            # Check git status to understand what happened
+            git_exit, git_status, git_stderr = await _run_cli_command(
+                ["git", "status", "--short"],
+                workdir,
+                timeout=30,
+            )
+
             patch = await _get_git_diff(workdir)
+
+            # Generate appropriate error message if no patch
+            error_msg = None
+            if not patch:
+                error_msg = _generate_no_patch_error_message(
+                    git_status=git_status,
+                    git_stderr=git_stderr,
+                    buggy_line="",  # Local mode doesn't have buggy line check
+                    tool_usage=tool_usage,
+                )
 
             return AgentResult(
                 patch=patch,
                 success=bool(patch),
-                error=None if patch else "No changes made by Claude Code",
+                error=error_msg,
                 iterations=num_turns or 1,
                 stdout=stdout,
                 stderr=stderr,
@@ -640,6 +744,7 @@ class ClaudeCodeHarness:
                 tool_usage=tool_usage,
                 tool_failures=tool_failures,
                 tool_errors=tool_errors,
+                cost_usd=cost_usd,
             )
         except Exception:
             if mcp_server_name:
@@ -669,6 +774,7 @@ class ClaudeCodeHarness:
                 patch="",
                 success=False,
                 error="ANTHROPIC_API_KEY environment variable not set",
+                cost_usd=None,
             )
 
         docker_env = {
@@ -682,6 +788,11 @@ class ClaudeCodeHarness:
         if self.mcp_server:
             docker_env["MCP_TIMEOUT"] = str(self.mcp_server.startup_timeout_ms)
             docker_env["MCP_TOOL_TIMEOUT"] = str(self.mcp_server.tool_timeout_ms)
+
+        # Add thinking budget to enable extended thinking
+        # See: https://code.claude.com/docs/en/common-workflows#use-extended-thinking-thinking-mode
+        if self.thinking_budget is not None:
+            docker_env["MAX_THINKING_TOKENS"] = str(self.thinking_budget)
 
         prompt_file = "/tmp/.mcpbr_prompt.txt"
         await env.exec_command(
@@ -712,6 +823,10 @@ class ClaudeCodeHarness:
                 # Sanitize key (must be valid shell identifier) and quote value
                 safe_key = key.replace("-", "_").replace(".", "_")
                 env_exports += f"export {safe_key}={shlex.quote(value)}\n"
+
+        # Add thinking budget to enable extended thinking
+        if self.thinking_budget is not None:
+            env_exports += f"export MAX_THINKING_TOKENS={shlex.quote(str(self.thinking_budget))}\n"
 
         await env.exec_command(
             f"cat > {env_file} << 'MCPBR_ENV_EOF'\n{env_exports}MCPBR_ENV_EOF",
@@ -770,6 +885,7 @@ class ClaudeCodeHarness:
                         error=error_msg,
                         stdout=mcp_stdout,
                         stderr=mcp_stderr,
+                        cost_usd=None,
                     )
 
                 if verbose:
@@ -789,6 +905,7 @@ class ClaudeCodeHarness:
                     patch="",
                     success=False,
                     error=error_msg,
+                    cost_usd=None,
                 )
 
         try:
@@ -899,6 +1016,7 @@ class ClaudeCodeHarness:
                 tokens_in,
                 tokens_out,
                 result_subtype,
+                cost_usd,
             ) = _parse_tool_usage_from_stream(stdout)
 
             if result_subtype == "error_max_turns" and num_turns > self.max_iterations:
@@ -946,6 +1064,7 @@ class ClaudeCodeHarness:
                     tool_usage=tool_usage,
                     tool_failures=tool_failures,
                     tool_errors=tool_errors,
+                    cost_usd=cost_usd,
                 )
 
             if mcp_server_name:
@@ -959,7 +1078,7 @@ class ClaudeCodeHarness:
                     environment=docker_env,
                 )
 
-            _, git_status, _ = await env.exec_command(
+            _, git_status, git_stderr = await env.exec_command(
                 "git status --short",
                 timeout=30,
             )
@@ -981,14 +1100,13 @@ class ClaudeCodeHarness:
             error_msg = None
             if not patch:
                 buggy_line = sep_check.strip()
-                if git_status.strip():
-                    error_msg = f"Files changed but no valid patch: {git_status.strip()}"
-                else:
-                    # If buggy_line is empty, the fix was applied but git didn't detect it
-                    if not buggy_line:
-                        error_msg = "Edit applied but git shows no changes (file unchanged?)"
-                    else:
-                        error_msg = f"Buggy line still present: {buggy_line}"
+                # Use helper function to generate accurate error message
+                error_msg = _generate_no_patch_error_message(
+                    git_status=git_status,
+                    git_stderr=git_stderr,
+                    buggy_line=buggy_line,
+                    tool_usage=tool_usage,
+                )
 
             return AgentResult(
                 patch=patch,
@@ -1003,6 +1121,7 @@ class ClaudeCodeHarness:
                 tool_usage=tool_usage,
                 tool_failures=tool_failures,
                 tool_errors=tool_errors,
+                cost_usd=cost_usd,
             )
         except asyncio.TimeoutError:
             # Task execution timed out - but we may have partial stdout with tool usage stats
@@ -1036,6 +1155,7 @@ class ClaudeCodeHarness:
                 tokens_in,
                 tokens_out,
                 result_subtype,
+                cost_usd,
             ) = _parse_tool_usage_from_stream(partial_stdout)
 
             if mcp_server_name:
@@ -1079,6 +1199,7 @@ class ClaudeCodeHarness:
                 tool_failures=tool_failures,
                 tool_errors=tool_errors,
                 stdout=partial_stdout,
+                cost_usd=cost_usd,
             )
         except Exception:
             if mcp_server_name:
@@ -1126,6 +1247,7 @@ def create_harness(
     verbosity: int = 1,
     log_file: TextIO | InstanceLogWriter | None = None,
     mcp_logs_dir: Path | None = None,
+    thinking_budget: int | None = None,
 ) -> AgentHarness:
     """Factory function to create an agent harness.
 
@@ -1138,6 +1260,7 @@ def create_harness(
         verbosity: Verbosity level for logging (0=silent, 1=summary, 2=detailed).
         log_file: Optional file handle for writing raw JSON logs.
         mcp_logs_dir: Directory for MCP server logs.
+        thinking_budget: Extended thinking token budget. Set to enable thinking mode.
 
     Returns:
         AgentHarness instance.
@@ -1160,6 +1283,7 @@ def create_harness(
         verbosity=verbosity,
         log_file=log_file,
         mcp_logs_dir=mcp_logs_dir,
+        thinking_budget=thinking_budget,
     )
 
 

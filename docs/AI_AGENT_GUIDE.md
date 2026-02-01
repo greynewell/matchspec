@@ -4,44 +4,51 @@ This guide provides quick commands for AI agents (like Claude Code) to perform c
 
 ## Creating a Release
 
-**Always use the automated workflow:**
+**Workflow:** Publish release in GitHub UI → Auto-bump version on main
+
+### Standard Release (Patch - Most Common)
+
+For patch releases (bug fixes, minor improvements):
+
+1. **Check the draft release** - Release Drafter auto-creates it from merged PRs:
+   ```bash
+   gh release list
+   ```
+
+2. **Publish the release in GitHub UI**:
+   - Go to https://github.com/greynewell/mcpbr/releases
+   - Edit the draft release
+   - Set tag to match current version (e.g., `v0.4.1`)
+   - Review notes and publish
+
+3. **Automatic version bump** - The post-release workflow automatically:
+   - Bumps to next patch (0.4.1 → 0.4.2)
+   - Commits to main
+   - Main is ready for next release!
+
+### Minor or Major Version Bumps
+
+For minor (new features) or major (breaking changes) releases, update the version **before** publishing:
 
 ```bash
-# For bug fixes and minor improvements (most common)
-gh workflow run release.yml -f version_bump=patch
+# For minor version bump (e.g., 0.4.2 → 0.5.0)
+sed -i 's/^version = "0.4.2"/version = "0.5.0"/' pyproject.toml
+python3 scripts/sync_version.py
+git add pyproject.toml package.json .claude-plugin/
+git commit -m "chore: Bump version to 0.5.0"
+git push origin main
 
-# For new features
-gh workflow run release.yml -f version_bump=minor
-
-# For breaking changes (rare)
-gh workflow run release.yml -f version_bump=major
+# Then publish release v0.5.0 in GitHub UI
+# Post-release workflow will auto-bump to 0.5.1
 ```
 
-**Almost there!** The workflow handles:
-- ✅ Version bump
-- ✅ File sync
-- ✅ Git commit & tag
-- ✅ GitHub release creation
+**Major version example:** Same process, use `1.0.0` for breaking changes.
 
-**Then manually trigger publication:**
-```bash
-# Wait for release workflow to complete, then:
-gh workflow run publish.yml -f tag=vX.Y.Z
-gh workflow run publish-npm.yml -f tag=vX.Y.Z
-```
+## Version Bump Strategy
 
-Why? GitHub Actions security prevents workflows from auto-triggering other workflows.
-
-## Version Bump Decision Tree
-
-```
-Is it a breaking change? (API changes, removed features)
-├─ YES → major
-└─ NO
-   └─ Is it a new feature or enhancement?
-      ├─ YES → minor
-      └─ NO → patch (bug fixes, docs, deps)
-```
+- **Patch (auto after release):** Bug fixes, docs, deps (0.4.1 → 0.4.2)
+- **Minor (manual before release):** New features (0.4.2 → 0.5.0)
+- **Major (manual before release):** Breaking changes (0.5.0 → 1.0.0)
 
 ## Common Tasks
 
@@ -82,12 +89,14 @@ git push origin main
 When making a release:
 
 - [ ] Ensure PR is merged to main
-- [ ] Decide version bump type (patch/minor/major)
-- [ ] Run: `gh workflow run release.yml -f version_bump=TYPE`
-- [ ] Wait ~2 minutes for completion
-- [ ] Verify release: `gh release view`
+- [ ] For minor/major bumps: Manually update version in pyproject.toml, sync, commit, push
+- [ ] For patch bumps (most common): Version is already set in main
+- [ ] Check draft release: `gh release list`
+- [ ] Publish release in GitHub UI (set correct tag version)
+- [ ] Wait ~2 minutes for post-release workflow to auto-bump version
+- [ ] Verify version was bumped on main: `grep '^version' pyproject.toml`
 - [ ] Verify PyPI: Check https://pypi.org/project/mcpbr/
-- [ ] Verify npm: Check https://www.npmjs.com/package/@greynewell/mcpbr
+- [ ] Verify npm: Check https://www.npmjs.com/package/mcpbr-cli
 
 ## What NOT to Do
 
@@ -131,23 +140,42 @@ For detailed information, see [RELEASE.md](./RELEASE.md)
 
 ## Examples
 
-### After fixing a bug
+### Standard patch release (most common)
 ```bash
-# PR #290 fixed Docker TypeError
-gh workflow run release.yml -f version_bump=patch
-# Creates v0.3.25
+# PRs merged to main, draft release exists
+# Version is already set in pyproject.toml (e.g., 0.4.1)
+
+# 1. Check draft
+gh release list
+
+# 2. Publish in GitHub UI with tag v0.4.1
+# 3. Post-release workflow auto-bumps to 0.4.2 on main
 ```
 
-### After adding a feature
+### Minor version release (new features)
 ```bash
-# Added new benchmark support
-gh workflow run release.yml -f version_bump=minor
-# Creates v0.4.0
+# Manually bump version first
+sed -i 's/^version = "0.4.2"/version = "0.5.0"/' pyproject.toml
+python3 scripts/sync_version.py
+git add pyproject.toml package.json .claude-plugin/
+git commit -m "chore: Bump version to 0.5.0"
+git push origin main
+
+# Publish release v0.5.0 in GitHub UI
+# Post-release workflow auto-bumps to 0.5.1
 ```
 
-### After breaking change
+### Major version release (breaking changes)
 ```bash
-# Redesigned CLI interface
+# Redesigned CLI interface - breaking change
+sed -i 's/^version = "0.5.1"/version = "1.0.0"/' pyproject.toml
+python3 scripts/sync_version.py
+git add pyproject.toml package.json .claude-plugin/
+git commit -m "chore: Bump version to 1.0.0"
+git push origin main
+
+# Publish release v1.0.0 in GitHub UI
+# Post-release workflow auto-bumps to 1.0.1
 gh workflow run release.yml -f version_bump=major
 # Creates v1.0.0
 ```

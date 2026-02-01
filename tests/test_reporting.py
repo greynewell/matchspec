@@ -6,11 +6,13 @@ from pathlib import Path
 
 import pytest
 import yaml
+from rich.console import Console
 
 from mcpbr.harness import EvaluationResults, TaskResult
 from mcpbr.reporting import (
     ToolCoverageReport,
     calculate_tool_coverage,
+    print_summary,
     save_json_results,
     save_markdown_report,
     save_yaml_results,
@@ -27,7 +29,7 @@ def sample_results() -> EvaluationResults:
                 "model": "claude-sonnet-4-5-20250929",
                 "provider": "anthropic",
                 "agent_harness": "claude-code",
-                "benchmark": "swe-bench",
+                "benchmark": "swe-bench-lite",
                 "dataset": "SWE-bench/SWE-bench_Lite",
                 "sample_size": 2,
                 "timeout_seconds": 300,
@@ -519,6 +521,160 @@ class TestCalculateToolCoverage:
         assert coverage["all_tool_usage"]["Read"] == 3
 
 
+class TestMcpOnlyMode:
+    """Tests for --mcp-only mode (no baseline data)."""
+
+    @pytest.fixture
+    def mcp_only_results(self) -> EvaluationResults:
+        """Create evaluation results from --mcp-only mode."""
+        return EvaluationResults(
+            metadata={
+                "timestamp": "2026-01-20T12:00:00Z",
+                "config": {
+                    "model": "claude-sonnet-4-5-20250929",
+                    "provider": "anthropic",
+                    "agent_harness": "claude-code",
+                    "benchmark": "swe-bench-lite",
+                    "dataset": "SWE-bench/SWE-bench_Lite",
+                    "sample_size": 2,
+                },
+                "mcp_server": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"],
+                },
+            },
+            summary={
+                "mcp": {
+                    "resolved": 1,
+                    "total": 2,
+                    "rate": 0.5,
+                    "total_cost": 0.05,
+                    "cost_per_task": 0.025,
+                    "cost_per_resolved": 0.05,
+                },
+                "baseline": {
+                    "resolved": 0,
+                    "total": 0,
+                    "rate": 0.0,
+                    "total_cost": 0.0,  # Zero cost in baseline
+                },
+                "improvement": "N/A",
+                "cost_comparison": {
+                    "total_difference": 0.05,
+                    "cost_per_additional_resolution": None,
+                },
+            },
+            tasks=[
+                TaskResult(
+                    instance_id="test-task-1",
+                    mcp={
+                        "resolved": True,
+                        "patch_generated": True,
+                        "tokens": {"input": 100, "output": 500},
+                    },
+                ),
+                TaskResult(
+                    instance_id="test-task-2",
+                    mcp={
+                        "resolved": False,
+                        "patch_generated": False,
+                        "tokens": {"input": 80, "output": 400},
+                    },
+                ),
+            ],
+        )
+
+    @pytest.fixture
+    def mcp_only_missing_baseline(self) -> EvaluationResults:
+        """Create evaluation results with missing baseline cost."""
+        return EvaluationResults(
+            metadata={
+                "timestamp": "2026-01-20T12:00:00Z",
+                "config": {
+                    "model": "claude-sonnet-4-5-20250929",
+                    "provider": "anthropic",
+                    "agent_harness": "claude-code",
+                    "benchmark": "swe-bench-lite",
+                },
+                "mcp_server": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"],
+                },
+            },
+            summary={
+                "mcp": {
+                    "resolved": 1,
+                    "total": 2,
+                    "rate": 0.5,
+                    "total_cost": 0.05,
+                },
+                "baseline": {
+                    "resolved": 0,
+                    "total": 0,
+                    "rate": 0.0,
+                    # Missing total_cost key
+                },
+                "improvement": "N/A",
+                "cost_comparison": {
+                    "total_difference": 0.05,
+                },
+            },
+            tasks=[
+                TaskResult(
+                    instance_id="test-task-1",
+                    mcp={"resolved": True},
+                ),
+            ],
+        )
+
+    def test_markdown_report_with_zero_baseline_cost(
+        self, mcp_only_results: EvaluationResults
+    ) -> None:
+        """Test that markdown report handles zero baseline cost without crashing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "report.md"
+            # Should not raise ZeroDivisionError
+            save_markdown_report(mcp_only_results, output_path)
+
+            assert output_path.exists()
+            content = output_path.read_text()
+
+            # Should contain "N/A - no baseline" instead of percentage
+            assert "(N/A - no baseline)" in content
+            assert "MCP Additional Cost" in content or "MCP Cost Savings" in content
+
+    def test_markdown_report_with_missing_baseline_cost(
+        self, mcp_only_missing_baseline: EvaluationResults
+    ) -> None:
+        """Test that markdown report handles missing baseline cost without crashing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "report.md"
+            # Should not raise ZeroDivisionError
+            save_markdown_report(mcp_only_missing_baseline, output_path)
+
+            assert output_path.exists()
+            content = output_path.read_text()
+
+            # Should contain "N/A - no baseline" instead of percentage
+            assert "(N/A - no baseline)" in content
+
+    def test_print_summary_with_zero_baseline_cost(
+        self, mcp_only_results: EvaluationResults
+    ) -> None:
+        """Test that print_summary handles zero baseline cost without crashing."""
+        console = Console()
+        # Should not raise ZeroDivisionError
+        print_summary(mcp_only_results, console)
+
+    def test_print_summary_with_missing_baseline_cost(
+        self, mcp_only_missing_baseline: EvaluationResults
+    ) -> None:
+        """Test that print_summary handles missing baseline cost without crashing."""
+        console = Console()
+        # Should not raise ZeroDivisionError
+        print_summary(mcp_only_missing_baseline, console)
+
+
 class TestToolCoverageInReports:
     """Tests for tool coverage inclusion in different report formats."""
 
@@ -532,7 +688,7 @@ class TestToolCoverageInReports:
                     "model": "claude-sonnet-4-5-20250929",
                     "provider": "anthropic",
                     "agent_harness": "claude-code",
-                    "benchmark": "swe-bench",
+                    "benchmark": "swe-bench-lite",
                     "dataset": "SWE-bench/SWE-bench_Lite",
                     "sample_size": 2,
                     "timeout_seconds": 300,

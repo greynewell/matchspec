@@ -187,12 +187,27 @@ uv run pytest -m integration
 
 **Expected result:** All tests must pass with 0 failures.
 
-### 3. Verify Changes
+### 3. Update CHANGELOG
+
+**MANDATORY:** If your changes are user-visible, update CHANGELOG.md:
+
+```bash
+# Edit CHANGELOG.md and add entry under [Unreleased]
+# Example:
+# ### Fixed
+# - Fixed XYZ issue (#123)
+
+# Verify entry is properly formatted
+cat CHANGELOG.md | head -30
+```
+
+### 4. Verify Changes
 
 - Review all modified files
 - Ensure no unintended changes were introduced
 - Confirm all new code follows project conventions
 - Check that imports are properly organized
+- **Verify CHANGELOG.md is updated** (if applicable)
 
 ## Code Quality Requirements
 
@@ -297,42 +312,109 @@ If your changes affect:
 
 Then you MUST update the README.md accordingly.
 
-### Changelog
+### Changelog Maintenance
 
-**REQUIRED:** The CHANGELOG.md MUST be kept up to date for EVERY release.
+**CRITICAL RULE:** The CHANGELOG.md MUST be updated with EVERY user-facing change, AUTOMATICALLY, WITHOUT BEING ASKED.
 
-When working on features, bug fixes, or any code changes that will be included in a release:
+#### When to Update CHANGELOG
 
-1. **Add entries to CHANGELOG.md** under the `[Unreleased]` section (or current version if preparing a release)
-2. **Follow Keep a Changelog format:**
-   - Use sections: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`
-   - Write clear, user-focused descriptions
-   - Include issue/PR numbers: `(closes #123)`
-   - Use past tense for what was done
-3. **Be comprehensive** - Document all user-visible changes
-4. **Update before release** - Ensure all changes for the version are documented
+Update CHANGELOG.md for ANY of these changes:
+- ✅ New features or functionality
+- ✅ Bug fixes
+- ✅ Breaking changes
+- ✅ Deprecations
+- ✅ Security fixes
+- ✅ Performance improvements that users will notice
+- ✅ Changes to CLI commands or configuration
+- ✅ Changes to output formats or APIs
+- ❌ Internal refactoring with no user impact
+- ❌ Test additions (unless they expose new testing capabilities)
+- ❌ Documentation fixes (unless significant new documentation)
 
-Example:
-```markdown
-## [Unreleased]
+#### How to Update CHANGELOG
 
-### Added
+1. **Add entries to the `[Unreleased]` section** - This is where all in-progress changes go
+2. **Use the correct category:**
+   - `Added` - New features, capabilities, configuration options
+   - `Changed` - Changes to existing functionality
+   - `Deprecated` - Features marked for removal
+   - `Removed` - Removed features
+   - `Fixed` - Bug fixes
+   - `Security` - Security-related changes
+   - `Infrastructure` - Build, release, or infrastructure changes
+   - `Documentation` - Significant documentation additions (not fixes)
+3. **Write clear, user-focused descriptions:**
+   - Start with what changed, not how
+   - Include issue/PR numbers: `(#123)` or `(closes #123)`
+   - Use past tense
+   - Add sub-bullets for important details
+4. **Format consistently:**
+   ```markdown
+   ## [Unreleased]
 
-- **New Feature**: Description of the feature (closes #123)
-  - Additional detail about the feature
-  - Another detail
+   ### Added
 
-### Fixed
+   - **Feature Name** (#123): Brief description
+     - Additional detail about the feature
+     - Another important detail
+   ```
 
-- Fixed bug in XYZ component (fixes #456)
+#### Example Workflow
+
+```bash
+# 1. Make code changes
+# ... edit files ...
+
+# 2. Update CHANGELOG.md (REQUIRED - don't skip this!)
+# Add entry under [Unreleased] section:
+# ### Fixed
+# - Fixed bug in git diff detection (#335)
+#   - Now detects newly created files correctly
+#   - Applied fallback pattern to both Docker and local modes
+
+# 3. Commit both together
+git add src/ CHANGELOG.md
+git commit -m "fix: Resolve git diff detection for new files (#335)"
 ```
 
-**Before any release:**
-- Verify CHANGELOG.md includes ALL changes since the last release
-- Update version number and release date
-- Add release tag link at the bottom
+#### Version Management on Main Branch
 
-The CHANGELOG is the primary source of truth for what changed between releases and is critical for users upgrading.
+**IMPORTANT:** The version in `pyproject.toml` on the main branch is ALWAYS the version for the NEXT release, not the current released version.
+
+- After releasing v0.4.1, main is automatically bumped to v0.4.2
+- All changes on main are being prepared for v0.4.2
+- When you update CHANGELOG, add entries under `[Unreleased]`
+- When a release is published, unreleased changes move to the new version section
+
+#### Release Process and CHANGELOG
+
+The release process works like this:
+
+1. **Development Phase:**
+   - Changes accumulate under `[Unreleased]` section
+   - Version in `pyproject.toml` reflects the upcoming release (e.g., 0.4.3)
+
+2. **Release Phase:**
+   - Maintainer manually publishes release in GitHub UI (e.g., v0.4.3)
+   - Post-release workflow automatically bumps version to next patch (e.g., 0.4.4)
+   - Maintainer moves `[Unreleased]` changes to `## [0.4.3] - YYYY-MM-DD` section
+   - Adds version link at bottom: `[0.4.3]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.3`
+
+3. **Post-Release:**
+   - `[Unreleased]` section is now empty, ready for next changes
+   - Version on main is 0.4.4
+   - Next changes go under `[Unreleased]` for eventual 0.4.4 release
+
+**CRITICAL:** Always add your changes to `[Unreleased]`. The maintainer will move them to the versioned section during release.
+
+#### Before Creating a PR
+
+Checklist for CHANGELOG:
+- [ ] All user-visible changes are documented under `[Unreleased]`
+- [ ] Entries are in the correct category (Added/Fixed/Changed/etc.)
+- [ ] Descriptions are clear and user-focused
+- [ ] Issue/PR numbers are included: `(#123)`
+- [ ] Format matches existing entries
 
 ## Pull Request Guidelines
 
@@ -341,9 +423,10 @@ The CHANGELOG is the primary source of truth for what changed between releases a
 1. ✅ All linting checks pass (`uvx ruff check src/ tests/`)
 2. ✅ Code is formatted (`uvx ruff format src/ tests/`)
 3. ✅ All tests pass (`uv run pytest -m "not integration"`)
-4. ✅ Code is documented
-5. ✅ README is updated (if applicable)
-6. ✅ Changes are committed with descriptive commit messages
+4. ✅ **CHANGELOG.md is updated** (for user-visible changes)
+5. ✅ Code is documented
+6. ✅ README is updated (if applicable)
+7. ✅ Changes are committed with descriptive commit messages
 
 ### PR Title Format
 
@@ -375,6 +458,71 @@ Use GitHub keywords in PR description to auto-close issues:
 - `fixes #123`
 - `closes #123`
 - `resolves #123`
+
+### Responding to CodeRabbit Reviews
+
+**REQUIRED:** When CodeRabbit posts review comments on your PR, you MUST acknowledge and respond to them.
+
+#### When You Fix a CodeRabbit Comment
+
+If you push a commit that addresses a CodeRabbit comment:
+
+1. **Add a comment to the PR** explaining what you fixed:
+   ```markdown
+   ✅ **Resolved CodeRabbit comment about XYZ (commit abc1234)**
+
+   Fixed the issue by:
+   - Specific change 1
+   - Specific change 2
+
+   The corrected code now [explanation of fix].
+   ```
+
+2. **Reference the specific comment** if there are multiple:
+   ```markdown
+   ✅ **Resolved: CLI override documentation issue**
+
+   Fixed in commit 8185e60:
+   - Removed incorrect `--thinking-budget` CLI override examples
+   - Added warning that thinking_budget is YAML-only
+   - Documented correct way to disable (omit field or set to null)
+   ```
+
+3. **Be specific** - Don't just say "fixed", explain what you changed
+
+#### When You Disagree with CodeRabbit
+
+If you believe a CodeRabbit suggestion is incorrect or not applicable:
+
+1. **Explain your reasoning** in a comment:
+   ```markdown
+   ❌ **CodeRabbit suggestion not applicable**
+
+   The suggestion to [X] doesn't apply here because:
+   - Reason 1
+   - Reason 2
+
+   The current implementation is correct as-is.
+   ```
+
+2. **Ask for maintainer input** if uncertain:
+   ```markdown
+   ❓ **Need guidance on CodeRabbit suggestion**
+
+   CodeRabbit suggests [X], but I'm not sure if this is the right approach.
+   Current approach: [Y]
+   CodeRabbit approach: [X]
+
+   @maintainer - Which approach should I take?
+   ```
+
+#### Why This Matters
+
+- Shows you're responsive to code review feedback
+- Helps maintainers track which issues are resolved
+- Creates a clear audit trail of what changed and why
+- Prevents CodeRabbit comments from being ignored or forgotten
+- Makes PR review faster (maintainers don't have to re-check everything)
 
 ## Common Pitfalls for Agents
 
@@ -431,19 +579,25 @@ git checkout -b feature/my-new-feature
 # 2. Implement the feature
 # ... edit files ...
 
-# 3. Check linting and format
+# 3. Update CHANGELOG.md (REQUIRED for user-visible changes)
+# Add entry under [Unreleased] section:
+# ### Added
+# - **New Feature**: Description of feature (#123)
+#   - Additional details
+
+# 4. Check linting and format
 uvx ruff check --fix src/ tests/
 uvx ruff format src/ tests/
 uvx ruff check src/ tests/  # Verify all fixed
 
-# 4. Run tests
+# 5. Run tests
 uv run pytest -m "not integration"
 
-# 5. Commit changes
-git add .
+# 6. Commit changes (include CHANGELOG.md)
+git add src/ tests/ CHANGELOG.md
 git commit -m "feat: add my new feature"
 
-# 6. Push and create PR
+# 7. Push and create PR
 git push -u origin feature/my-new-feature
 gh pr create --title "feat: add my new feature" --body "Implements #123"
 ```

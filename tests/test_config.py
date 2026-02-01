@@ -51,9 +51,8 @@ class TestHarnessConfig:
         assert config.model == DEFAULT_MODEL
         assert config.provider == "anthropic"
         assert config.agent_harness == "claude-code"
-        assert config.benchmark == "swe-bench"
+        assert config.benchmark == "swe-bench-verified"
         assert config.agent_prompt is None
-        assert config.dataset is None
         assert config.cybergym_level == 1
         assert config.sample_size is None
         assert config.timeout_seconds == 300
@@ -99,11 +98,11 @@ class TestHarnessConfig:
         with pytest.raises(ValueError, match="Invalid benchmark"):
             HarnessConfig(mcp_server=mcp, benchmark="invalid")
 
-    def test_benchmark_swebench(self) -> None:
-        """Test that benchmark can be set to swe-bench."""
+    def test_benchmark_swebench_lite(self) -> None:
+        """Test that benchmark can be set to swe-bench-lite."""
         mcp = MCPServerConfig(command="echo", args=[])
-        config = HarnessConfig(mcp_server=mcp, benchmark="swe-bench")
-        assert config.benchmark == "swe-bench"
+        config = HarnessConfig(mcp_server=mcp, benchmark="swe-bench-lite")
+        assert config.benchmark == "swe-bench-lite"
 
     def test_benchmark_cybergym(self) -> None:
         """Test that benchmark can be set to cybergym."""
@@ -203,3 +202,55 @@ class TestCreateDefaultConfig:
         assert config.model == DEFAULT_MODEL
         assert config.provider == "anthropic"
         assert config.agent_harness == "claude-code"
+
+
+class TestBenchmarkConfiguration:
+    """Tests for benchmark configuration."""
+
+    def test_swe_bench_lite_benchmark(self) -> None:
+        """Test SWE-bench Lite benchmark selection."""
+        yaml_content = """
+mcp_server:
+  command: npx
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
+
+benchmark: "swe-bench-lite"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+
+            config = load_config(f.name)
+            assert config.benchmark == "swe-bench-lite"
+
+    def test_swe_bench_verified_benchmark(self) -> None:
+        """Test SWE-bench Verified benchmark selection."""
+        yaml_content = """
+mcp_server:
+  command: npx
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
+
+benchmark: "swe-bench-verified"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+
+            config = load_config(f.name)
+            assert config.benchmark == "swe-bench-verified"
+
+    def test_swe_bench_full_benchmark(self) -> None:
+        """Test SWE-bench Full benchmark selection."""
+        yaml_content = """
+mcp_server:
+  command: npx
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"]
+
+benchmark: "swe-bench-full"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(yaml_content)
+            f.flush()
+
+            config = load_config(f.name)
+            assert config.benchmark == "swe-bench-full"

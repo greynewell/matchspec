@@ -169,7 +169,14 @@ sample_size: 1
 
             result = runner.invoke(
                 main,
-                ["run", "-c", str(test_config_path), "--skip-health-check", "--disable-logs"],
+                [
+                    "run",
+                    "-c",
+                    str(test_config_path),
+                    "--skip-health-check",
+                    "--skip-preflight",
+                    "--disable-logs",
+                ],
             )
 
             # Check that the command executed (exit code 0)
@@ -211,7 +218,9 @@ disable_logs: true
             }
             mock_run.return_value = mock_results
 
-            result = runner.invoke(main, ["run", "-c", str(config_path), "--skip-health-check"])
+            result = runner.invoke(
+                main, ["run", "-c", str(config_path), "--skip-health-check", "--skip-preflight"]
+            )
 
             # Check that the command executed
             assert result.exit_code == 0
@@ -259,6 +268,7 @@ disable_logs: true
                     "-c",
                     str(test_config_path),
                     "--skip-health-check",
+                    "--skip-preflight",
                     "--log-dir",
                     str(custom_log_dir),
                 ],
@@ -310,6 +320,7 @@ disable_logs: true
                     "-c",
                     str(test_config_path),
                     "--skip-health-check",
+                    "--skip-preflight",
                     "--log-file",
                     str(custom_log_file),
                 ],

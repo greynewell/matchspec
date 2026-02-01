@@ -54,7 +54,7 @@ mcp_server:
 provider: anthropic
 agent_harness: claude-code
 model: sonnet
-benchmark: swe-bench
+benchmark: swe-bench-lite
 dataset: SWE-bench/SWE-bench_Lite
 sample_size: 1
 timeout_seconds: 300

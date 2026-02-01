@@ -3,7 +3,7 @@ faq:
   - q: "How do I configure mcpbr to use my MCP server?"
     a: "Configure the mcp_server section in your YAML config file with the command to start your server, args (using {workdir} as placeholder for the task repository path), and any required environment variables."
   - q: "What configuration parameters are available in mcpbr?"
-    a: "Key parameters include mcp_server (command, args, env), provider (anthropic), model, dataset, sample_size, timeout_seconds, max_concurrent, and max_iterations."
+    a: "Key parameters include mcp_server (command, args, env), provider (anthropic), model, benchmark, sample_size, timeout_seconds, max_concurrent, and max_iterations."
   - q: "How do I use environment variables in mcpbr config?"
     a: "Reference environment variables in the env section using ${VAR_NAME} syntax, e.g., SUPERMODEL_API_KEY: '${SUPERMODEL_API_KEY}'. The variable will be expanded from your shell environment at runtime."
   - q: "What is the {workdir} placeholder in mcpbr?"
@@ -104,9 +104,9 @@ agent_prompt: |
 # Model Configuration (use alias or full name)
 model: "sonnet"  # or "claude-sonnet-4-5-20250929"
 
-# Dataset Configuration
-dataset: "SWE-bench/SWE-bench_Lite"
-sample_size: 10  # null for full dataset
+# Benchmark Selection
+benchmark: "swe-bench-lite"  # 300 tasks for quick testing
+sample_size: 10  # null for full benchmark
 
 # Execution Parameters
 timeout_seconds: 300
@@ -264,17 +264,90 @@ See [Installation](installation.md#supported-models) for the full list of suppor
     mcpbr run -c config.yaml --benchmark cybergym --level 2
     ```
 
-### Dataset Configuration
+### Benchmark Selection
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `dataset` | `null` | HuggingFace dataset (optional, benchmark provides default) |
+| `benchmark` | `"swe-bench-verified"` | Benchmark to run |
 | `sample_size` | `null` | Number of tasks (`null` = full dataset) |
 
-The `dataset` field is optional. If not specified, each benchmark uses its default dataset:
+Available benchmarks:
 
-- **SWE-bench**: `SWE-bench/SWE-bench_Lite`
-- **CyberGym**: `sunblaze-ucb/cybergym`
+- **swe-bench-verified**: Manually validated test cases, accurate benchmarking (default)
+- **swe-bench-lite**: 300 curated tasks, quick testing
+- **swe-bench-full**: 2,294 tasks, comprehensive evaluation
+- **cybergym**: Security exploits at various difficulty levels
+- **mcptoolbench**: MCP tool usage evaluation
+
+Example:
+```yaml
+benchmark: "swe-bench-verified"  # Use high-quality validated tasks
+sample_size: 50                   # Run 50 tasks
+```
+
+### Filtering Configuration
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `filter_difficulty` | `null` | Filter tasks by difficulty (list of strings) |
+| `filter_category` | `null` | Filter tasks by category (list of strings) |
+| `filter_tags` | `null` | Filter tasks by tags (list of strings, requires all to match) |
+
+Filter benchmarks to select specific subsets of tasks:
+
+```yaml
+# Filter by difficulty (CyberGym: 0-3, MCPToolBench: single/multi)
+filter_difficulty:
+  - "easy"
+  - "medium"
+
+# Filter by category (MCPToolBench: browser, finance, etc.)
+filter_category:
+  - "browser"
+  - "web"
+
+# Filter by tags (requires custom dataset with tags)
+filter_tags:
+  - "security"
+  - "critical"
+```
+
+**Benchmark-specific filtering:**
+
+- **SWE-bench**:
+  - `filter_category`: Filter by repository name (e.g., "django", "scikit-learn")
+  - `filter_difficulty` and `filter_tags`: Not supported in base dataset
+
+- **CyberGym**:
+  - `filter_difficulty`: Numeric levels (0-3) or names (easy, medium, hard, expert)
+  - `filter_category`: Filter by project language (c++, python) or source (arvo, libfuzzer)
+  - `filter_tags`: Not supported in base dataset
+
+- **MCPToolBench++**:
+  - `filter_difficulty`: Task complexity (easy/single, hard/multi)
+  - `filter_category`: Task categories (browser, finance, web, etc.)
+  - `filter_tags`: Not supported in base dataset
+
+!!! tip "CLI Override"
+    Apply filters at runtime:
+    ```bash
+    # Filter by difficulty
+    mcpbr run -c config.yaml --filter-difficulty easy --filter-difficulty medium
+
+    # Filter by category
+    mcpbr run -c config.yaml --filter-category browser --filter-category finance
+
+    # Combine multiple filters
+    mcpbr run -c config.yaml \
+      --filter-difficulty hard \
+      --filter-category security
+    ```
+
+!!! note "Filter Behavior"
+    - Filters are applied after task_ids selection but before sample_size
+    - Multiple values within a filter are OR'ed (task matches ANY value)
+    - Multiple different filters are AND'ed (task must match ALL filter types)
+    - Empty filter lists are treated as no filter (all tasks pass)
 
 ### Execution Parameters
 
@@ -283,6 +356,64 @@ The `dataset` field is optional. If not specified, each benchmark uses its defau
 | `timeout_seconds` | `300` | Timeout per task in seconds |
 | `max_concurrent` | `4` | Maximum parallel task evaluations |
 | `max_iterations` | `10` | Maximum agent iterations (turns) per task |
+| `thinking_budget` | `null` | Extended thinking token budget (1024-31999) |
+
+#### Extended Thinking Mode
+
+The `thinking_budget` field enables Claude's extended thinking mode, allowing the model to reason through complex problems before responding. When enabled, Claude can use up to the specified token budget for internal reasoning (thinking tokens), separate from the response tokens.
+
+**Configuration:**
+
+```yaml
+# Enable extended thinking with 10,000 token budget
+thinking_budget: 10000
+```
+
+**Valid Range:**
+- Minimum: 1024 tokens (Claude API requirement)
+- Maximum: 31999 tokens (Claude Code default cap)
+- Default: `null` (disabled)
+
+**When to Use:**
+
+Extended thinking is particularly useful for:
+- Complex debugging tasks requiring deep analysis
+- Multi-step reasoning problems
+- Tasks where the model needs to explore multiple solution paths
+- Situations where upfront planning improves solution quality
+
+**Cost Considerations:**
+
+Thinking tokens are billed at a lower rate than regular input/output tokens. The exact pricing depends on your model tier. Extended thinking increases cost but may improve success rates on complex tasks, potentially reducing the number of attempts needed.
+
+**Example Configurations:**
+
+```yaml
+# Conservative thinking budget for simpler tasks
+thinking_budget: 5000
+
+# Moderate thinking budget for balanced performance
+thinking_budget: 10000
+
+# Maximum thinking budget for very complex tasks
+thinking_budget: 31999
+
+# Disabled (default) - omit the field or set to null
+thinking_budget: null
+```
+
+!!! warning "Configuration Only"
+    **Important**: `thinking_budget` can only be configured in the YAML file. There is no CLI override option for this parameter.
+
+    To disable thinking mode, omit the `thinking_budget` field entirely or explicitly set it to `null`:
+    ```yaml
+    # Thinking mode disabled (these are equivalent)
+    thinking_budget: null
+    # or simply omit the field
+    ```
+
+!!! note "Validation"
+    mcpbr validates thinking_budget at configuration load time. Invalid values (< 1024 or > 31999) will produce a clear error message before evaluation starts.
 
 ### Docker Configuration
 

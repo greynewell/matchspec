@@ -14,7 +14,14 @@ from .models import DEFAULT_MODEL
 
 VALID_PROVIDERS = ("anthropic",)
 VALID_HARNESSES = ("claude-code",)
-VALID_BENCHMARKS = ("swe-bench", "cybergym", "mcptoolbench")
+VALID_BENCHMARKS = (
+    "swe-bench-lite",
+    "swe-bench-verified",
+    "swe-bench-full",
+    "cybergym",
+    "humaneval",
+    "mcptoolbench",
+)
 
 
 class MCPServerConfig(BaseModel):
@@ -69,7 +76,19 @@ class HarnessConfig(BaseModel):
     Supports multiple model providers and agent harnesses.
     """
 
-    mcp_server: MCPServerConfig = Field(description="MCP server configuration")
+    # Single server field (for backward compatibility)
+    mcp_server: MCPServerConfig | None = Field(
+        default=None, description="MCP server configuration (single server mode)"
+    )
+
+    # Comparison mode fields
+    mcp_server_a: MCPServerConfig | None = Field(
+        default=None, description="First MCP server for comparison"
+    )
+    mcp_server_b: MCPServerConfig | None = Field(
+        default=None, description="Second MCP server for comparison"
+    )
+    comparison_mode: bool = Field(default=False, description="Enable side-by-side comparison mode")
 
     provider: str = Field(
         default="anthropic",
@@ -92,13 +111,8 @@ class HarnessConfig(BaseModel):
     )
 
     benchmark: str = Field(
-        default="swe-bench",
-        description="Benchmark to run (swe-bench, cybergym, or mcptoolbench)",
-    )
-
-    dataset: str | None = Field(
-        default=None,
-        description="HuggingFace dataset to use (optional, benchmark provides default)",
+        default="swe-bench-verified",
+        description="Benchmark to run (swe-bench-lite, swe-bench-verified, swe-bench-full, cybergym, mcptoolbench)",
     )
 
     cybergym_level: int = Field(
@@ -125,6 +139,27 @@ class HarnessConfig(BaseModel):
         default=10,
         description="Maximum agent iterations per task",
     )
+
+    thinking_budget: int | None = Field(
+        default=None,
+        description="Extended thinking token budget. Set to enable thinking mode (e.g., 10000)",
+    )
+
+    @field_validator("thinking_budget")
+    @classmethod
+    def validate_thinking_budget(cls, v: int | None) -> int | None:
+        """Validate thinking_budget is within acceptable bounds.
+
+        Claude API requires budget_tokens >= 1024 and < max_tokens.
+        Claude Code caps thinking at 31999 tokens by default.
+        """
+        if v is None:
+            return v
+        if v < 1024:
+            raise ValueError("thinking_budget must be at least 1024 tokens (Claude API minimum)")
+        if v > 31999:
+            raise ValueError("thinking_budget cannot exceed 31999 tokens (Claude Code maximum)")
+        return v
 
     use_prebuilt_images: bool = Field(
         default=True,
@@ -154,6 +189,26 @@ class HarnessConfig(BaseModel):
     disable_logs: bool = Field(
         default=False,
         description="Disable detailed execution logs (logs are enabled by default to output_dir/logs/)",
+    )
+
+    filter_difficulty: list[str] | None = Field(
+        default=None,
+        description="Filter benchmarks by difficulty (e.g., ['easy', 'medium', 'hard'] or ['0', '1', '2', '3'] for CyberGym)",
+    )
+
+    filter_category: list[str] | None = Field(
+        default=None,
+        description="Filter benchmarks by category (e.g., ['browser', 'finance'] for MCPToolBench)",
+    )
+
+    filter_tags: list[str] | None = Field(
+        default=None,
+        description="Filter benchmarks by tags (requires all tags to match)",
+    )
+
+    enable_profiling: bool = Field(
+        default=False,
+        description="Enable comprehensive performance profiling (tool latency, memory, overhead)",
     )
 
     @field_validator("provider")
@@ -196,6 +251,21 @@ class HarnessConfig(BaseModel):
 
         Anthropic provider accepts any model ID (direct API).
         """
+        return self
+
+    @model_validator(mode="after")
+    def validate_server_config(self) -> "HarnessConfig":
+        """Validate MCP server configuration consistency."""
+        if self.comparison_mode:
+            if not (self.mcp_server_a and self.mcp_server_b):
+                raise ValueError("comparison_mode requires both mcp_server_a and mcp_server_b")
+            if self.mcp_server:
+                raise ValueError("comparison_mode: use mcp_server_a/b instead of mcp_server")
+        else:
+            if not self.mcp_server:
+                raise ValueError("mcp_server required when comparison_mode is false")
+            if self.mcp_server_a or self.mcp_server_b:
+                raise ValueError("mcp_server_a/b only valid in comparison_mode")
         return self
 
     @field_validator("max_concurrent")

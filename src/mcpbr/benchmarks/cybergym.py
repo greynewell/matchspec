@@ -37,6 +37,9 @@ class CyberGymBenchmark:
         sample_size: int | None = None,
         task_ids: list[str] | None = None,
         level: int | None = None,
+        filter_difficulty: list[str] | None = None,
+        filter_category: list[str] | None = None,
+        filter_tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Load tasks from CyberGym dataset.
 
@@ -44,6 +47,9 @@ class CyberGymBenchmark:
             sample_size: Maximum number of tasks to load (None for all).
             task_ids: Specific task IDs to load (None for all).
             level: Override difficulty level from constructor.
+            filter_difficulty: Filter by difficulty levels (0-3 for CyberGym).
+            filter_category: Filter by project language or source (e.g., 'c++', 'python', 'arvo').
+            filter_tags: Filter by tags (not supported for CyberGym base dataset).
 
         Returns:
             List of CyberGym task dictionaries.
@@ -61,6 +67,44 @@ class CyberGymBenchmark:
                     tasks.append(item)
         else:
             tasks = list(dataset)
+
+        # Apply filters before augmentation
+        if filter_difficulty:
+            # Convert difficulty strings to level numbers
+            difficulty_levels = set()
+            for diff in filter_difficulty:
+                # Support both numeric strings ("0", "1", "2", "3") and names
+                if diff.isdigit():
+                    difficulty_levels.add(int(diff))
+                else:
+                    # Map difficulty names to levels (example mapping)
+                    mapping = {"easy": 0, "medium": 1, "hard": 2, "expert": 3}
+                    if diff.lower() in mapping:
+                        difficulty_levels.add(mapping[diff.lower()])
+
+            # Note: CyberGym difficulty is set at load time, not in dataset
+            # For now, we filter by the requested level
+            if difficulty_levels and task_level not in difficulty_levels:
+                # If requested level not in filter, return empty
+                return []
+
+        if filter_category:
+            # Filter by project_language or source (from task_id)
+            filtered = []
+            for task in tasks:
+                language = task.get("project_language", "").lower()
+                source = (
+                    task.get("task_id", "").split(":")[0].lower()
+                )  # e.g., "arvo" from "arvo:1065"
+
+                # Match if any category matches language or source
+                for category in filter_category:
+                    if category.lower() in language or category.lower() == source:
+                        filtered.append(task)
+                        break
+            tasks = filtered
+
+        # Note: filter_tags not applicable to base CyberGym dataset
 
         if sample_size and len(tasks) > sample_size:
             tasks = tasks[:sample_size]

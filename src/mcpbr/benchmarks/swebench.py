@@ -31,6 +31,9 @@ class SWEBenchmark:
         sample_size: int | None = None,
         task_ids: list[str] | None = None,
         level: int | None = None,
+        filter_difficulty: list[str] | None = None,
+        filter_category: list[str] | None = None,
+        filter_tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Load tasks from SWE-bench dataset.
 
@@ -38,6 +41,9 @@ class SWEBenchmark:
             sample_size: Maximum number of tasks to load (None for all).
             task_ids: Specific task IDs to load (None for all).
             level: Unused for SWE-bench (no difficulty levels).
+            filter_difficulty: Filter by difficulty (not supported for SWE-bench).
+            filter_category: Filter by repository categories (e.g., repo name patterns).
+            filter_tags: Filter by tags (not supported for SWE-bench base dataset).
 
         Returns:
             List of SWE-bench task dictionaries.
@@ -53,6 +59,22 @@ class SWEBenchmark:
                     tasks.append(item)
         else:
             tasks = list(dataset)
+
+        # Apply filters
+        if filter_category:
+            # For SWE-bench, filter by repository name
+            filtered = []
+            for task in tasks:
+                repo = task.get("repo", "")
+                # Match if any category matches the repo or repo organization
+                for category in filter_category:
+                    if category.lower() in repo.lower():
+                        filtered.append(task)
+                        break
+            tasks = filtered
+
+        # Note: filter_difficulty and filter_tags not applicable to base SWE-bench
+        # These would require custom metadata or extended datasets
 
         if sample_size and len(tasks) > sample_size:
             tasks = tasks[:sample_size]

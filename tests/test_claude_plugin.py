@@ -166,9 +166,20 @@ class TestSkills:
         skill_path = skills_dir / "mcpbr-eval" / "SKILL.md"
         content = skill_path.read_text().lower()
 
-        benchmarks = ["swe-bench", "cybergym", "mcptoolbench"]
+        benchmarks = [
+            "swe-bench-lite",
+            "swe-bench-verified",
+            "swe-bench-full",
+            "cybergym",
+            "mcptoolbench",
+        ]
         for benchmark in benchmarks:
-            assert benchmark in content, f"mcpbr-eval should mention {benchmark} benchmark"
+            # Allow partial matches (e.g., "swe-bench" matches all variants)
+            benchmark_lower = benchmark.lower()
+            if "swe-bench" in benchmark_lower:
+                assert "swe-bench" in content, "mcpbr-eval should mention swe-bench benchmarks"
+            else:
+                assert benchmark in content, f"mcpbr-eval should mention {benchmark} benchmark"
 
     def test_benchmark_swe_lite_has_defaults(self, skills_dir: Path) -> None:
         """Test that benchmark-swe-lite skill has default command."""

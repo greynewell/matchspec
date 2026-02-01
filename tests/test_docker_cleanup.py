@@ -399,6 +399,123 @@ class TestDockerEnvironmentManager:
         mock_container.stop.assert_called_once()
 
 
+class TestTaskEnvironmentCleanup:
+    """Test TaskEnvironment aggressive cleanup functionality."""
+
+    @pytest.mark.asyncio
+    async def test_task_environment_cleanup_removes_temp_dir(self, mock_docker_client):
+        """Test that TaskEnvironment.cleanup() removes temp directory."""
+        from mcpbr.docker_env import TaskEnvironment
+
+        manager = DockerEnvironmentManager()
+        mock_container = MagicMock()
+        mock_container.name = "test-container"
+
+        # Create a mock temp directory
+        mock_temp_dir = MagicMock()
+        manager._temp_dirs = [mock_temp_dir]
+
+        # Create task environment with temp dir reference
+        env = TaskEnvironment(
+            container=mock_container,
+            workdir="/workspace",
+            host_workdir="/tmp/test",
+            instance_id="test-instance",
+            _temp_dir=mock_temp_dir,
+            _manager=manager,
+        )
+
+        # Cleanup environment
+        await env.cleanup()
+
+        # Verify temp directory cleanup was called
+        mock_temp_dir.cleanup.assert_called_once()
+
+        # Verify temp directory was removed from manager's list
+        assert mock_temp_dir not in manager._temp_dirs
+
+    @pytest.mark.asyncio
+    async def test_task_environment_cleanup_handles_missing_temp_dir(self, mock_docker_client):
+        """Test that cleanup handles None temp directory gracefully."""
+        from mcpbr.docker_env import TaskEnvironment
+
+        mock_container = MagicMock()
+
+        # Create task environment without temp dir reference
+        env = TaskEnvironment(
+            container=mock_container,
+            workdir="/workspace",
+            host_workdir="/tmp/test",
+            instance_id="test-instance",
+            _temp_dir=None,
+            _manager=None,
+        )
+
+        # Should not raise
+        await env.cleanup()
+
+        mock_container.stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_task_environment_cleanup_handles_errors(self, mock_docker_client):
+        """Test that cleanup handles temp dir cleanup errors gracefully."""
+        from mcpbr.docker_env import TaskEnvironment
+
+        manager = DockerEnvironmentManager()
+        mock_container = MagicMock()
+
+        # Create a mock temp directory that fails to cleanup
+        mock_temp_dir = MagicMock()
+        mock_temp_dir.cleanup.side_effect = Exception("Cleanup failed")
+        manager._temp_dirs = [mock_temp_dir]
+
+        env = TaskEnvironment(
+            container=mock_container,
+            workdir="/workspace",
+            host_workdir="/tmp/test",
+            instance_id="test-instance",
+            _temp_dir=mock_temp_dir,
+            _manager=manager,
+        )
+
+        # Should not raise even if temp dir cleanup fails
+        await env.cleanup()
+
+        # Container should still be cleaned up
+        mock_container.stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_task_environment_cleanup_removes_from_manager_list(self, mock_docker_client):
+        """Test that cleanup removes temp dir from manager's tracking list."""
+        from mcpbr.docker_env import TaskEnvironment
+
+        manager = DockerEnvironmentManager()
+        mock_container = MagicMock()
+
+        # Create multiple temp directories
+        mock_temp_dir1 = MagicMock()
+        mock_temp_dir2 = MagicMock()
+        manager._temp_dirs = [mock_temp_dir1, mock_temp_dir2]
+
+        # Create environment for first temp dir
+        env = TaskEnvironment(
+            container=mock_container,
+            workdir="/workspace",
+            host_workdir="/tmp/test",
+            instance_id="test-instance",
+            _temp_dir=mock_temp_dir1,
+            _manager=manager,
+        )
+
+        # Cleanup environment
+        await env.cleanup()
+
+        # First temp dir should be removed, second should remain
+        assert mock_temp_dir1 not in manager._temp_dirs
+        assert mock_temp_dir2 in manager._temp_dirs
+        assert len(manager._temp_dirs) == 1
+
+
 class TestSignalHandlers:
     """Test signal handler cleanup."""
 

@@ -29,24 +29,37 @@ class EvaluationResult:
 
 
 def parse_test_list(test_str: str) -> list[str]:
-    """Parse test list from SWE-bench format (JSON string or Python literal)."""
+    """Parse test list from SWE-bench format (JSON string or Python literal).
+
+    Always returns a list of strings, converting non-string elements as needed.
+    Handles malformed data gracefully by filtering out invalid entries.
+    """
     if not test_str:
         return []
 
     test_str = test_str.strip()
 
+    # Try JSON parsing first
     try:
-        return json.loads(test_str)
+        parsed = json.loads(test_str)
+        if isinstance(parsed, list):
+            # Convert all elements to strings and filter out invalid entries
+            return [str(item) for item in parsed if item is not None and str(item).strip()]
+        return []
     except json.JSONDecodeError:
         pass
 
+    # Try Python literal_eval
     try:
         result = ast.literal_eval(test_str)
         if isinstance(result, list):
-            return result
+            # Convert all elements to strings and filter out invalid entries
+            return [str(item) for item in result if item is not None and str(item).strip()]
+        return []
     except (ValueError, SyntaxError):
         pass
 
+    # Fallback: manual parsing for unquoted strings
     if test_str.startswith("[") and test_str.endswith("]"):
         inner = test_str[1:-1]
         tests = []

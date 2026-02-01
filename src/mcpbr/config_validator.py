@@ -226,7 +226,7 @@ class ConfigValidator:
             )
 
         # Validate benchmark
-        benchmark = config.get("benchmark", "swe-bench")
+        benchmark = config.get("benchmark", "swe-bench-verified")
         if benchmark not in VALID_BENCHMARKS:
             self.errors.append(
                 ConfigValidationError(

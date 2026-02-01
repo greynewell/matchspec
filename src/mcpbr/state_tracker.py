@@ -122,7 +122,6 @@ def compute_config_hash(config: Any) -> str:
         "provider": config.provider,
         "agent_harness": config.agent_harness,
         "benchmark": config.benchmark,
-        "dataset": config.dataset,
         "timeout_seconds": config.timeout_seconds,
         "max_iterations": config.max_iterations,
         # Include MCP server config

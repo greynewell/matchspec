@@ -1,0 +1,70 @@
+name: Post-Release Version Bump
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Get current version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(python -c "import tomllib; f=open('pyproject.toml','rb'); data=tomllib.load(f); print(data['project']['version'])")
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Calculate next version (patch bump)
+        id: next_version
+        run: |
+          CURRENT="${{ steps.current_version.outputs.version }}"
+          IFS='.' read -r major minor patch <<< "$CURRENT"
+          NEXT_VERSION="${major}.${minor}.$((patch + 1))"
+          echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+          echo "Next version: $NEXT_VERSION"
+
+      - name: Update version in pyproject.toml
+        run: |
+          NEXT_VERSION="${{ steps.next_version.outputs.version }}"
+          sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/" pyproject.toml
+          echo "Updated pyproject.toml to version $NEXT_VERSION"
+
+      - name: Sync version across all files
+        run: |
+          python3 scripts/sync_version.py
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push version bump
+        run: |
+          git add pyproject.toml package.json .claude-plugin/
+          git commit -m "chore: Bump version to ${{ steps.next_version.outputs.version }}"
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "## Version Bumped Successfully! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Released Version**: v${{ steps.current_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version (on main)**: v${{ steps.next_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Main branch is now ready for the next release." >> $GITHUB_STEP_SUMMARY

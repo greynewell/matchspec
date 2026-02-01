@@ -11,93 +11,115 @@ This document explains how to create releases for mcpbr, both manually and via a
 - [What Happens on Release](#what-happens-on-release)
 - [Troubleshooting](#troubleshooting)
 
-## Automated Release (Recommended)
+## Release Process (Recommended)
 
-### Using GitHub Actions UI
+### Workflow Overview
 
-1. **Navigate to Actions**
-   - Go to the [Actions tab](../../actions) in GitHub
-   - Select "Create Release" workflow from the left sidebar
+mcpbr uses GitHub's release drafter and automatic version bumping:
 
-2. **Trigger the workflow**
-   - Click "Run workflow" button
-   - Select the version bump type:
-     - `patch` - Bug fixes (0.3.24 → 0.3.25)
-     - `minor` - New features (0.3.24 → 0.4.0)
-     - `major` - Breaking changes (0.3.24 → 1.0.0)
-   - Optionally add additional release notes
-   - Click "Run workflow"
+1. **Release Drafter** automatically creates draft releases from merged PRs
+2. You **manually publish the release** in the GitHub UI
+3. **Post-release workflow** automatically bumps the version on main
 
-3. **Wait for completion**
-   - The workflow will:
-     - Calculate the new version
-     - Update `pyproject.toml`
-     - Sync version to all package files
-     - Commit and push the changes
-     - Create a git tag
-     - Create a GitHub release
-     - Trigger PyPI and npm publication
+### Step-by-Step
 
-### Using GitHub CLI
+#### 1. Review the Draft Release
+
+As you merge PRs to main, Release Drafter automatically:
+- Creates/updates a draft release
+- Categorizes changes (features, fixes, breaking changes)
+- Generates release notes from PR titles and labels
+
+Navigate to [Releases](../../releases) to see the current draft.
+
+#### 2. Prepare the Version (if needed)
+
+For **patch releases** (bug fixes, minor improvements):
+- No preparation needed! The current version in `pyproject.toml` is already correct.
+
+For **minor releases** (new features) or **major releases** (breaking changes):
+- Manually update the version in `pyproject.toml` before publishing:
 
 ```bash
-# Patch release (bug fixes)
-gh workflow run release.yml -f version_bump=patch
+# For minor bump (0.4.1 → 0.5.0)
+sed -i 's/^version = "0.4.1"/version = "0.5.0"/' pyproject.toml
+python3 scripts/sync_version.py
+git add pyproject.toml package.json .claude-plugin/
+git commit -m "chore: Bump version to 0.5.0"
+git push origin main
 
-# Minor release (new features)
-gh workflow run release.yml -f version_bump=minor
-
-# Major release (breaking changes)
-gh workflow run release.yml -f version_bump=major
-
-# With additional notes
-gh workflow run release.yml \
-  -f version_bump=patch \
-  -f release_notes="Special thanks to all contributors!"
+# For major bump (0.5.0 → 1.0.0)
+# Same process, update to "1.0.0"
 ```
+
+#### 3. Publish the Release
+
+In the [Releases](../../releases) page:
+1. Click "Edit" on the draft release
+2. Set the tag to match the version in `pyproject.toml` (e.g., `v0.4.1`)
+3. Review the auto-generated release notes
+4. Add any additional context or breaking change warnings
+5. Click "Publish release"
+
+#### 4. Automatic Version Bump
+
+After you publish the release, the **Post-Release Version Bump** workflow automatically:
+- ✅ Bumps to next patch version (e.g., `0.4.1` → `0.4.2`)
+- ✅ Syncs version across all files
+- ✅ Commits and pushes to main
+- ✅ Triggers PyPI and npm publication
+
+**Main branch is now ready for the next release!**
+
+### Version Bump Strategy
+
+- **Patch (automatic after release):** Bug fixes, minor improvements (0.4.1 → 0.4.2)
+- **Minor (manual before release):** New features, enhancements (0.4.2 → 0.5.0)
+- **Major (manual before release):** Breaking changes (0.5.0 → 1.0.0)
 
 ## Manual Release
 
-If you need to create a release manually:
+If you need to create a release manually, follow the same pattern as the automated workflow:
 
-### 1. Update the version
-
-Edit `pyproject.toml`:
-```toml
-version = "0.3.25"  # Update this line
-```
-
-### 2. Sync versions across all files
+### 1. Tag and release the current version
 
 ```bash
-python3 scripts/sync_version.py
-```
-
-This will update:
-- `package.json`
-- `.claude-plugin/plugin.json`
-- `.claude-plugin/package.json`
-- `.claude-plugin/marketplace.json`
-
-### 3. Commit and tag
-
-```bash
-# Commit the version bump
-git add pyproject.toml package.json .claude-plugin/
-git commit -m "chore: bump version to 0.3.25"
-git push origin main
+# Get current version from pyproject.toml
+CURRENT_VERSION=$(python -c "import tomllib; f=open('pyproject.toml','rb'); data=tomllib.load(f); print(data['project']['version'])")
 
 # Create and push tag
-git tag -a v0.3.25 -m "Release v0.3.25"
-git push origin v0.3.25
+git tag -a "v${CURRENT_VERSION}" -m "Release v${CURRENT_VERSION}"
+git push origin "v${CURRENT_VERSION}"
+
+# Create GitHub release
+gh release create "v${CURRENT_VERSION}" \
+  --title "v${CURRENT_VERSION}" \
+  --generate-notes \
+  --latest
 ```
 
-### 4. Create GitHub release
+### 2. Bump to next version
+
+After the release is published, bump to the next patch version:
 
 ```bash
-# Using gh CLI
-gh release create v0.3.25 \
-  --title "v0.3.25" \
+# Calculate next version (assuming CURRENT_VERSION is set from above)
+IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+NEXT_VERSION="${major}.${minor}.$((patch + 1))"
+
+# Update pyproject.toml
+sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/" pyproject.toml
+
+# Sync versions across all files
+python3 scripts/sync_version.py
+
+# Commit and push
+git add pyproject.toml package.json .claude-plugin/
+git commit -m "chore: Bump version to ${NEXT_VERSION}"
+git push origin main
+```
+
+This keeps the repository ready for the next release.
   --notes "Release notes here" \
   --latest
 

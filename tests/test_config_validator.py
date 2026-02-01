@@ -23,7 +23,7 @@ mcp_server:
 provider: anthropic
 agent_harness: claude-code
 model: claude-sonnet-4-5-20250514
-benchmark: swe-bench
+benchmark: swe-bench-lite
 sample_size: 10
 timeout_seconds: 300
 max_concurrent: 4

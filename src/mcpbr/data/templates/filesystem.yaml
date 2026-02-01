@@ -35,7 +35,7 @@ config:
   model: sonnet
 
   # Benchmark to run
-  benchmark: swe-bench
+  benchmark: swe-bench-verified
 
   # Number of tasks to evaluate (null for full dataset)
   sample_size: 10

@@ -110,7 +110,6 @@ def _create_test_suite(
     _add_property(properties, "provider", results.metadata["config"]["provider"])
     _add_property(properties, "agent_harness", results.metadata["config"]["agent_harness"])
     _add_property(properties, "benchmark", results.metadata["config"]["benchmark"])
-    _add_property(properties, "dataset", results.metadata["config"]["dataset"])
 
     if results.metadata["config"].get("cybergym_level") is not None:
         _add_property(

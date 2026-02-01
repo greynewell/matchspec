@@ -55,7 +55,16 @@ class TestGenerateJsonSchema:
         schema = generate_json_schema()
 
         mcp_server = schema["properties"]["mcp_server"]
-        assert "properties" in mcp_server or "allOf" in mcp_server or "$ref" in mcp_server
+        # Check direct structure
+        if "properties" in mcp_server or "allOf" in mcp_server or "$ref" in mcp_server:
+            assert True
+        # Check anyOf structure (for Optional fields in Pydantic)
+        elif "anyOf" in mcp_server:
+            # Find the non-null option in anyOf
+            refs = [opt for opt in mcp_server["anyOf"] if "$ref" in opt or "properties" in opt]
+            assert len(refs) > 0, "mcp_server anyOf should contain $ref or properties"
+        else:
+            assert False, f"mcp_server has unexpected structure: {mcp_server.keys()}"
 
     def test_schema_has_examples(self) -> None:
         """Test that schema includes example configurations."""

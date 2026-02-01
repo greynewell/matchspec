@@ -19,6 +19,7 @@ Benchmark your MCP server against real GitHub issues. One command, hard numbers.
 **Model Context Protocol Benchmark Runner**
 
 [![PyPI version](https://badge.fury.io/py/mcpbr.svg)](https://pypi.org/project/mcpbr/)
+[![npm version](https://badge.fury.io/js/mcpbr-cli.svg)](https://www.npmjs.com/package/mcpbr-cli)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/greynewell/mcpbr/actions/workflows/ci.yml/badge.svg)](https://github.com/greynewell/mcpbr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -60,10 +61,14 @@ mcpbr supports multiple software engineering benchmarks through a flexible abstr
 ### SWE-bench (Default)
 Real GitHub issues requiring bug fixes and patches. The agent generates unified diffs evaluated by running pytest test suites.
 
-- **Dataset**: [SWE-bench/SWE-bench_Lite](https://huggingface.co/datasets/SWE-bench/SWE-bench_Lite)
 - **Task**: Generate patches to fix bugs
 - **Evaluation**: Test suite pass/fail
 - **Pre-built images**: Available for most tasks
+
+**Variants:**
+- **swe-bench-verified** (default) - Manually validated test cases for higher quality evaluation ([SWE-bench/SWE-bench_Verified](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified))
+- **swe-bench-lite** - 300 tasks, quick testing ([SWE-bench/SWE-bench_Lite](https://huggingface.co/datasets/SWE-bench/SWE-bench_Lite))
+- **swe-bench-full** - 2,294 tasks, complete benchmark ([SWE-bench/SWE-bench](https://huggingface.co/datasets/SWE-bench/SWE-bench))
 
 ### CyberGym
 Security vulnerabilities requiring Proof-of-Concept (PoC) exploits. The agent generates exploits that trigger crashes in vulnerable code.
@@ -93,19 +98,19 @@ Grade-school math word problems testing mathematical reasoning and chain-of-thou
 - **Learn more**: [GSM8K Paper](https://arxiv.org/abs/2110.14168) | [GitHub](https://github.com/openai/grade-school-math)
 
 ```bash
-# Run SWE-bench (default)
+# Run SWE-bench Verified (default - manually validated tests)
 mcpbr run -c config.yaml
 
-# Run CyberGym at level 2
-mcpbr run -c config.yaml --benchmark cybergym --level 2
+# Run SWE-bench Lite (300 tasks, quick testing)
+mcpbr run -c config.yaml -b swe-bench-lite
 
-# Run MCPToolBench++
-mcpbr run -c config.yaml --benchmark mcptoolbench
+# Run SWE-bench Full (2,294 tasks, complete benchmark)
+mcpbr run -c config.yaml -b swe-bench-full
 
 # Run GSM8K
 mcpbr run -c config.yaml --benchmark gsm8k -n 50
 
-# List available benchmarks
+# List all available benchmarks
 mcpbr benchmarks
 ```
 
@@ -223,6 +228,8 @@ Run `mcpbr models` to see the full list.
 
 ### via npm
 
+[![npm package](https://img.shields.io/npm/v/mcpbr-cli.svg)](https://www.npmjs.com/package/mcpbr-cli)
+
 ```bash
 # Run with npx (no installation)
 npx mcpbr-cli run -c config.yaml
@@ -232,6 +239,8 @@ npm install -g mcpbr-cli
 mcpbr run -c config.yaml
 ```
 
+> **Package**: [`mcpbr-cli`](https://www.npmjs.com/package/mcpbr-cli) on npm
+>
 > **Note**: The npm package requires Python 3.11+ and the mcpbr Python package (`pip install mcpbr`)
 
 ### via pip
@@ -322,6 +331,60 @@ max_concurrent: 4
 ```bash
 mcpbr run --config config.yaml
 ```
+
+## Side-by-Side Server Comparison
+
+Compare two MCP servers head-to-head in a single evaluation run to see which implementation performs better.
+
+### Quick Example
+
+```yaml
+# comparison-config.yaml
+comparison_mode: true
+
+mcp_server_a:
+  name: "Task Queries"
+  command: node
+  args: [build/index.js]
+  cwd: /path/to/task-queries
+
+mcp_server_b:
+  name: "Edge Identity"
+  command: node
+  args: [build/index.js]
+  cwd: /path/to/edge-identity
+
+benchmark: swe-bench-lite
+sample_size: 10
+```
+
+```bash
+mcpbr run -c comparison-config.yaml -o results.json
+```
+
+### Results Output
+
+```text
+Side-by-Side MCP Server Comparison
+
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┓
+┃ Metric            ┃ Task Queries ┃ Edge Identity┃ Δ (A - B)┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━┩
+│ Resolved Tasks    │ 4/10         │ 2/10         │ +2       │
+│ Resolution Rate   │ 40.0%        │ 20.0%        │ +100.0%  │
+└───────────────────┴──────────────┴──────────────┴──────────┘
+
+✓ Task Queries unique wins: 2 tasks
+  - django__django-12286
+  - astropy__astropy-7606
+```
+
+**Use cases:**
+- **A/B testing**: Compare optimized vs. baseline implementations
+- **Tool evaluation**: Test different MCP tool sets
+- **Version comparison**: Benchmark v2.0 vs. v1.5
+
+See [docs/comparison-mode.md](docs/comparison-mode.md) for complete documentation.
 
 ## Claude Code Integration
 
@@ -632,6 +695,7 @@ Run SWE-bench evaluation with the configured MCP server.
 | `--smtp-port PORT` | | SMTP server port (default: 587) |
 | `--smtp-user USER` | | SMTP username for authentication |
 | `--smtp-password PASS` | | SMTP password for authentication |
+| `--profile` | | Enable comprehensive performance profiling (tool latency, memory, overhead) |
 | `--help` | `-h` | Show help message |
 
 </details>
@@ -745,6 +809,58 @@ mcpbr cleanup -f
 ```
 
 </details>
+
+## Performance Profiling
+
+mcpbr includes comprehensive performance profiling to understand MCP server overhead and identify optimization opportunities.
+
+### Enable Profiling
+
+```bash
+# Via CLI flag
+mcpbr run -c config.yaml --profile
+
+# Or in config.yaml
+enable_profiling: true
+```
+
+### What Gets Measured
+
+- **Tool call latencies** with percentiles (p50, p95, p99)
+- **Memory usage** (peak and average RSS/VMS)
+- **Infrastructure overhead** (Docker and MCP server startup times)
+- **Tool discovery speed** (time to first tool use)
+- **Tool switching overhead** (time between tool calls)
+- **Automated insights** from profiling data
+
+### Example Profiling Output
+
+```json
+{
+  "profiling": {
+    "task_duration_seconds": 140.5,
+    "tool_call_latencies": {
+      "Read": {"count": 15, "avg_seconds": 0.8, "p95_seconds": 1.5},
+      "Bash": {"avg_seconds": 2.3, "p95_seconds": 5.1}
+    },
+    "memory_profile": {"peak_rss_mb": 512.3, "avg_rss_mb": 387.5},
+    "docker_startup_seconds": 2.1,
+    "mcp_server_startup_seconds": 1.8
+  }
+}
+```
+
+### Automated Insights
+
+The profiler automatically identifies performance issues:
+
+```text
+- Bash is the slowest tool (avg: 2.3s, p95: 5.1s)
+- Docker startup adds 2.1s overhead per task
+- Fast tool discovery: first tool use in 8.3s
+```
+
+See [docs/profiling.md](docs/profiling.md) for complete profiling documentation.
 
 ## Example Run
 

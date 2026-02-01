@@ -32,6 +32,9 @@ class Benchmark(Protocol):
         sample_size: int | None = None,
         task_ids: list[str] | None = None,
         level: int | None = None,
+        filter_difficulty: list[str] | None = None,
+        filter_category: list[str] | None = None,
+        filter_tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Load tasks from the benchmark dataset.
 
@@ -39,6 +42,9 @@ class Benchmark(Protocol):
             sample_size: Maximum number of tasks to load (None for all).
             task_ids: Specific task IDs to load (None for all).
             level: Difficulty/context level (benchmark-specific, e.g., CyberGym 0-3).
+            filter_difficulty: Filter by difficulty levels (benchmark-specific).
+            filter_category: Filter by categories (benchmark-specific).
+            filter_tags: Filter by tags (requires all tags to match).
 
         Returns:
             List of task dictionaries in benchmark-specific format.

@@ -1,0 +1,67 @@
+# HumanEval benchmark configuration for mcpbr
+#
+# HumanEval is a code generation benchmark with 164 Python programming problems.
+# Each task requires completing a function given its signature and docstring.
+#
+# Requires ANTHROPIC_API_KEY environment variable.
+
+# Benchmark selection
+benchmark: "humaneval"
+
+# Dataset configuration (optional, default is openai_humaneval)
+dataset: "openai_humaneval"
+
+# Number of tasks to evaluate (null for full dataset of 164 tasks)
+sample_size: 10
+
+# MCP server configuration
+mcp_server:
+  # Name to register the MCP server as (appears in tool names like mcp__<name>__*)
+  name: "filesystem"
+
+  # Command to start the MCP server
+  command: "npx"
+
+  # Arguments to pass to the command
+  # Use {workdir} as a placeholder for the task working directory
+  args:
+    - "-y"
+    - "@modelcontextprotocol/server-filesystem"
+    - "{workdir}"
+
+  # Environment variables for the MCP server (optional)
+  env: {}
+
+# Model provider (currently only anthropic is supported)
+provider: "anthropic"
+
+# Agent harness (currently only claude-code is supported)
+agent_harness: "claude-code"
+
+# Custom agent prompt (optional)
+# Use {problem_statement} as a placeholder for the task description
+# If not specified, a default prompt is used
+# agent_prompt: |
+#   Complete the following Python function:
+#
+#   {problem_statement}
+#
+#   INSTRUCTIONS:
+#   - Implement the function according to its docstring
+#   - Save your implementation to a file named 'solution.py'
+#   - Ensure your code passes all test cases
+
+# Model ID (Anthropic model identifier)
+# Run 'mcpbr models' to see available options
+model: "sonnet"
+
+# Timeout for each task in seconds
+# HumanEval tasks are generally quick, but allow time for agent reasoning
+timeout_seconds: 180
+
+# Maximum concurrent task evaluations
+max_concurrent: 4
+
+# Maximum agent iterations per task
+# HumanEval tasks are simpler than SWE-bench, fewer iterations needed
+max_iterations: 15

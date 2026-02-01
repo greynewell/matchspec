@@ -7,6 +7,7 @@ import logging
 import os
 import signal
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -129,6 +130,8 @@ class TaskEnvironment:
     instance_id: str
     uses_prebuilt: bool = field(default=False)
     claude_cli_installed: bool = field(default=False)
+    _temp_dir: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
+    _manager: "DockerEnvironmentManager | None" = field(default=None, repr=False)
 
     async def exec_command(
         self,
@@ -281,12 +284,28 @@ class TaskEnvironment:
         return Path(full_path).read_text()
 
     async def cleanup(self) -> None:
-        """Stop and remove the container."""
+        """Stop and remove the container and clean up temp directory.
+
+        This aggressively cleans up resources immediately after task completion
+        to prevent disk space exhaustion when running many tasks.
+        """
+        # Stop and remove container
         try:
             self.container.stop(timeout=5)
             self.container.remove(force=True)
         except Exception:
             pass
+
+        # Clean up temp directory immediately
+        if self._temp_dir is not None:
+            try:
+                self._temp_dir.cleanup()
+            except Exception:
+                pass
+
+            # Remove from manager's list to avoid double cleanup
+            if self._manager is not None and self._temp_dir in self._manager._temp_dirs:
+                self._manager._temp_dirs.remove(self._temp_dir)
 
 
 class DockerEnvironmentManager:
@@ -360,12 +379,72 @@ class DockerEnvironmentManager:
         self._fallback_image_built = True
 
     def _use_fallback_image(self) -> None:
-        """Tag python:3.11-slim as our image if Dockerfile not found."""
+        """Build a comprehensive fallback image if Dockerfile not found.
+
+        Includes all system dependencies commonly needed for SWE-bench tasks:
+        - Version control (git)
+        - Build tools (gcc, g++, make)
+        - SSL/crypto libraries (for requests, urllib3, cryptography)
+        - Database drivers (PostgreSQL, MySQL)
+        - XML processing (lxml)
+        - Image processing (Pillow, matplotlib)
+        - Python testing tools (pytest, coverage)
+        """
         try:
-            img = self.client.images.get("python:3.11-slim")
-            img.tag(self.FALLBACK_IMAGE)
-        except Exception:
-            pass
+            # Build a comprehensive fallback image with common SWE-bench dependencies
+            dockerfile_content = """FROM python:3.11-slim
+
+# Install system dependencies commonly needed for SWE-bench tasks
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    git \\
+    curl \\
+    wget \\
+    vim \\
+    ca-certificates \\
+    build-essential \\
+    libssl-dev \\
+    libffi-dev \\
+    libpq-dev \\
+    default-libmysqlclient-dev \\
+    libxml2-dev \\
+    libxslt1-dev \\
+    libjpeg-dev \\
+    libpng-dev \\
+    zlib1g-dev \\
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Install common Python testing tools
+RUN pip install --no-cache-dir \\
+    pytest \\
+    pytest-xdist \\
+    coverage
+
+CMD ["/bin/bash"]
+"""
+            with tempfile.TemporaryDirectory() as tmpdir:
+                dockerfile_path = os.path.join(tmpdir, "Dockerfile")
+                with open(dockerfile_path, "w") as f:
+                    f.write(dockerfile_content)
+
+                self.client.images.build(
+                    path=tmpdir,
+                    tag=self.FALLBACK_IMAGE,
+                    rm=True,
+                )
+        except Exception as e:
+            # Last resort: just tag the base image
+            logger.warning(
+                f"Failed to build comprehensive fallback image: {e}. "
+                f"Falling back to tagging python:3.11-slim as {self.FALLBACK_IMAGE}"
+            )
+            try:
+                img = self.client.images.get("python:3.11-slim")
+                img.tag(self.FALLBACK_IMAGE)
+            except Exception as tag_error:
+                logger.error(f"Failed to create fallback image {self.FALLBACK_IMAGE}: {tag_error}")
+                raise
 
     async def create_environment(
         self,
@@ -404,26 +483,45 @@ class DockerEnvironmentManager:
         container_workdir = "/testbed" if uses_prebuilt else "/workspace"
 
         def _create_container() -> Container:
-            container = self.client.containers.run(
-                image_name,
-                command="tail -f /dev/null",
-                name=container_name,
-                detach=True,
-                platform="linux/amd64" if uses_prebuilt else None,
-                network_mode="bridge",  # Enable network for API calls
-                volumes={
-                    host_workdir: {"bind": "/workspace", "mode": "rw"},
-                },
-                working_dir=container_workdir,
-                remove=False,
-                labels={
-                    MCPBR_LABEL: "true",
-                    MCPBR_INSTANCE_LABEL: str(instance_id),
-                    MCPBR_SESSION_LABEL: self._session_id,
-                    MCPBR_TIMESTAMP_LABEL: self._session_timestamp,
-                },
-            )
-            return container
+            max_retries = 3
+            base_delay = 1  # Start with 1 second delay
+
+            for attempt in range(max_retries + 1):
+                try:
+                    container = self.client.containers.run(
+                        image_name,
+                        command="tail -f /dev/null",
+                        name=container_name,
+                        detach=True,
+                        platform="linux/amd64" if uses_prebuilt else None,
+                        network_mode="bridge",  # Enable network for API calls
+                        volumes={
+                            host_workdir: {"bind": "/workspace", "mode": "rw"},
+                        },
+                        working_dir=container_workdir,
+                        remove=False,
+                        labels={
+                            MCPBR_LABEL: "true",
+                            MCPBR_INSTANCE_LABEL: str(instance_id),
+                            MCPBR_SESSION_LABEL: self._session_id,
+                            MCPBR_TIMESTAMP_LABEL: self._session_timestamp,
+                        },
+                    )
+                    return container
+                except docker.errors.APIError as e:
+                    # Only retry on 500 errors (transient Docker daemon issues)
+                    response = getattr(e, "response", None)
+                    if response is not None and getattr(response, "status_code", None) == 500:
+                        if attempt < max_retries:
+                            delay = base_delay * (2**attempt)  # Exponential backoff: 1s, 2s, 4s
+                            logger.warning(
+                                f"Docker API error (attempt {attempt + 1}/{max_retries + 1}): {e}. "
+                                f"Retrying in {delay}s..."
+                            )
+                            time.sleep(delay)
+                            continue
+                    # Re-raise for non-500 errors or after max retries
+                    raise
 
         loop = asyncio.get_event_loop()
         container = await loop.run_in_executor(None, _create_container)
@@ -436,6 +534,8 @@ class DockerEnvironmentManager:
             instance_id=instance_id,
             uses_prebuilt=uses_prebuilt,
             claude_cli_installed=False,
+            _temp_dir=temp_dir,
+            _manager=self,
         )
 
         if uses_prebuilt:

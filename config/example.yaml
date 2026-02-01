@@ -43,6 +43,10 @@ agent_harness: "claude-code"
 model: "sonnet"
 
 # Dataset configuration
+# SWE-bench variants:
+#   - SWE-bench/SWE-bench_Lite (300 tasks, default)
+#   - SWE-bench/SWE-bench_Verified (manually validated tests, high quality)
+#   - SWE-bench/SWE-bench (2,294 tasks, full benchmark)
 dataset: "SWE-bench/SWE-bench_Lite"
 
 # Number of tasks to evaluate (null for full dataset)

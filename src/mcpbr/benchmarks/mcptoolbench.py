@@ -37,6 +37,9 @@ class MCPToolBenchmark:
         sample_size: int | None = None,
         task_ids: list[str] | None = None,
         level: int | None = None,
+        filter_difficulty: list[str] | None = None,
+        filter_category: list[str] | None = None,
+        filter_tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Load tasks from MCPToolBench++ dataset.
 
@@ -44,6 +47,9 @@ class MCPToolBenchmark:
             sample_size: Maximum number of tasks to load (None for all).
             task_ids: Specific task IDs (uuids) to load (None for all).
             level: Unused for MCPToolBench++ (no difficulty levels).
+            filter_difficulty: Filter by difficulty (call_type: single, multi).
+            filter_category: Filter by task categories (e.g., browser, finance, web).
+            filter_tags: Filter by tags (not supported for MCPToolBench++ base dataset).
 
         Returns:
             List of MCPToolBench++ task dictionaries.
@@ -59,6 +65,46 @@ class MCPToolBenchmark:
                     tasks.append(item)
         else:
             tasks = list(dataset)
+
+        # Apply filters
+        if filter_difficulty:
+            # For MCPToolBench++, difficulty can map to call_type
+            # "easy" or "single" -> single-step tasks
+            # "hard", "multi", or "medium" -> multi-step tasks
+            # Note: MCPToolBench++ only has two complexity levels (single/multi),
+            # so "medium" maps to "multi" for backward compatibility
+            call_types = set()
+            for diff in filter_difficulty:
+                diff_lower = diff.lower()
+                if diff_lower in ("easy", "single"):
+                    call_types.add("single")
+                elif diff_lower in ("hard", "multi", "medium"):
+                    call_types.add("multi")
+                else:
+                    # Try to use as-is if it's a valid call_type
+                    call_types.add(diff)
+
+            if call_types:
+                filtered = []
+                for task in tasks:
+                    call_type = task.get("call_type", "")
+                    if call_type in call_types:
+                        filtered.append(task)
+                tasks = filtered
+
+        if filter_category:
+            # Filter by category field
+            filtered = []
+            category_set = set(cat.lower() for cat in filter_category)
+            for task in tasks:
+                task_category = task.get("category", "").lower()
+                if task_category in category_set:
+                    filtered.append(task)
+            tasks = filtered
+
+        # Note: filter_tags not applicable to base MCPToolBench++ dataset
+        # Parameter required by Benchmark protocol
+        _ = filter_tags  # Silence unused parameter warning
 
         if sample_size and len(tasks) > sample_size:
             tasks = tasks[:sample_size]

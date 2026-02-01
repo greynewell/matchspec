@@ -258,7 +258,7 @@ class TestTemplateContent:
         assert template.category == "File Operations"
         assert "filesystem" in template.tags
         assert template.config["mcp_server"]["command"] == "npx"
-        assert template.config["benchmark"] == "swe-bench"
+        assert template.config["benchmark"] == "swe-bench-verified"
 
     def test_cybergym_templates(self) -> None:
         """Test CyberGym templates have correct benchmark."""

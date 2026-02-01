@@ -17,6 +17,7 @@ from .harness import run_evaluation
 from .harnesses import list_available_harnesses
 from .junit_reporter import save_junit_xml
 from .models import list_supported_models
+from .output_validator import validate_output_file
 from .regression import (
     detect_regressions,
     format_regression_report,
@@ -134,7 +135,7 @@ def main() -> None:
     "benchmark_override",
     type=click.Choice(VALID_BENCHMARKS),
     default=None,
-    help="Override benchmark from config (swe-bench, cybergym, or mcptoolbench)",
+    help="Override benchmark from config (use 'mcpbr benchmarks' to list all)",
 )
 @click.option(
     "--level",
@@ -346,10 +347,40 @@ def main() -> None:
     help="Skip MCP server pre-flight health check",
 )
 @click.option(
+    "--skip-preflight",
+    is_flag=True,
+    help="Skip comprehensive pre-flight validation (use with caution)",
+)
+@click.option(
     "--output-dir",
     type=click.Path(path_type=Path),
     default=None,
     help="Directory for all outputs (logs, state, results). Default: .mcpbr_run_TIMESTAMP",
+)
+@click.option(
+    "--trial-mode",
+    is_flag=True,
+    help="Enable trial mode: isolated state, no caching (for repeated experiments)",
+)
+@click.option(
+    "--filter-difficulty",
+    multiple=True,
+    help="Filter benchmarks by difficulty (can be specified multiple times, e.g., --filter-difficulty easy --filter-difficulty medium)",
+)
+@click.option(
+    "--filter-category",
+    multiple=True,
+    help="Filter benchmarks by category (can be specified multiple times, e.g., --filter-category browser --filter-category finance)",
+)
+@click.option(
+    "--filter-tags",
+    multiple=True,
+    help="Filter benchmarks by tags (can be specified multiple times, requires all tags to match)",
+)
+@click.option(
+    "--profile",
+    is_flag=True,
+    help="Enable comprehensive performance profiling (tool latency, memory, overhead)",
 )
 def run(
     config_path: Path,
@@ -390,20 +421,26 @@ def run(
     state_dir: Path | None,
     no_incremental: bool,
     skip_health_check: bool,
+    skip_preflight: bool,
     output_dir: Path | None,
+    trial_mode: bool,
+    filter_difficulty: tuple[str, ...],
+    filter_category: tuple[str, ...],
+    filter_tags: tuple[str, ...],
+    profile: bool,
 ) -> None:
-    """Run SWE-bench evaluation with the configured MCP server.
+    """Run benchmark evaluation with the configured MCP server.
 
     \b
     Examples:
-      mcpbr run -c config.yaml           # Full evaluation
-      mcpbr run -c config.yaml -M        # MCP only
-      mcpbr run -c config.yaml -B        # Baseline only
-      mcpbr run -c config.yaml -n 10     # Sample 10 tasks
-      mcpbr run -c config.yaml -v        # Verbose output
+      mcpbr run -c config.yaml                    # Full evaluation (defaults to swe-bench-verified)
+      mcpbr run -c config.yaml -M                 # MCP only
+      mcpbr run -c config.yaml -B                 # Baseline only
+      mcpbr run -c config.yaml -n 10              # Sample 10 tasks
+      mcpbr run -c config.yaml -b swe-bench-lite  # Use Lite benchmark (300 tasks)
+      mcpbr run -c config.yaml -v                 # Verbose output
       mcpbr run -c config.yaml -o out.json -r report.md
-      mcpbr run -c config.yaml --yaml out.yaml  # Save as YAML
-      mcpbr run -c config.yaml -y out.yaml  # Save as YAML (short form)
+      mcpbr benchmarks                            # List all available benchmarks
 
     \b
     Incremental Evaluation:
@@ -413,11 +450,24 @@ def run(
       mcpbr run -c config.yaml --no-incremental   # Disable caching
 
     \b
+    Trial Mode (for repeated experiments):
+      mcpbr run -c config.yaml --trial-mode -o trial_1.json
+      for i in {1..5}; do mcpbr run -c config.yaml --trial-mode -o trial_${i}.json; done
+
+    \b
     Regression Detection:
       mcpbr run -c config.yaml --baseline-results baseline.json
       mcpbr run -c config.yaml --baseline-results baseline.json --regression-threshold 0.1
       mcpbr run -c config.yaml --baseline-results baseline.json --slack-webhook https://...
       mcpbr run -c config.yaml --baseline-results baseline.json --discord-webhook https://...
+
+    \b
+    Exit Codes:
+      0   Success (at least one task resolved)
+      1   Fatal error (invalid config, Docker unavailable, crash)
+      2   No resolutions (evaluation ran but 0% success)
+      3   Nothing evaluated (all tasks cached/skipped)
+      130 Interrupted by user (Ctrl+C)
     """
     register_signal_handlers()
 
@@ -484,6 +534,36 @@ def run(
             console.print("[red]Error: Budget must be positive[/red]")
             sys.exit(1)
         config.budget = budget
+
+    # Handle trial mode
+    if trial_mode:
+        # Override state settings for clean trials
+        no_incremental = True
+
+        # Generate unique state directory with microseconds for uniqueness
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        state_dir = Path(f".mcpbr_trial_{timestamp}")
+
+        console.print("[cyan]Trial mode enabled:[/cyan]")
+        console.print("  • State caching disabled")
+        console.print(f"  • Isolated state dir: {state_dir}")
+        console.print("  • Fresh evaluation guaranteed")
+        console.print()
+
+    # Apply filter overrides
+    if filter_difficulty:
+        config.filter_difficulty = list(filter_difficulty)
+
+    if filter_category:
+        config.filter_category = list(filter_category)
+
+    if filter_tags:
+        config.filter_tags = list(filter_tags)
+
+    if profile:
+        config.enable_profiling = True
 
     # Determine output directory AFTER all CLI overrides are applied
     import shutil
@@ -576,8 +656,20 @@ To archive:
     run_baseline = not mcp_only
     verbose = verbosity > 0
 
-    # Run MCP pre-flight health check if MCP is enabled
-    if run_mcp and not skip_health_check:
+    # Run comprehensive pre-flight validation
+    if not skip_preflight:
+        from .preflight import display_preflight_results, run_comprehensive_preflight
+
+        checks, failures = run_comprehensive_preflight(config, config_path)
+        display_preflight_results(checks, failures)
+
+        if failures:
+            console.print(
+                "[yellow]Use --skip-preflight to proceed anyway (not recommended)[/yellow]"
+            )
+            sys.exit(1)
+    elif not skip_health_check and run_mcp:
+        # Fallback to old MCP-only check if pre-flight is skipped but health check is not
         from .smoke_test import run_mcp_preflight_check
 
         success, error_msg = asyncio.run(run_mcp_preflight_check(config_path))
@@ -612,8 +704,6 @@ To archive:
     console.print(f"  Benchmark: {config.benchmark}")
     if config.benchmark == "cybergym":
         console.print(f"  CyberGym Level: {config.cybergym_level}")
-    dataset_display = config.dataset if config.dataset else "default"
-    console.print(f"  Dataset: {dataset_display}")
     console.print(f"  Sample size: {config.sample_size or 'full'}")
     console.print(f"  Run MCP: {run_mcp}, Run Baseline: {run_baseline}")
     console.print(f"  Pre-built images: {config.use_prebuilt_images}")
@@ -661,15 +751,37 @@ To archive:
         if log_file:
             log_file.close()
 
-    print_summary(results, console)
+    # Use comparison summary if in comparison mode
+    if results.summary.get("mcp_server_a"):
+        from .reporting import print_comparison_summary
+
+        print_comparison_summary(results, console)
+    else:
+        print_summary(results, console)
 
     if output_path:
         save_json_results(results, output_path)
         console.print(f"\n[green]Results saved to {output_path}[/green]")
 
+        # Validate output file
+        valid, msg = validate_output_file(output_path)
+        if not valid:
+            console.print(f"[red]✗ {msg}[/red]")
+            console.print("[yellow]Check logs for errors during evaluation[/yellow]")
+            sys.exit(4)
+        console.print(f"[green]✓ Output validated: {msg}[/green]")
+
     if yaml_output:
         save_yaml_results(results, yaml_output)
         console.print(f"[green]YAML results saved to {yaml_output}[/green]")
+
+        # Validate YAML output file
+        valid, msg = validate_output_file(yaml_output)
+        if not valid:
+            console.print(f"[red]✗ {msg}[/red]")
+            console.print("[yellow]Check logs for errors during evaluation[/yellow]")
+            sys.exit(4)
+        console.print(f"[green]✓ Output validated: {msg}[/green]")
 
     if report_path:
         save_markdown_report(results, report_path)
@@ -744,6 +856,48 @@ To archive:
             if verbose:
                 console.print_exception()
             sys.exit(1)
+
+    # Determine exit code based on evaluation results
+    exit_code = 0
+
+    # Check if anything was evaluated (exit code 3)
+    incremental_info = results.metadata.get("incremental", {})
+    if incremental_info.get("enabled"):
+        evaluated_count = incremental_info.get("evaluated_tasks", 0)
+        if evaluated_count == 0:
+            console.print("\n[yellow]⚠ No tasks evaluated (all cached)[/yellow]")
+            console.print("[dim]Use --reset-state or --no-incremental to re-run[/dim]")
+            exit_code = 3
+
+    # Check if anything was resolved (exit code 2)
+    # Only check this if we actually evaluated tasks
+    if exit_code == 0:
+        mcp_resolved = results.summary["mcp"]["resolved"]
+        baseline_resolved = results.summary["baseline"]["resolved"]
+        mcp_total = results.summary["mcp"]["total"]
+        baseline_total = results.summary["baseline"]["total"]
+
+        # Only report "no resolutions" if tasks were actually run
+        # If total is 0, no tasks were run (not a failure)
+        if mcp_only and mcp_total > 0 and mcp_resolved == 0:
+            console.print("\n[yellow]⚠ No tasks resolved (0% success)[/yellow]")
+            exit_code = 2
+        elif baseline_only and baseline_total > 0 and baseline_resolved == 0:
+            console.print("\n[yellow]⚠ No tasks resolved (0% success)[/yellow]")
+            exit_code = 2
+        elif not mcp_only and not baseline_only:
+            # For full run, check if either had tasks and none were resolved
+            if (
+                (mcp_total > 0 or baseline_total > 0)
+                and mcp_resolved == 0
+                and baseline_resolved == 0
+            ):
+                console.print("\n[yellow]⚠ No tasks resolved by either agent (0% success)[/yellow]")
+                exit_code = 2
+
+    # Exit with determined exit code
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -1059,30 +1213,44 @@ def benchmarks() -> None:
 
     table = Table()
     table.add_column("Benchmark", style="cyan")
+    table.add_column("Tasks")
     table.add_column("Description")
-    table.add_column("Output Type")
 
+    # SWE-bench variants
     table.add_row(
-        "swe-bench",
-        "Software bug fixes in GitHub repositories",
-        "Patch (unified diff)",
+        "swe-bench-verified",
+        "Subset",
+        "Bug fixing (manually validated tests) - DEFAULT",
     )
     table.add_row(
+        "swe-bench-lite",
+        "300",
+        "Bug fixing (quick testing, curated tasks)",
+    )
+    table.add_row(
+        "swe-bench-full",
+        "2,294",
+        "Bug fixing (complete benchmark, research)",
+    )
+    # Other benchmarks
+    table.add_row(
         "cybergym",
-        "Security vulnerability exploitation (PoC generation)",
-        "Exploit code",
+        "Varies",
+        "Security exploits (PoC generation, difficulty levels 0-3)",
     )
     table.add_row(
         "mcptoolbench",
-        "MCP tool use evaluation (tool discovery, selection, invocation)",
-        "Tool call sequence",
+        "Varies",
+        "MCP tool use (tool discovery, selection, invocation)",
     )
 
     console.print(table)
-    console.print("\n[dim]Use --benchmark flag with 'run' command to select a benchmark[/dim]")
+    console.print("\n[dim]Use -b/--benchmark flag to select a benchmark[/dim]")
     console.print("[dim]Examples:[/dim]")
-    console.print("[dim]  mcpbr run -c config.yaml --benchmark cybergym --level 2[/dim]")
-    console.print("[dim]  mcpbr run -c config.yaml --benchmark mcptoolbench[/dim]")
+    console.print("[dim]  mcpbr run -c config.yaml -b swe-bench-verified[/dim]")
+    console.print("[dim]  mcpbr run -c config.yaml -b swe-bench-full -n 50[/dim]")
+    console.print("[dim]  mcpbr run -c config.yaml -b cybergym --level 2[/dim]")
+    console.print("[dim]  mcpbr run -c config.yaml -b mcptoolbench[/dim]")
 
 
 @main.group(context_settings={"help_option_names": ["-h", "--help"]})

@@ -20,7 +20,7 @@ def sample_results() -> EvaluationResults:
                 "model": "claude-sonnet-4-5-20250929",
                 "provider": "anthropic",
                 "agent_harness": "claude-code",
-                "benchmark": "swe-bench",
+                "benchmark": "swe-bench-lite",
                 "dataset": "SWE-bench/SWE-bench_Lite",
                 "sample_size": 2,
                 "timeout_seconds": 300,
@@ -122,7 +122,7 @@ class TestSaveXmlResults:
             assert config.find("model") is not None
             assert config.find("model").text == "claude-sonnet-4-5-20250929"
             assert config.find("provider").text == "anthropic"
-            assert config.find("benchmark").text == "swe-bench"
+            assert config.find("benchmark").text == "swe-bench-lite"
 
     def test_xml_contains_summary(self, sample_results: EvaluationResults) -> None:
         """Test that XML contains summary section with expected data."""

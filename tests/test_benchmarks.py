@@ -6,6 +6,7 @@ from mcpbr.benchmarks import (
     Benchmark,
     CyberGymBenchmark,
     GSM8KBenchmark,
+    HumanEvalBenchmark,
     MCPToolBenchmark,
     SWEBenchmark,
     create_benchmark,
@@ -19,28 +20,41 @@ class TestBenchmarkRegistry:
     def test_list_benchmarks(self) -> None:
         """Test listing available benchmarks."""
         benchmarks = list_benchmarks()
-        assert "swe-bench" in benchmarks
+        assert "swe-bench-lite" in benchmarks
+        assert "swe-bench-verified" in benchmarks
+        assert "swe-bench-full" in benchmarks
         assert "cybergym" in benchmarks
+        assert "humaneval" in benchmarks
         assert "mcptoolbench" in benchmarks
         assert "gsm8k" in benchmarks
-        assert len(benchmarks) >= 4
+        assert len(benchmarks) >= 7
 
-    def test_create_swebench(self) -> None:
-        """Test creating SWE-bench benchmark."""
-        benchmark = create_benchmark("swe-bench")
+    def test_create_swebench_lite(self) -> None:
+        """Test creating SWE-bench Lite benchmark."""
+        benchmark = create_benchmark("swe-bench-lite")
         assert isinstance(benchmark, SWEBenchmark)
         assert benchmark.name == "swe-bench"
+        assert benchmark.dataset == "SWE-bench/SWE-bench_Lite"
+
+    def test_create_swebench_verified(self) -> None:
+        """Test creating SWE-bench Verified benchmark."""
+        benchmark = create_benchmark("swe-bench-verified")
+        assert isinstance(benchmark, SWEBenchmark)
+        assert benchmark.name == "swe-bench"
+        assert benchmark.dataset == "SWE-bench/SWE-bench_Verified"
+
+    def test_create_swebench_full(self) -> None:
+        """Test creating SWE-bench Full benchmark."""
+        benchmark = create_benchmark("swe-bench-full")
+        assert isinstance(benchmark, SWEBenchmark)
+        assert benchmark.name == "swe-bench"
+        assert benchmark.dataset == "SWE-bench/SWE-bench"
 
     def test_create_cybergym(self) -> None:
         """Test creating CyberGym benchmark."""
         benchmark = create_benchmark("cybergym")
         assert isinstance(benchmark, CyberGymBenchmark)
         assert benchmark.name == "cybergym"
-
-    def test_create_with_custom_dataset(self) -> None:
-        """Test creating benchmark with custom dataset."""
-        benchmark = create_benchmark("swe-bench", dataset="custom/dataset")
-        assert benchmark.dataset == "custom/dataset"
 
     def test_create_cybergym_with_level(self) -> None:
         """Test creating CyberGym with difficulty level."""
@@ -88,6 +102,18 @@ class TestSWEBenchmark:
         """Test SWE-bench with custom dataset."""
         benchmark = SWEBenchmark(dataset="custom/dataset")
         assert benchmark.dataset == "custom/dataset"
+
+    def test_verified_dataset(self) -> None:
+        """Test SWE-bench with Verified dataset."""
+        benchmark = SWEBenchmark(dataset="SWE-bench/SWE-bench_Verified")
+        assert benchmark.dataset == "SWE-bench/SWE-bench_Verified"
+        assert benchmark.name == "swe-bench"
+
+    def test_full_dataset(self) -> None:
+        """Test SWE-bench with full dataset."""
+        benchmark = SWEBenchmark(dataset="SWE-bench/SWE-bench")
+        assert benchmark.dataset == "SWE-bench/SWE-bench"
+        assert benchmark.name == "swe-bench"
 
     def test_normalize_task(self) -> None:
         """Test normalizing SWE-bench task."""
@@ -323,6 +349,118 @@ class TestMCPToolBenchmark:
         assert "no tool calls" in result["details"].lower()
 
 
+class TestHumanEvalBenchmark:
+    """Tests for HumanEval benchmark implementation."""
+
+    def test_initialization(self) -> None:
+        """Test HumanEval initialization."""
+        benchmark = HumanEvalBenchmark()
+        assert benchmark.name == "humaneval"
+        assert benchmark.dataset == "openai_humaneval"
+
+    def test_custom_dataset(self) -> None:
+        """Test HumanEval with custom dataset."""
+        benchmark = HumanEvalBenchmark(dataset="custom/dataset")
+        assert benchmark.dataset == "custom/dataset"
+
+    def test_normalize_task(self) -> None:
+        """Test normalizing HumanEval task."""
+        benchmark = HumanEvalBenchmark()
+        task = {
+            "task_id": "HumanEval/0",
+            "prompt": "def example(x):\n    '''Example function'''\n    pass",
+            "entry_point": "example",
+            "canonical_solution": "    return x",
+            "test": "def check(candidate):\n    assert candidate(1) == 1",
+        }
+
+        normalized = benchmark.normalize_task(task)
+        assert normalized.task_id == "HumanEval/0"
+        assert "Complete the following Python function" in normalized.problem_statement
+        assert normalized.repo == "openai/humaneval"
+        assert normalized.commit == "HEAD"
+        assert normalized.metadata["entry_point"] == "example"
+
+    def test_generate_problem_statement(self) -> None:
+        """Test problem statement generation."""
+        benchmark = HumanEvalBenchmark()
+        task = {
+            "task_id": "HumanEval/0",
+            "prompt": "def add(a, b):\n    '''Add two numbers'''\n    pass",
+            "entry_point": "add",
+        }
+
+        statement = benchmark._generate_problem_statement(task)
+        assert "HumanEval/0" in statement
+        assert "def add(a, b)" in statement
+        assert "solution.py" in statement
+        assert "entry_point" in statement.lower() or "add" in statement
+
+    def test_extract_code_from_markdown(self) -> None:
+        """Test extracting code from markdown solution."""
+        benchmark = HumanEvalBenchmark()
+        solution = """
+Here is the solution:
+
+```python
+def add(a, b):
+    return a + b
+```
+
+This should work!
+"""
+        code = benchmark._extract_code_from_solution(solution)
+        assert code is not None
+        assert "def add(a, b):" in code
+        assert "return a + b" in code
+
+    def test_extract_code_from_plain_text(self) -> None:
+        """Test extracting code from plain text solution."""
+        benchmark = HumanEvalBenchmark()
+        solution = """
+def add(a, b):
+    return a + b
+"""
+        code = benchmark._extract_code_from_solution(solution)
+        assert code is not None
+        assert "def add(a, b):" in code
+        assert "return a + b" in code
+
+    def test_extract_code_returns_none_for_no_code(self) -> None:
+        """Test that code extraction returns None when no code found."""
+        benchmark = HumanEvalBenchmark()
+        solution = "This is just text without any code."
+        code = benchmark._extract_code_from_solution(solution)
+        assert code is None
+
+    def test_get_prebuilt_image(self) -> None:
+        """Test getting pre-built image (should be None for HumanEval)."""
+        benchmark = HumanEvalBenchmark()
+        task = {"task_id": "HumanEval/0"}
+        image = benchmark.get_prebuilt_image(task)
+        assert image is None
+
+    def test_get_prompt_template(self) -> None:
+        """Test getting prompt template."""
+        benchmark = HumanEvalBenchmark()
+        prompt = benchmark.get_prompt_template()
+        assert "{problem_statement}" in prompt
+        assert "solution.py" in prompt
+        assert "function" in prompt.lower()
+        assert "implement" in prompt.lower()
+
+    def test_create_humaneval_benchmark(self) -> None:
+        """Test creating HumanEval benchmark via factory."""
+        benchmark = create_benchmark("humaneval")
+        assert isinstance(benchmark, HumanEvalBenchmark)
+        assert benchmark.name == "humaneval"
+
+    def test_create_humaneval_with_custom_dataset(self) -> None:
+        """Test creating HumanEval with custom dataset via factory."""
+        benchmark = create_benchmark("humaneval", dataset="custom/dataset")
+        assert benchmark.dataset == "custom/dataset"
+
+
 class TestBenchmarkProtocol:
     """Tests for benchmark protocol compliance."""
 
@@ -362,6 +500,17 @@ class TestBenchmarkProtocol:
     def test_gsm8k_implements_protocol(self) -> None:
         """Test that GSM8KBenchmark implements Benchmark protocol."""
         benchmark = GSM8KBenchmark()
+        assert isinstance(benchmark, Benchmark)
+        assert hasattr(benchmark, "load_tasks")
+        assert hasattr(benchmark, "normalize_task")
+        assert hasattr(benchmark, "create_environment")
+        assert hasattr(benchmark, "evaluate")
+        assert hasattr(benchmark, "get_prebuilt_image")
+        assert hasattr(benchmark, "get_prompt_template")
+
+    def test_humaneval_implements_protocol(self) -> None:
+        """Test that HumanEvalBenchmark implements Benchmark protocol."""
+        benchmark = HumanEvalBenchmark()
         assert isinstance(benchmark, Benchmark)
         assert hasattr(benchmark, "load_tasks")
         assert hasattr(benchmark, "normalize_task")
