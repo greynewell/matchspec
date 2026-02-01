@@ -162,11 +162,13 @@ class AzureConfig(BaseModel):
     def validate_resource_group(cls, v: str) -> str:
         """Validate resource group name format.
 
-        Azure resource groups must contain only alphanumeric characters, dashes, and underscores.
+        Azure resource groups must be 1-90 characters and contain only
+        alphanumeric characters, dashes, and underscores.
         """
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+        if not re.match(r"^[a-zA-Z0-9_-]{1,90}$", v):
             raise ValueError(
-                "resource_group must contain only alphanumeric characters, dashes, and underscores"
+                "resource_group must be 1-90 characters and contain only "
+                "alphanumeric characters, dashes, and underscores"
             )
         return v
 

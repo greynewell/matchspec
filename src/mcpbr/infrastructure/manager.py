@@ -7,6 +7,20 @@ from .base import InfrastructureProvider
 from .local import LocalProvider
 
 
+class UnknownInfrastructureModeError(ValueError):
+    """Raised when an unknown infrastructure mode is specified."""
+
+    def __init__(self, mode: str) -> None:
+        super().__init__(f"Unknown infrastructure mode: {mode}")
+
+
+class InfrastructureHealthCheckError(RuntimeError):
+    """Raised when infrastructure health checks fail."""
+
+    def __init__(self, failures: list[str]) -> None:
+        super().__init__(f"Health check failed: {', '.join(failures)}")
+
+
 class InfrastructureManager:
     """Factory and lifecycle manager for infrastructure providers.
 
@@ -26,8 +40,7 @@ class InfrastructureManager:
             Infrastructure provider instance.
 
         Raises:
-            ValueError: If infrastructure mode is unknown.
-            NotImplementedError: If infrastructure mode is not yet implemented.
+            UnknownInfrastructureModeError: If infrastructure mode is unknown.
         """
         # Get infrastructure config (with backward compatibility)
         infra_config = getattr(config, "infrastructure", None)
@@ -44,7 +57,7 @@ class InfrastructureManager:
 
             return AzureProvider(config)
         else:
-            raise ValueError(f"Unknown infrastructure mode: {mode}")
+            raise UnknownInfrastructureModeError(mode)
 
     @staticmethod
     async def run_with_infrastructure(
@@ -78,7 +91,7 @@ class InfrastructureManager:
                 - artifacts_path: Path to ZIP archive (or None if no output_dir)
 
         Raises:
-            RuntimeError: If health check fails.
+            InfrastructureHealthCheckError: If health check fails.
             Exception: If evaluation or other steps fail.
         """
         # Create provider
@@ -89,7 +102,7 @@ class InfrastructureManager:
             health_result = await provider.health_check(config=config, config_path=config_path)
             if not health_result["healthy"]:
                 failures = health_result["failures"]
-                raise RuntimeError(f"Health check failed: {', '.join(failures)}")
+                raise InfrastructureHealthCheckError(failures)
 
             # 2. Setup infrastructure
             await provider.setup()

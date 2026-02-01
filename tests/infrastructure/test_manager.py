@@ -7,7 +7,11 @@ import pytest
 
 from mcpbr.infrastructure.base import InfrastructureProvider
 from mcpbr.infrastructure.local import LocalProvider
-from mcpbr.infrastructure.manager import InfrastructureManager
+from mcpbr.infrastructure.manager import (
+    InfrastructureHealthCheckError,
+    InfrastructureManager,
+    UnknownInfrastructureModeError,
+)
 
 
 class TestInfrastructureManager:
@@ -32,7 +36,9 @@ class TestInfrastructureManager:
         mock_infra.mode = "unknown_mode"
         mock_config.infrastructure = mock_infra
 
-        with pytest.raises(ValueError, match="Unknown infrastructure mode: unknown_mode"):
+        with pytest.raises(
+            UnknownInfrastructureModeError, match="Unknown infrastructure mode: unknown_mode"
+        ):
             InfrastructureManager.create_provider(mock_config)
 
     def test_create_provider_azure_mode(self) -> None:
@@ -85,20 +91,20 @@ class TestInfrastructureManager:
 
         # Create a mock provider with tracking
         mock_provider = AsyncMock(spec=InfrastructureProvider)
-        mock_provider.health_check.side_effect = lambda **kw: (
+        mock_provider.health_check.side_effect = lambda **_: (
             call_order.append("health_check"),
             {"healthy": True, "checks": [], "failures": []},
         )[1]
         mock_provider.setup.side_effect = lambda: call_order.append("setup")
-        mock_provider.run_evaluation.side_effect = lambda **kw: (
+        mock_provider.run_evaluation.side_effect = lambda **_: (
             call_order.append("run_evaluation"),
             MagicMock(),
         )[1]
-        mock_provider.collect_artifacts.side_effect = lambda output_dir: (
+        mock_provider.collect_artifacts.side_effect = lambda _output_dir: (
             call_order.append("collect_artifacts"),
             Path("/fake/artifacts.zip"),
         )[1]
-        mock_provider.cleanup.side_effect = lambda **kw: call_order.append("cleanup")
+        mock_provider.cleanup.side_effect = lambda **_: call_order.append("cleanup")
 
         with patch.object(InfrastructureManager, "create_provider", return_value=mock_provider):
             output_dir = Path("/fake/output")
@@ -218,7 +224,7 @@ class TestInfrastructureManager:
         with patch.object(InfrastructureManager, "create_provider", return_value=mock_provider):
             output_dir = Path("/fake/output")
 
-            with pytest.raises(RuntimeError, match="Health check failed"):
+            with pytest.raises(InfrastructureHealthCheckError, match="Health check failed"):
                 await InfrastructureManager.run_with_infrastructure(
                     config=mock_config,
                     config_path=mock_config_path,

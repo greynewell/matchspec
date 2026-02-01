@@ -1,5 +1,8 @@
 """Tests for InfrastructureProvider abstract base class."""
 
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 from mcpbr.infrastructure.base import InfrastructureProvider
@@ -12,11 +15,11 @@ class ConcreteProvider(InfrastructureProvider):
         """Test implementation."""
         pass
 
-    async def run_evaluation(self, config, run_mcp: bool, run_baseline: bool):
+    async def run_evaluation(self, config: Any, run_mcp: bool, run_baseline: bool) -> Any:
         """Test implementation."""
         pass
 
-    async def collect_artifacts(self, output_dir):
+    async def collect_artifacts(self, output_dir: Path) -> Path:
         """Test implementation."""
         pass
 
@@ -24,7 +27,7 @@ class ConcreteProvider(InfrastructureProvider):
         """Test implementation."""
         pass
 
-    async def health_check(self):
+    async def health_check(self, **kwargs: Any) -> dict[str, Any]:
         """Test implementation."""
         pass
 

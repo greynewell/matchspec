@@ -18,7 +18,7 @@ class TestCheckAzCliInstalled:
 
     @patch("subprocess.run")
     @patch("platform.system")
-    def test_az_cli_installed_unix(self, mock_system, mock_run):
+    def test_az_cli_installed_unix(self, mock_system: MagicMock, mock_run: MagicMock) -> None:
         """Test detecting az CLI on Unix systems."""
         mock_system.return_value = "Linux"
         mock_run.return_value = MagicMock(
@@ -35,7 +35,7 @@ class TestCheckAzCliInstalled:
 
     @patch("subprocess.run")
     @patch("platform.system")
-    def test_az_cli_installed_windows(self, mock_system, mock_run):
+    def test_az_cli_installed_windows(self, mock_system: MagicMock, mock_run: MagicMock) -> None:
         """Test detecting az CLI on Windows systems."""
         mock_system.return_value = "Windows"
         mock_run.return_value = MagicMock(
@@ -52,7 +52,7 @@ class TestCheckAzCliInstalled:
 
     @patch("subprocess.run")
     @patch("platform.system")
-    def test_az_cli_not_installed(self, mock_system, mock_run):
+    def test_az_cli_not_installed(self, mock_system: MagicMock, mock_run: MagicMock) -> None:
         """Test detecting when az CLI is not installed."""
         mock_system.return_value = "Linux"
         mock_run.return_value = MagicMock(returncode=1, stdout="")
@@ -64,7 +64,7 @@ class TestCheckAzCliInstalled:
 
     @patch("subprocess.run")
     @patch("platform.system")
-    def test_az_cli_check_exception(self, mock_system, mock_run):
+    def test_az_cli_check_exception(self, mock_system: MagicMock, mock_run: MagicMock) -> None:
         """Test handling exceptions when checking az CLI."""
         mock_system.return_value = "Linux"
         mock_run.side_effect = Exception("Command failed")
@@ -79,7 +79,7 @@ class TestCheckAzAuthenticated:
     """Tests for check_az_authenticated function."""
 
     @patch("subprocess.run")
-    def test_az_authenticated_success(self, mock_run):
+    def test_az_authenticated_success(self, mock_run: MagicMock) -> None:
         """Test successful Azure authentication check."""
         account_data = {
             "id": "12345678-1234-1234-1234-123456789012",
@@ -99,7 +99,7 @@ class TestCheckAzAuthenticated:
         assert "az account show" in " ".join(mock_run.call_args[0][0])
 
     @patch("subprocess.run")
-    def test_az_not_authenticated(self, mock_run):
+    def test_az_not_authenticated(self, mock_run: MagicMock) -> None:
         """Test when not authenticated to Azure."""
         mock_run.return_value = MagicMock(
             returncode=1,
@@ -112,7 +112,7 @@ class TestCheckAzAuthenticated:
         assert "not logged in" in result.lower()
 
     @patch("subprocess.run")
-    def test_az_authenticated_invalid_json(self, mock_run):
+    def test_az_authenticated_invalid_json(self, mock_run: MagicMock) -> None:
         """Test handling invalid JSON response."""
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -125,7 +125,7 @@ class TestCheckAzAuthenticated:
         assert "error" in result.lower()
 
     @patch("subprocess.run")
-    def test_az_authenticated_exception(self, mock_run):
+    def test_az_authenticated_exception(self, mock_run: MagicMock) -> None:
         """Test handling exceptions during authentication check."""
         mock_run.side_effect = Exception("Network error")
 
@@ -139,7 +139,7 @@ class TestCheckAzSubscription:
     """Tests for check_az_subscription function."""
 
     @patch("subprocess.run")
-    def test_subscription_found_specific_id(self, mock_run):
+    def test_subscription_found_specific_id(self, mock_run: MagicMock) -> None:
         """Test finding a specific subscription by ID."""
         subscriptions = [
             {
@@ -165,7 +165,7 @@ class TestCheckAzSubscription:
         mock_run.assert_called_once()
 
     @patch("subprocess.run")
-    def test_subscription_found_default(self, mock_run):
+    def test_subscription_found_default(self, mock_run: MagicMock) -> None:
         """Test finding default subscription when no ID specified."""
         subscriptions = [
             {
@@ -186,7 +186,7 @@ class TestCheckAzSubscription:
         assert "Default Subscription" in result
 
     @patch("subprocess.run")
-    def test_subscription_not_found(self, mock_run):
+    def test_subscription_not_found(self, mock_run: MagicMock) -> None:
         """Test when specified subscription is not found."""
         subscriptions = [
             {
@@ -206,7 +206,7 @@ class TestCheckAzSubscription:
         assert "not found" in result.lower()
 
     @patch("subprocess.run")
-    def test_subscription_command_fails(self, mock_run):
+    def test_subscription_command_fails(self, mock_run: MagicMock) -> None:
         """Test when az subscription list command fails."""
         mock_run.return_value = MagicMock(
             returncode=1,
@@ -219,7 +219,7 @@ class TestCheckAzSubscription:
         assert "error" in result.lower()
 
     @patch("subprocess.run")
-    def test_subscription_no_default(self, mock_run):
+    def test_subscription_no_default(self, mock_run: MagicMock) -> None:
         """Test when no default subscription is set."""
         subscriptions = [
             {
@@ -243,7 +243,7 @@ class TestCheckAzureQuotas:
     """Tests for check_azure_quotas function."""
 
     @patch("subprocess.run")
-    def test_vm_size_available(self, mock_run):
+    def test_vm_size_available(self, mock_run: MagicMock) -> None:
         """Test when requested VM size is available."""
         skus = [
             {
@@ -268,7 +268,7 @@ class TestCheckAzureQuotas:
         assert result == ""
 
     @patch("subprocess.run")
-    def test_vm_size_not_available(self, mock_run):
+    def test_vm_size_not_available(self, mock_run: MagicMock) -> None:
         """Test when requested VM size is not available."""
         skus = [
             {
@@ -288,7 +288,7 @@ class TestCheckAzureQuotas:
         assert "not available" in result.lower()
 
     @patch("subprocess.run")
-    def test_vm_size_restricted(self, mock_run):
+    def test_vm_size_restricted(self, mock_run: MagicMock) -> None:
         """Test when VM size has restrictions."""
         skus = [
             {
@@ -313,7 +313,7 @@ class TestCheckAzureQuotas:
         assert "restricted" in result.lower()
 
     @patch("subprocess.run")
-    def test_quota_check_command_fails(self, mock_run):
+    def test_quota_check_command_fails(self, mock_run: MagicMock) -> None:
         """Test when quota check command fails."""
         mock_run.return_value = MagicMock(
             returncode=1,
@@ -326,7 +326,7 @@ class TestCheckAzureQuotas:
         assert "error" in result.lower()
 
     @patch("subprocess.run")
-    def test_quota_check_invalid_json(self, mock_run):
+    def test_quota_check_invalid_json(self, mock_run: MagicMock) -> None:
         """Test handling invalid JSON in quota response."""
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -348,11 +348,11 @@ class TestRunAzureHealthChecks:
     @patch("mcpbr.infrastructure.azure_health.check_az_cli_installed")
     def test_all_checks_pass(
         self,
-        mock_cli,
-        mock_auth,
-        mock_sub,
-        mock_quotas,
-    ):
+        mock_cli: MagicMock,
+        mock_auth: MagicMock,
+        mock_sub: MagicMock,
+        mock_quotas: MagicMock,
+    ) -> None:
         """Test when all health checks pass."""
         mock_cli.return_value = (True, "/usr/local/bin/az")
         mock_auth.return_value = (True, "test@example.com")
@@ -379,11 +379,11 @@ class TestRunAzureHealthChecks:
     @patch("mcpbr.infrastructure.azure_health.check_az_cli_installed")
     def test_cli_not_installed(
         self,
-        mock_cli,
-        mock_auth,
-        mock_sub,
-        mock_quotas,
-    ):
+        mock_cli: MagicMock,
+        mock_auth: MagicMock,
+        mock_sub: MagicMock,
+        mock_quotas: MagicMock,
+    ) -> None:
         """Test when az CLI is not installed."""
         mock_cli.return_value = (False, "az command not found")
         mock_auth.return_value = (False, "Cannot check without CLI")
@@ -407,11 +407,11 @@ class TestRunAzureHealthChecks:
     @patch("mcpbr.infrastructure.azure_health.check_az_cli_installed")
     def test_not_authenticated(
         self,
-        mock_cli,
-        mock_auth,
-        mock_sub,
-        mock_quotas,
-    ):
+        mock_cli: MagicMock,
+        mock_auth: MagicMock,
+        mock_sub: MagicMock,
+        mock_quotas: MagicMock,
+    ) -> None:
         """Test when not authenticated to Azure."""
         mock_cli.return_value = (True, "/usr/local/bin/az")
         mock_auth.return_value = (False, "Not logged in")
@@ -433,11 +433,11 @@ class TestRunAzureHealthChecks:
     @patch("mcpbr.infrastructure.azure_health.check_az_cli_installed")
     def test_quota_check_fails(
         self,
-        mock_cli,
-        mock_auth,
-        mock_sub,
-        mock_quotas,
-    ):
+        mock_cli: MagicMock,
+        mock_auth: MagicMock,
+        mock_sub: MagicMock,
+        mock_quotas: MagicMock,
+    ) -> None:
         """Test when quota check fails."""
         mock_cli.return_value = (True, "/usr/local/bin/az")
         mock_auth.return_value = (True, "test@example.com")
@@ -464,11 +464,11 @@ class TestRunAzureHealthChecks:
     @patch("mcpbr.infrastructure.azure_health.check_az_cli_installed")
     def test_skip_quota_check_when_no_vm_size(
         self,
-        mock_cli,
-        mock_auth,
-        mock_sub,
-        mock_quotas,
-    ):
+        mock_cli: MagicMock,
+        mock_auth: MagicMock,
+        mock_sub: MagicMock,
+        mock_quotas: MagicMock,
+    ) -> None:
         """Test that quota check is skipped when no vm_size specified."""
         mock_cli.return_value = (True, "/usr/local/bin/az")
         mock_auth.return_value = (True, "test@example.com")

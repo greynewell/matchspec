@@ -1,12 +1,14 @@
 """Tests for CLI infrastructure integration."""
 
+from pathlib import Path
+
 from mcpbr.config import load_config
 
 
 class TestCLIInfrastructure:
     """Test CLI infrastructure mode integration."""
 
-    def test_cli_respects_local_infrastructure_config_parsing(self, tmp_path):
+    def test_cli_respects_local_infrastructure_config_parsing(self, tmp_path: Path) -> None:
         """Test CLI correctly parses local infrastructure configuration."""
         # Create minimal valid config with local mode
         config_path = tmp_path / "config.yaml"
@@ -32,7 +34,7 @@ sample_size: 1
         assert config.infrastructure is not None
         assert config.infrastructure.mode == "local"
 
-    def test_cli_with_azure_infrastructure_config_parsing(self, tmp_path):
+    def test_cli_with_azure_infrastructure_config_parsing(self, tmp_path: Path) -> None:
         """Test CLI correctly parses Azure infrastructure configuration."""
         # Create config with infrastructure.mode: azure
         config_path = tmp_path / "config.yaml"
@@ -65,7 +67,7 @@ sample_size: 1
         assert config.infrastructure.azure.cpu_cores == 4
         assert config.infrastructure.azure.memory_gb == 16
 
-    def test_cli_with_azure_infrastructure_env_export(self, tmp_path):
+    def test_cli_with_azure_infrastructure_env_export(self, tmp_path: Path) -> None:
         """Test CLI parses Azure env_keys_to_export configuration."""
         # Create config with Azure-specific settings
         config_path = tmp_path / "config.yaml"
@@ -101,7 +103,7 @@ sample_size: 1
         assert "ANTHROPIC_API_KEY" in config.infrastructure.azure.env_keys_to_export
         assert "CUSTOM_KEY" in config.infrastructure.azure.env_keys_to_export
 
-    def test_cli_backward_compatibility_no_infrastructure(self, tmp_path):
+    def test_cli_backward_compatibility_no_infrastructure(self, tmp_path: Path) -> None:
         """Test CLI backward compatibility when infrastructure field is missing."""
         # Create config without infrastructure field (old format)
         config_path = tmp_path / "config.yaml"
@@ -124,7 +126,7 @@ sample_size: 1
         # Infrastructure defaults to local mode when not specified
         assert config.infrastructure.mode == "local"
 
-    def test_cli_azure_infrastructure_full_configuration(self, tmp_path):
+    def test_cli_azure_infrastructure_full_configuration(self, tmp_path: Path) -> None:
         """Test CLI parses full Azure configuration with all options."""
         config_path = tmp_path / "config.yaml"
         config_path.write_text(

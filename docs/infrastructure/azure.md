@@ -104,7 +104,7 @@ infrastructure:
 ```
 
 If evaluation fails, VM is kept and SSH command is printed:
-```
+```text
 VM preserved: mcpbr-eval-1234567890
 SSH: ssh -i ~/.ssh/mcpbr_azure azureuser@20.30.40.50
 Delete with: az vm delete -g mcpbr-benchmarks -n mcpbr-eval-1234567890 --yes
@@ -115,7 +115,7 @@ Delete with: az vm delete -g mcpbr-benchmarks -n mcpbr-eval-1234567890 --yes
 CPU/Memory automatically maps to Azure VM sizes:
 
 | Cores | Memory | VM Size | $/hour (East US) |
-|-------|--------|---------|------------------|
+| ------- | -------- | --------- | ------------------ |
 | 2 | 8GB | Standard_D2s_v3 | $0.096 |
 | 4 | 16GB | Standard_D4s_v3 | $0.192 |
 | 8 | 32GB | Standard_D8s_v3 | $0.384 |

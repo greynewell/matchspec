@@ -1,5 +1,6 @@
 """Tests for Azure infrastructure provider."""
 
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, mock_open, patch
 
@@ -10,7 +11,7 @@ from mcpbr.infrastructure.azure import AzureProvider
 
 
 @pytest.fixture
-def azure_config():
+def azure_config() -> AzureConfig:
     """Create a test Azure configuration."""
     return AzureConfig(
         resource_group="test-rg",
@@ -24,7 +25,7 @@ def azure_config():
 
 
 @pytest.fixture
-def harness_config(azure_config):
+def harness_config(azure_config: AzureConfig) -> HarnessConfig:
     """Create a test harness configuration with Azure."""
     return HarnessConfig(
         mcp_server=MCPServerConfig(
@@ -36,7 +37,7 @@ def harness_config(azure_config):
 
 
 @pytest.fixture
-def azure_provider(harness_config):
+def azure_provider(harness_config: HarnessConfig) -> AzureProvider:
     """Create an Azure provider instance."""
     return AzureProvider(harness_config)
 
@@ -49,7 +50,7 @@ def azure_provider(harness_config):
 class TestVMSizeMapping:
     """Test VM size mapping from cpu_cores/memory_gb."""
 
-    def test_mapping_2_cores_8gb(self):
+    def test_mapping_2_cores_8gb(self) -> None:
         """Test mapping 2 cores, 8GB → Standard_D2s_v3."""
         config = HarnessConfig(
             mcp_server=MCPServerConfig(command="npx", args=[]),
@@ -61,7 +62,7 @@ class TestVMSizeMapping:
         provider = AzureProvider(config)
         assert provider._determine_vm_size() == "Standard_D2s_v3"
 
-    def test_mapping_4_cores_16gb(self):
+    def test_mapping_4_cores_16gb(self) -> None:
         """Test mapping 4 cores, 16GB → Standard_D4s_v3."""
         config = HarnessConfig(
             mcp_server=MCPServerConfig(command="npx", args=[]),
@@ -73,7 +74,7 @@ class TestVMSizeMapping:
         provider = AzureProvider(config)
         assert provider._determine_vm_size() == "Standard_D4s_v3"
 
-    def test_mapping_8_cores_32gb(self):
+    def test_mapping_8_cores_32gb(self) -> None:
         """Test mapping 8 cores, 32GB → Standard_D8s_v3."""
         config = HarnessConfig(
             mcp_server=MCPServerConfig(command="npx", args=[]),
@@ -85,7 +86,7 @@ class TestVMSizeMapping:
         provider = AzureProvider(config)
         assert provider._determine_vm_size() == "Standard_D8s_v3"
 
-    def test_mapping_16_cores_64gb(self):
+    def test_mapping_16_cores_64gb(self) -> None:
         """Test mapping 16 cores, 64GB → Standard_D16s_v3."""
         config = HarnessConfig(
             mcp_server=MCPServerConfig(command="npx", args=[]),
@@ -97,7 +98,7 @@ class TestVMSizeMapping:
         provider = AzureProvider(config)
         assert provider._determine_vm_size() == "Standard_D16s_v3"
 
-    def test_mapping_32_cores_128gb(self):
+    def test_mapping_32_cores_128gb(self) -> None:
         """Test mapping 32 cores, 128GB → Standard_D32s_v3."""
         config = HarnessConfig(
             mcp_server=MCPServerConfig(command="npx", args=[]),
@@ -109,7 +110,7 @@ class TestVMSizeMapping:
         provider = AzureProvider(config)
         assert provider._determine_vm_size() == "Standard_D32s_v3"
 
-    def test_mapping_large_64_cores_256gb(self):
+    def test_mapping_large_64_cores_256gb(self) -> None:
         """Test mapping 64+ cores → Standard_D64s_v3."""
         config = HarnessConfig(
             mcp_server=MCPServerConfig(command="npx", args=[]),
@@ -121,7 +122,7 @@ class TestVMSizeMapping:
         provider = AzureProvider(config)
         assert provider._determine_vm_size() == "Standard_D64s_v3"
 
-    def test_custom_vm_size_overrides_mapping(self):
+    def test_custom_vm_size_overrides_mapping(self) -> None:
         """Test custom vm_size overrides cpu/memory mapping."""
         config = HarnessConfig(
             mcp_server=MCPServerConfig(command="npx", args=[]),
@@ -149,7 +150,12 @@ class TestVMProvisioning:
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
-    async def test_create_vm_success(self, mock_time, mock_run, azure_provider):
+    async def test_create_vm_success(
+        self,
+        mock_time: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test successful VM creation."""
         # Mock ssh-keygen, resource group show (exists), vm create
         mock_run.side_effect = [
@@ -169,8 +175,11 @@ class TestVMProvisioning:
     @patch("mcpbr.infrastructure.azure.subprocess.run")
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
     async def test_create_vm_with_resource_group_creation(
-        self, mock_time, mock_run, azure_provider
-    ):
+        self,
+        mock_time: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test VM creation with resource group creation."""
         # Mock resource group doesn't exist, then create it
         mock_run.side_effect = [
@@ -185,7 +194,11 @@ class TestVMProvisioning:
         assert azure_provider.vm_name == "mcpbr-eval-1234567890"
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_create_vm_with_ssh_key_generation(self, mock_run, azure_provider):
+    async def test_create_vm_with_ssh_key_generation(
+        self,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test VM creation with SSH key generation."""
         # Mock ssh-keygen, resource group show, and vm creation
         mock_run.side_effect = [
@@ -201,7 +214,11 @@ class TestVMProvisioning:
         assert "ssh-keygen" in str(ssh_keygen_call)
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_create_vm_failure_quota_exceeded(self, mock_run, azure_provider):
+    async def test_create_vm_failure_quota_exceeded(
+        self,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test VM creation failure (quota exceeded)."""
         # Mock ssh-keygen success, resource group show, VM creation failure
         mock_run.side_effect = [
@@ -214,7 +231,12 @@ class TestVMProvisioning:
             await azure_provider._create_vm("Standard_D8s_v3")
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_create_vm_with_existing_ssh_key(self, mock_run, azure_provider, tmp_path):
+    async def test_create_vm_with_existing_ssh_key(
+        self,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test VM creation with existing SSH key."""
         # Create a dummy SSH key
         ssh_key = tmp_path / "test_key"
@@ -242,7 +264,11 @@ class TestVMIP:
     """Test getting VM public IP."""
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_get_vm_ip_success(self, mock_run, azure_provider):
+    async def test_get_vm_ip_success(
+        self,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test getting VM public IP."""
         azure_provider.vm_name = "test-vm"
         mock_run.return_value = Mock(returncode=0, stdout='"1.2.3.4"', stderr="")
@@ -257,7 +283,11 @@ class TestVMIP:
         assert "show" in args
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_get_vm_ip_failure(self, mock_run, azure_provider):
+    async def test_get_vm_ip_failure(
+        self,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test VM IP retrieval failure."""
         azure_provider.vm_name = "test-vm"
         mock_run.return_value = Mock(returncode=1, stderr="VM not found", stdout="")
@@ -275,7 +305,12 @@ class TestSSHConnection:
     """Test SSH connection management."""
 
     @patch("mcpbr.infrastructure.azure.paramiko.SSHClient")
-    async def test_ssh_connection_success(self, mock_ssh_client, azure_provider, tmp_path):
+    async def test_ssh_connection_success(
+        self,
+        mock_ssh_client: MagicMock,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test successful SSH connection."""
         azure_provider.vm_ip = "1.2.3.4"
         azure_provider.ssh_key_path = tmp_path / "key"
@@ -294,8 +329,12 @@ class TestSSHConnection:
     @patch("mcpbr.infrastructure.azure.paramiko.SSHClient")
     @patch("mcpbr.infrastructure.azure.asyncio.sleep", new_callable=AsyncMock)
     async def test_ssh_connection_timeout(
-        self, mock_sleep, mock_ssh_client, azure_provider, tmp_path
-    ):
+        self,
+        mock_sleep: MagicMock,
+        mock_ssh_client: MagicMock,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test SSH connection timeout."""
         azure_provider.vm_ip = "1.2.3.4"
         azure_provider.ssh_key_path = tmp_path / "key"
@@ -309,8 +348,11 @@ class TestSSHConnection:
 
     @patch("mcpbr.infrastructure.azure.paramiko.SSHClient")
     async def test_ssh_connection_with_custom_key_path(
-        self, mock_ssh_client, azure_provider, tmp_path
-    ):
+        self,
+        mock_ssh_client: MagicMock,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test SSH connection with custom key path."""
         custom_key = tmp_path / "custom_key"
         custom_key.touch()
@@ -328,8 +370,12 @@ class TestSSHConnection:
     @patch("mcpbr.infrastructure.azure.paramiko.SSHClient")
     @patch("mcpbr.infrastructure.azure.asyncio.sleep", new_callable=AsyncMock)
     async def test_ssh_connection_retries(
-        self, mock_sleep, mock_ssh_client, azure_provider, tmp_path
-    ):
+        self,
+        mock_sleep: MagicMock,
+        mock_ssh_client: MagicMock,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test SSH connection with retries."""
         azure_provider.vm_ip = "1.2.3.4"
         azure_provider.ssh_key_path = tmp_path / "key"
@@ -357,7 +403,7 @@ class TestSSHConnection:
 class TestSSHCommandExecution:
     """Test executing commands over SSH."""
 
-    async def test_execute_command_success(self, azure_provider):
+    async def test_execute_command_success(self, azure_provider: AzureProvider) -> None:
         """Test executing command successfully."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -376,7 +422,7 @@ class TestSSHCommandExecution:
         assert stdout == "output\n"
         assert stderr == ""
 
-    async def test_execute_command_non_zero_exit(self, azure_provider):
+    async def test_execute_command_non_zero_exit(self, azure_provider: AzureProvider) -> None:
         """Test command with non-zero exit code."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -389,12 +435,12 @@ class TestSSHCommandExecution:
 
         mock_client.exec_command.return_value = (None, mock_stdout, mock_stderr)
 
-        exit_code, stdout, stderr = await azure_provider._ssh_exec("false")
+        exit_code, _stdout, stderr = await azure_provider._ssh_exec("false")
 
         assert exit_code == 1
         assert stderr == "error\n"
 
-    async def test_execute_command_timeout(self, azure_provider):
+    async def test_execute_command_timeout(self, azure_provider: AzureProvider) -> None:
         """Test command timeout."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -404,7 +450,7 @@ class TestSSHCommandExecution:
         with pytest.raises(RuntimeError, match="SSH command failed"):
             await azure_provider._ssh_exec("sleep 1000", timeout=1)
 
-    async def test_execute_command_no_client(self, azure_provider):
+    async def test_execute_command_no_client(self, azure_provider: AzureProvider) -> None:
         """Test executing command without SSH client."""
         azure_provider.ssh_client = None
 
@@ -421,7 +467,11 @@ class TestCleanup:
     """Test VM deletion and cleanup."""
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_cleanup_success(self, mock_run, azure_provider):
+    async def test_cleanup_success(
+        self,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test VM deletion success."""
         azure_provider.vm_name = "test-vm"
         mock_run.return_value = Mock(returncode=0)
@@ -435,7 +485,11 @@ class TestCleanup:
         assert "delete" in args
         assert "test-vm" in args
 
-    async def test_cleanup_preserve_on_error(self, azure_provider, capsys):
+    async def test_cleanup_preserve_on_error(
+        self,
+        azure_provider: AzureProvider,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
         """Test VM deletion when preserve_on_error=True and error occurred."""
         azure_provider.vm_name = "test-vm"
         azure_provider.vm_ip = "1.2.3.4"
@@ -450,7 +504,12 @@ class TestCleanup:
         assert "VM preserved" in captured.out or "test-vm" in str(azure_provider.vm_name)
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_cleanup_auto_shutdown_false(self, mock_run, azure_provider, capsys):
+    async def test_cleanup_auto_shutdown_false(
+        self,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
         """Test VM deletion when auto_shutdown=False."""
         azure_provider.vm_name = "test-vm"
         azure_provider.vm_ip = "1.2.3.4"
@@ -463,7 +522,7 @@ class TestCleanup:
         mock_run.assert_not_called()
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_cleanup_force(self, mock_run, azure_provider):
+    async def test_cleanup_force(self, mock_run: MagicMock, azure_provider: AzureProvider) -> None:
         """Test forced cleanup ignores preserve settings."""
         azure_provider.vm_name = "test-vm"
         azure_provider._error_occurred = True
@@ -475,7 +534,7 @@ class TestCleanup:
         # VM should be deleted despite preserve_on_error
         mock_run.assert_called_once()
 
-    async def test_cleanup_no_vm(self, azure_provider):
+    async def test_cleanup_no_vm(self, azure_provider: AzureProvider) -> None:
         """Test cleanup when no VM exists."""
         azure_provider.vm_name = None
 
@@ -483,7 +542,11 @@ class TestCleanup:
         await azure_provider.cleanup()
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
-    async def test_cleanup_deletes_ssh_client(self, mock_run, azure_provider):
+    async def test_cleanup_deletes_ssh_client(
+        self,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test cleanup closes SSH client."""
         azure_provider.vm_name = "test-vm"
         mock_client = MagicMock()
@@ -508,8 +571,13 @@ class TestSetup:
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_setup_success(
-        self, mock_env_get, mock_time, mock_ssh_client, mock_run, azure_provider
-    ):
+        self,
+        mock_env_get: MagicMock,
+        mock_time: MagicMock,
+        mock_ssh_client: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test full setup flow (create VM, wait SSH, get IP, install, config, test)."""
         mock_env_get.return_value = "test-api-key"
 
@@ -545,7 +613,12 @@ class TestSetup:
 
     @patch("mcpbr.infrastructure.azure.subprocess.run")
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
-    async def test_setup_failure_rolls_back(self, mock_time, mock_run, azure_provider):
+    async def test_setup_failure_rolls_back(
+        self,
+        mock_time: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test setup failure rolls back VM creation."""
         # Mock ssh-keygen success, resource group show, VM creation success, IP retrieval failure
         mock_run.side_effect = [
@@ -565,8 +638,13 @@ class TestSetup:
     @patch("mcpbr.infrastructure.azure.paramiko.SSHClient")
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_setup_with_existing_ssh_key(
-        self, mock_env_get, mock_ssh_client, mock_run, azure_provider, tmp_path
-    ):
+        self,
+        mock_env_get: MagicMock,
+        mock_ssh_client: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test setup with existing SSH key."""
         mock_env_get.return_value = "test-api-key"
         ssh_key = tmp_path / "existing_key"
@@ -604,8 +682,12 @@ class TestSetup:
     @patch("mcpbr.infrastructure.azure.paramiko.SSHClient")
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_setup_with_generated_ssh_key(
-        self, mock_env_get, mock_ssh_client, mock_run, azure_provider
-    ):
+        self,
+        mock_env_get: MagicMock,
+        mock_ssh_client: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test setup with generated SSH key."""
         mock_env_get.return_value = "test-api-key"
 
@@ -652,7 +734,11 @@ class TestHealthCheck:
     """Test Azure health checks."""
 
     @patch("mcpbr.infrastructure.azure_health.run_azure_health_checks")
-    async def test_health_check_success(self, mock_health_check, azure_provider):
+    async def test_health_check_success(
+        self,
+        mock_health_check: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test health check delegates to azure_health module."""
         mock_health_check.return_value = {
             "healthy": True,
@@ -666,7 +752,11 @@ class TestHealthCheck:
         mock_health_check.assert_called_once_with(azure_provider.azure_config)
 
     @patch("mcpbr.infrastructure.azure_health.run_azure_health_checks")
-    async def test_health_check_failure(self, mock_health_check, azure_provider):
+    async def test_health_check_failure(
+        self,
+        mock_health_check: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test health check with failures."""
         mock_health_check.return_value = {
             "healthy": False,
@@ -688,7 +778,7 @@ class TestHealthCheck:
 class TestEnvironmentSetup:
     """Test environment setup on VM (dependency installation)."""
 
-    async def test_install_dependencies_success(self, azure_provider):
+    async def test_install_dependencies_success(self, azure_provider: AzureProvider) -> None:
         """Test successful dependency installation."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -710,7 +800,10 @@ class TestEnvironmentSetup:
         assert "docker" in cmd.lower()
         assert "pip3 install mcpbr" in cmd
 
-    async def test_install_dependencies_handles_failures_gracefully(self, azure_provider):
+    async def test_install_dependencies_handles_failures_gracefully(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test dependency installation handles apt-get failures gracefully."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -728,7 +821,10 @@ class TestEnvironmentSetup:
 
         mock_client.exec_command.assert_called_once()
 
-    async def test_install_dependencies_installs_docker(self, azure_provider):
+    async def test_install_dependencies_installs_docker(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test dependency installation includes Docker."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -746,7 +842,10 @@ class TestEnvironmentSetup:
         cmd = mock_client.exec_command.call_args[0][0]
         assert "get.docker.com" in cmd
 
-    async def test_install_dependencies_installs_python_version(self, azure_provider):
+    async def test_install_dependencies_installs_python_version(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test dependency installation installs configured Python version."""
         azure_provider.azure_config.python_version = "3.11"
         mock_client = MagicMock()
@@ -765,7 +864,7 @@ class TestEnvironmentSetup:
         cmd = mock_client.exec_command.call_args[0][0]
         assert "python3.11" in cmd
 
-    async def test_install_dependencies_installs_mcpbr(self, azure_provider):
+    async def test_install_dependencies_installs_mcpbr(self, azure_provider: AzureProvider) -> None:
         """Test dependency installation installs mcpbr via pip."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -792,7 +891,11 @@ class TestEnvironmentSetup:
 class TestConfigurationTransfer:
     """Test configuration file transfer via SFTP."""
 
-    async def test_transfer_config_creates_temporary_yaml(self, azure_provider, tmp_path):
+    async def test_transfer_config_creates_temporary_yaml(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test config transfer creates temporary YAML file."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -807,7 +910,7 @@ class TestConfigurationTransfer:
         mock_sftp.put.assert_called_once()
         mock_sftp.close.assert_called_once()
 
-    async def test_transfer_config_uploads_via_sftp(self, azure_provider):
+    async def test_transfer_config_uploads_via_sftp(self, azure_provider: AzureProvider) -> None:
         """Test config transfer uploads via SFTP."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -821,7 +924,10 @@ class TestConfigurationTransfer:
         call_args = mock_sftp.put.call_args
         assert call_args[0][1] == "/home/azureuser/config.yaml"
 
-    async def test_transfer_config_handles_upload_failures(self, azure_provider):
+    async def test_transfer_config_handles_upload_failures(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test config transfer handles upload failures."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -846,7 +952,11 @@ class TestEnvironmentVariableExport:
     """Test environment variable export to VM."""
 
     @patch("mcpbr.infrastructure.azure.os.environ.get")
-    async def test_export_env_vars_exports_anthropic_api_key(self, mock_env_get, azure_provider):
+    async def test_export_env_vars_exports_anthropic_api_key(
+        self,
+        mock_env_get: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test environment variable export includes ANTHROPIC_API_KEY."""
         mock_env_get.return_value = "sk-test-key"
         mock_client = MagicMock()
@@ -871,7 +981,11 @@ class TestEnvironmentVariableExport:
                 assert "sk-test-key" in cmd
 
     @patch("mcpbr.infrastructure.azure.os.environ.get")
-    async def test_export_env_vars_exports_multiple_keys(self, mock_env_get, azure_provider):
+    async def test_export_env_vars_exports_multiple_keys(
+        self,
+        mock_env_get: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test environment variable export handles multiple keys."""
         azure_provider.azure_config.env_keys_to_export = ["KEY1", "KEY2", "KEY3"]
 
@@ -905,7 +1019,11 @@ class TestEnvironmentVariableExport:
         assert "KEY3" in all_commands
 
     @patch("mcpbr.infrastructure.azure.os.environ.get")
-    async def test_export_env_vars_writes_to_bashrc_and_profile(self, mock_env_get, azure_provider):
+    async def test_export_env_vars_writes_to_bashrc_and_profile(
+        self,
+        mock_env_get: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test environment variable export writes to both .bashrc and .profile."""
         mock_env_get.return_value = "test-value"
         mock_client = MagicMock()
@@ -929,8 +1047,10 @@ class TestEnvironmentVariableExport:
 
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_export_env_vars_handles_missing_env_vars_gracefully(
-        self, mock_env_get, azure_provider
-    ):
+        self,
+        mock_env_get: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test environment variable export handles missing vars gracefully."""
 
         # Return default for Rich environment vars, None for our keys
@@ -966,7 +1086,10 @@ class TestEnvironmentVariableExport:
 class TestTaskValidation:
     """Test single task validation to verify setup."""
 
-    async def test_run_test_task_executes_mcpbr_with_sample_size_1(self, azure_provider):
+    async def test_run_test_task_executes_mcpbr_with_sample_size_1(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test task validation executes mcpbr with sample_size=1."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -987,7 +1110,10 @@ class TestTaskValidation:
         assert "mcpbr run" in cmd
         assert "-n 1" in cmd or "sample_size=1" in cmd.lower()
 
-    async def test_run_test_task_succeeds_with_exit_code_0(self, azure_provider):
+    async def test_run_test_task_succeeds_with_exit_code_0(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test task validation succeeds with exit code 0."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1003,7 +1129,10 @@ class TestTaskValidation:
         # Should not raise
         await azure_provider._run_test_task()
 
-    async def test_run_test_task_fails_with_non_zero_exit_code(self, azure_provider):
+    async def test_run_test_task_fails_with_non_zero_exit_code(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test task validation fails with non-zero exit code."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1019,7 +1148,10 @@ class TestTaskValidation:
         with pytest.raises(RuntimeError, match="Test task validation failed"):
             await azure_provider._run_test_task()
 
-    async def test_run_test_task_captures_stdout_stderr(self, azure_provider):
+    async def test_run_test_task_captures_stdout_stderr(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test task validation captures stdout/stderr."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1038,7 +1170,7 @@ class TestTaskValidation:
             # Verify error message includes output info
             assert "exit code 1" in str(e)
 
-    async def test_run_test_task_uses_correct_timeout(self, azure_provider):
+    async def test_run_test_task_uses_correct_timeout(self, azure_provider: AzureProvider) -> None:
         """Test task validation uses 600s timeout."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1071,8 +1203,13 @@ class TestUpdatedSetup:
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_setup_includes_dependency_installation(
-        self, mock_env_get, mock_time, mock_ssh_client, mock_run, azure_provider
-    ):
+        self,
+        mock_env_get: MagicMock,
+        mock_time: MagicMock,
+        mock_ssh_client: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test full setup flow includes dependency installation."""
         mock_env_get.return_value = "test-api-key"
 
@@ -1116,8 +1253,13 @@ class TestUpdatedSetup:
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_setup_includes_config_transfer(
-        self, mock_env_get, mock_time, mock_ssh_client, mock_run, azure_provider
-    ):
+        self,
+        mock_env_get: MagicMock,
+        mock_time: MagicMock,
+        mock_ssh_client: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test full setup flow includes config transfer."""
         mock_env_get.return_value = "test-api-key"
 
@@ -1153,8 +1295,13 @@ class TestUpdatedSetup:
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_setup_includes_env_var_export(
-        self, mock_env_get, mock_time, mock_ssh_client, mock_run, azure_provider
-    ):
+        self,
+        mock_env_get: MagicMock,
+        mock_time: MagicMock,
+        mock_ssh_client: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test full setup flow includes env var export."""
         mock_env_get.return_value = "test-api-key"
 
@@ -1190,8 +1337,13 @@ class TestUpdatedSetup:
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_setup_includes_test_task(
-        self, mock_env_get, mock_time, mock_ssh_client, mock_run, azure_provider
-    ):
+        self,
+        mock_env_get: MagicMock,
+        mock_time: MagicMock,
+        mock_ssh_client: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test full setup flow includes test task."""
         mock_env_get.return_value = "test-api-key"
 
@@ -1227,8 +1379,13 @@ class TestUpdatedSetup:
     @patch("mcpbr.infrastructure.azure.time.time", return_value=1234567890)
     @patch("mcpbr.infrastructure.azure.os.environ.get")
     async def test_setup_fails_if_test_task_fails(
-        self, mock_env_get, mock_time, mock_ssh_client, mock_run, azure_provider
-    ):
+        self,
+        mock_env_get: MagicMock,
+        mock_time: MagicMock,
+        mock_ssh_client: MagicMock,
+        mock_run: MagicMock,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test setup fails if test task fails."""
         mock_env_get.return_value = "test-api-key"
 
@@ -1277,7 +1434,10 @@ class TestUpdatedSetup:
 class TestRemoteExecution:
     """Test remote execution of evaluation on VM."""
 
-    async def test_run_evaluation_executes_mcpbr_with_flags(self, azure_provider):
+    async def test_run_evaluation_executes_mcpbr_with_flags(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test run_evaluation executes mcpbr command with correct flags."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1312,7 +1472,7 @@ class TestRemoteExecution:
         assert "mcpbr run" in cmd
         assert "-c ~/config.yaml" in cmd
 
-    async def test_run_evaluation_with_mcp_only_flag(self, azure_provider):
+    async def test_run_evaluation_with_mcp_only_flag(self, azure_provider: AzureProvider) -> None:
         """Test run_evaluation with mcp_only (-M flag)."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1338,7 +1498,10 @@ class TestRemoteExecution:
         cmd = mock_client.exec_command.call_args[0][0]
         assert "-M" in cmd
 
-    async def test_run_evaluation_with_baseline_only_flag(self, azure_provider):
+    async def test_run_evaluation_with_baseline_only_flag(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test run_evaluation with baseline_only (-B flag)."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1364,7 +1527,10 @@ class TestRemoteExecution:
         cmd = mock_client.exec_command.call_args[0][0]
         assert "-B" in cmd
 
-    async def test_run_evaluation_with_both_mcp_and_baseline(self, azure_provider):
+    async def test_run_evaluation_with_both_mcp_and_baseline(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test run_evaluation with both mcp and baseline (no flags)."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1389,9 +1555,9 @@ class TestRemoteExecution:
 
         cmd = mock_client.exec_command.call_args[0][0]
         # Should have no -M or -B flags when running both
-        assert "-M" not in cmd or "-B" not in cmd
+        assert "-M" not in cmd and "-B" not in cmd
 
-    async def test_run_evaluation_streams_output(self, azure_provider):
+    async def test_run_evaluation_streams_output(self, azure_provider: AzureProvider) -> None:
         """Test run_evaluation streams output to console."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1418,7 +1584,7 @@ class TestRemoteExecution:
         # Verify stdout was iterated
         mock_stdout.__iter__.assert_called()
 
-    async def test_run_evaluation_handles_success(self, azure_provider):
+    async def test_run_evaluation_handles_success(self, azure_provider: AzureProvider) -> None:
         """Test run_evaluation handles evaluation success (exit code 0)."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1443,7 +1609,7 @@ class TestRemoteExecution:
         result = await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=False)
         assert result is not None
 
-    async def test_run_evaluation_handles_failure(self, azure_provider):
+    async def test_run_evaluation_handles_failure(self, azure_provider: AzureProvider) -> None:
         """Test run_evaluation handles evaluation failure (non-zero exit code)."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1460,7 +1626,10 @@ class TestRemoteExecution:
         with pytest.raises(RuntimeError, match="Evaluation failed"):
             await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=False)
 
-    async def test_run_evaluation_sets_error_flag_on_failure(self, azure_provider):
+    async def test_run_evaluation_sets_error_flag_on_failure(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test run_evaluation sets _error_occurred flag on failure."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1481,7 +1650,10 @@ class TestRemoteExecution:
 
         assert azure_provider._error_occurred is True
 
-    async def test_run_evaluation_returns_downloaded_results(self, azure_provider):
+    async def test_run_evaluation_returns_downloaded_results(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test run_evaluation returns results from downloaded JSON."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1520,7 +1692,10 @@ class TestRemoteExecution:
 class TestResultsDownload:
     """Test downloading results.json from VM."""
 
-    async def test_download_results_finds_latest_directory(self, azure_provider):
+    async def test_download_results_finds_latest_directory(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test _download_results finds latest .mcpbr_run_* directory."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1545,7 +1720,7 @@ class TestResultsDownload:
 
         mock_client.open_sftp.assert_called_once()
 
-    async def test_download_results_downloads_json(self, azure_provider):
+    async def test_download_results_downloads_json(self, azure_provider: AzureProvider) -> None:
         """Test _download_results downloads results.json."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1570,7 +1745,7 @@ class TestResultsDownload:
         call_args = mock_sftp.get.call_args[0]
         assert "results.json" in call_args[0]
 
-    async def test_download_results_parses_json(self, azure_provider):
+    async def test_download_results_parses_json(self, azure_provider: AzureProvider) -> None:
         """Test _download_results parses JSON into EvaluationResults."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1594,7 +1769,10 @@ class TestResultsDownload:
         assert isinstance(result, EvaluationResults)
         assert result.summary["pass_rate"] == 0.9
 
-    async def test_download_results_handles_missing_json(self, azure_provider):
+    async def test_download_results_handles_missing_json(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test _download_results handles missing results.json."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1607,7 +1785,10 @@ class TestResultsDownload:
         with pytest.raises(FileNotFoundError, match="No output directory found"):
             await azure_provider._download_results()
 
-    async def test_download_results_handles_invalid_json(self, azure_provider):
+    async def test_download_results_handles_invalid_json(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
         """Test _download_results handles invalid JSON."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1622,7 +1803,7 @@ class TestResultsDownload:
 
         with patch("builtins.open", mock_open(read_data="invalid json")):
             with patch("pathlib.Path.unlink"):
-                with pytest.raises(Exception):  # JSON decode error
+                with pytest.raises(json.JSONDecodeError):
                     await azure_provider._download_results()
 
 
@@ -1634,7 +1815,11 @@ class TestResultsDownload:
 class TestArtifactCollection:
     """Test collecting artifacts from VM."""
 
-    async def test_collect_artifacts_finds_output_directory(self, azure_provider, tmp_path):
+    async def test_collect_artifacts_finds_output_directory(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test collect_artifacts finds output directory on VM."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1658,7 +1843,11 @@ class TestArtifactCollection:
         # Verify directory was created
         assert output_dir.exists()
 
-    async def test_collect_artifacts_downloads_recursively(self, azure_provider, tmp_path):
+    async def test_collect_artifacts_downloads_recursively(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test collect_artifacts downloads recursively via SFTP."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1689,7 +1878,11 @@ class TestArtifactCollection:
         mock_sftp.listdir_attr.assert_called()
         mock_sftp.get.assert_called()
 
-    async def test_collect_artifacts_creates_zip_archive(self, azure_provider, tmp_path):
+    async def test_collect_artifacts_creates_zip_archive(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test collect_artifacts creates ZIP archive locally."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1715,7 +1908,11 @@ class TestArtifactCollection:
         assert result.exists()
         assert result.suffix == ".zip"
 
-    async def test_collect_artifacts_includes_logs_results_traces(self, azure_provider, tmp_path):
+    async def test_collect_artifacts_includes_logs_results_traces(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test collect_artifacts includes logs, results, traces."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1748,7 +1945,11 @@ class TestArtifactCollection:
         # Verify files were downloaded
         assert mock_sftp.get.call_count >= 1
 
-    async def test_collect_artifacts_handles_missing_directory(self, azure_provider, tmp_path):
+    async def test_collect_artifacts_handles_missing_directory(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test collect_artifacts handles missing output directory."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1764,7 +1965,11 @@ class TestArtifactCollection:
 
         assert result is None
 
-    async def test_collect_artifacts_returns_zip_path(self, azure_provider, tmp_path):
+    async def test_collect_artifacts_returns_zip_path(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test collect_artifacts returns Path to ZIP file."""
         mock_client = MagicMock()
         azure_provider.ssh_client = mock_client
@@ -1795,7 +2000,11 @@ class TestArtifactCollection:
 class TestSFTPRecursiveDownload:
     """Test SFTP recursive download functionality."""
 
-    def test_recursive_download_downloads_files(self, azure_provider, tmp_path):
+    def test_recursive_download_downloads_files(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test _recursive_download downloads files."""
         import stat
 
@@ -1814,7 +2023,11 @@ class TestSFTPRecursiveDownload:
 
         mock_sftp.get.assert_called_once()
 
-    def test_recursive_download_creates_directories(self, azure_provider, tmp_path):
+    def test_recursive_download_creates_directories(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test _recursive_download creates directories."""
         import stat
 
@@ -1835,7 +2048,11 @@ class TestSFTPRecursiveDownload:
         # Verify subdirectory was created
         assert (local_dir / "subdir").exists()
 
-    def test_recursive_download_handles_nested_structure(self, azure_provider, tmp_path):
+    def test_recursive_download_handles_nested_structure(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test _recursive_download handles nested structures."""
         import stat
 
@@ -1862,7 +2079,11 @@ class TestSFTPRecursiveDownload:
         assert (local_dir / "subdir").exists()
         mock_sftp.get.assert_called_once()
 
-    def test_recursive_download_preserves_metadata(self, azure_provider, tmp_path):
+    def test_recursive_download_preserves_metadata(
+        self,
+        azure_provider: AzureProvider,
+        tmp_path: Path,
+    ) -> None:
         """Test _recursive_download preserves file permissions (metadata)."""
         import stat
 

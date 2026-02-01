@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -236,6 +237,10 @@ class AzureProvider(InfrastructureProvider):
             try:
                 # Create SSH client
                 self.ssh_client = paramiko.SSHClient()
+                # AutoAddPolicy is used because we just provisioned this VM and
+                # its host key is not yet in known_hosts. This is acceptable for
+                # automated provisioning where MITM risk is low, but enterprise
+                # deployments may want to use RejectPolicy with pre-seeded keys.
                 self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 self.ssh_client.connect(
                     self.vm_ip,
@@ -274,7 +279,7 @@ class AzureProvider(InfrastructureProvider):
             raise RuntimeError("SSH client not initialized")
 
         try:
-            stdin, stdout, stderr = self.ssh_client.exec_command(command, timeout=timeout)
+            _stdin, stdout, stderr = self.ssh_client.exec_command(command, timeout=timeout)
             exit_code = stdout.channel.recv_exit_status()
             stdout_str = stdout.read().decode("utf-8")
             stderr_str = stderr.read().decode("utf-8")
@@ -301,7 +306,7 @@ class AzureProvider(InfrastructureProvider):
             "pip3 install mcpbr"
         )
 
-        exit_code, stdout, stderr = await self._ssh_exec(install_cmd, timeout=600)
+        exit_code, _stdout, stderr = await self._ssh_exec(install_cmd, timeout=600)
 
         # Don't fail hard on installation issues - log and continue
         if exit_code != 0:
@@ -356,15 +361,15 @@ class AzureProvider(InfrastructureProvider):
             console.print("[yellow]⚠ No environment variables to export[/yellow]")
             return
 
-        # Write to .bashrc and .profile
-        env_commands = [f'export {k}="{v}"' for k, v in env_vars.items()]
+        # Write to .bashrc and .profile using shlex.quote to prevent shell injection
+        env_commands = [f"export {k}={shlex.quote(v)}" for k, v in env_vars.items()]
         bashrc_append = "\n".join(env_commands)
 
-        # Escape for shell command
-        bashrc_append_escaped = bashrc_append.replace('"', '\\"')
-
-        await self._ssh_exec(f'echo "{bashrc_append_escaped}" >> ~/.bashrc')
-        await self._ssh_exec(f'echo "{bashrc_append_escaped}" >> ~/.profile')
+        # Use a here-document to safely write env vars without shell expansion
+        heredoc_cmd = f"cat << 'MCPBR_ENV_EOF' >> ~/.bashrc\n{bashrc_append}\nMCPBR_ENV_EOF"
+        await self._ssh_exec(heredoc_cmd)
+        heredoc_cmd = f"cat << 'MCPBR_ENV_EOF' >> ~/.profile\n{bashrc_append}\nMCPBR_ENV_EOF"
+        await self._ssh_exec(heredoc_cmd)
 
         console.print(f"[green]✓ Exported {len(env_vars)} environment variables[/green]")
 
@@ -471,7 +476,7 @@ class AzureProvider(InfrastructureProvider):
         console.print(f"[dim]Running: {cmd}[/dim]")
 
         # Execute with streaming output
-        stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
+        _stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
 
         # Stream output line by line
         for line in stdout:
@@ -511,7 +516,7 @@ class AzureProvider(InfrastructureProvider):
         console.print("[cyan]Downloading evaluation results...[/cyan]")
 
         # Find latest output directory
-        exit_code, stdout, stderr = await self._ssh_exec(
+        exit_code, stdout, _stderr = await self._ssh_exec(
             "find ~ -maxdepth 1 -type d -name '.mcpbr_run_*' | sort -r | head -n1"
         )
 
@@ -551,7 +556,7 @@ class AzureProvider(InfrastructureProvider):
         console.print("[cyan]Collecting artifacts from VM...[/cyan]")
 
         # Find output directory on VM
-        exit_code, stdout, stderr = await self._ssh_exec(
+        exit_code, stdout, _stderr = await self._ssh_exec(
             "find ~ -maxdepth 1 -type d -name '.mcpbr_run_*' | sort -r | head -n1"
         )
 
@@ -578,7 +583,7 @@ class AzureProvider(InfrastructureProvider):
         archive_path = local_archive_dir.parent / f"{local_archive_dir.name}.zip"
 
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(local_archive_dir):
+            for root, _dirs, files in os.walk(local_archive_dir):
                 for file in files:
                     file_path = Path(root) / file
                     arcname = file_path.relative_to(local_archive_dir.parent)
@@ -622,8 +627,8 @@ class AzureProvider(InfrastructureProvider):
         if self.ssh_client:
             try:
                 self.ssh_client.close()
-            except Exception:
-                pass  # Best effort
+            except Exception as e:
+                console.print(f"[dim]Note: SSH close warning: {e}[/dim]")
 
         # Check if we should cleanup
         if not self.vm_name:

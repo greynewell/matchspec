@@ -8,4 +8,4 @@ from .base import InfrastructureProvider
 from .local import LocalProvider
 from .manager import InfrastructureManager
 
-__all__ = ["InfrastructureProvider", "LocalProvider", "InfrastructureManager"]
+__all__ = ["InfrastructureManager", "InfrastructureProvider", "LocalProvider"]
