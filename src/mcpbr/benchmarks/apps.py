@@ -21,7 +21,7 @@ class APPSBenchmark:
 
     name = "apps"
 
-    def __init__(self, dataset: str = "codeparrot/apps", split: str = "test"):
+    def __init__(self, dataset: str = "metr-evals/apps", split: str = "test"):
         """Initialize APPS benchmark.
 
         Args:

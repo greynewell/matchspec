@@ -23,7 +23,7 @@ class MATHBenchmark:
 
     name = "math"
 
-    def __init__(self, dataset: str = "hendrycks/competition_math"):
+    def __init__(self, dataset: str = "DigitalLearningGmbH/MATH-lighteval"):
         """Initialize MATH benchmark.
 
         Args:
@@ -55,7 +55,7 @@ class MATHBenchmark:
         """
         _ = filter_tags
 
-        dataset = load_dataset(self.dataset, split="test")
+        dataset = load_dataset(self.dataset, "default", split="test")
         tasks = list(dataset)
 
         if task_ids:

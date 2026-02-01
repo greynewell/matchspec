@@ -22,7 +22,7 @@ class ToolBenchBenchmark:
 
     name = "toolbench"
 
-    def __init__(self, dataset: str = "ToolBench/ToolBench"):
+    def __init__(self, dataset: str = "tuandunghcmut/toolbench-v1"):
         """Initialize ToolBench benchmark.
 
         Args:
@@ -54,7 +54,7 @@ class ToolBenchBenchmark:
         """
         _ = level
 
-        dataset = load_dataset(self.dataset, split="test")
+        dataset = load_dataset(self.dataset, split="train")
         tasks = list(dataset)
 
         if filter_difficulty:

@@ -22,7 +22,7 @@ class TerminalBenchBenchmark:
 
     name = "terminalbench"
 
-    def __init__(self, dataset: str = "TerminalBench/TerminalBench"):
+    def __init__(self, dataset: str = "ia03/terminal-bench"):
         """Initialize TerminalBench benchmark.
 
         Args:

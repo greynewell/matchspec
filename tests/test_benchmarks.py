@@ -904,7 +904,7 @@ class TestMATHBenchmark:
         """Test MATH initialization."""
         benchmark = MATHBenchmark()
         assert benchmark.name == "math"
-        assert benchmark.dataset == "hendrycks/competition_math"
+        assert benchmark.dataset == "DigitalLearningGmbH/MATH-lighteval"
 
     def test_normalize_task(self) -> None:
         """Test normalizing MATH task."""
@@ -1102,7 +1102,7 @@ class TestAPPSBenchmark:
         """Test APPS initialization."""
         benchmark = APPSBenchmark()
         assert benchmark.name == "apps"
-        assert benchmark.dataset == "codeparrot/apps"
+        assert benchmark.dataset == "metr-evals/apps"
 
     def test_normalize_task(self) -> None:
         """Test normalizing APPS task."""
@@ -1314,7 +1314,7 @@ class TestToolBenchBenchmark:
         """Test ToolBench initialization."""
         benchmark = ToolBenchBenchmark()
         assert benchmark.name == "toolbench"
-        assert benchmark.dataset == "ToolBench/ToolBench"
+        assert benchmark.dataset == "tuandunghcmut/toolbench-v1"
 
     def test_normalize_task(self) -> None:
         """Test normalizing ToolBench task."""
@@ -1392,7 +1392,7 @@ class TestTerminalBenchBenchmark:
         """Test TerminalBench initialization."""
         benchmark = TerminalBenchBenchmark()
         assert benchmark.name == "terminalbench"
-        assert benchmark.dataset == "TerminalBench/TerminalBench"
+        assert benchmark.dataset == "ia03/terminal-bench"
 
     def test_normalize_task(self) -> None:
         """Test normalizing TerminalBench task."""
