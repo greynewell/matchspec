@@ -369,9 +369,6 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 """
-            import tempfile
-            import os
-
             with tempfile.TemporaryDirectory() as tmpdir:
                 dockerfile_path = os.path.join(tmpdir, "Dockerfile")
                 with open(dockerfile_path, "w") as f:
@@ -382,13 +379,15 @@ WORKDIR /workspace
                     tag=self.FALLBACK_IMAGE,
                     rm=True,
                 )
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to build fallback image with git: %s", exc)
             # Last resort: just tag the base image
             try:
                 img = self.client.images.get("python:3.11-slim")
                 img.tag(self.FALLBACK_IMAGE)
-            except Exception:
-                pass
+            except Exception as tag_exc:
+                logger.error("Failed to tag base image as fallback: %s", tag_exc)
+                raise
 
     async def create_environment(
         self,
