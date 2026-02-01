@@ -76,7 +76,7 @@ class BigCodeBenchBenchmark:
                 )
             ]
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
         augmented_tasks = []

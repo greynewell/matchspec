@@ -81,7 +81,7 @@ class LeetCodeBenchmark:
                 if str(t.get("id", "")) in task_id_set or t.get("title_slug", "") in task_id_set
             ]
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
         augmented_tasks = []

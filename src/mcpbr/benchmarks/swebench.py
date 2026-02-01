@@ -76,7 +76,7 @@ class SWEBenchmark:
         # Note: filter_difficulty and filter_tags not applicable to base SWE-bench
         # These would require custom metadata or extended datasets
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
         return tasks

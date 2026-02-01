@@ -72,7 +72,7 @@ class MATHBenchmark:
             category_set = {c.lower() for c in filter_category}
             tasks = [t for t in tasks if t.get("type", "").lower() in category_set]
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
         augmented_tasks = []

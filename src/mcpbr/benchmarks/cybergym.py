@@ -106,7 +106,7 @@ class CyberGymBenchmark:
 
         # Note: filter_tags not applicable to base CyberGym dataset
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
         # Augment tasks with level information and instance_id (create copies to avoid mutating dataset)

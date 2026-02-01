@@ -115,7 +115,7 @@ class BigBenchHardBenchmark:
             task_id_set = set(task_ids)
             all_tasks = [t for t in all_tasks if t["instance_id"] in task_id_set]
 
-        if sample_size and len(all_tasks) > sample_size:
+        if sample_size is not None and len(all_tasks) > sample_size:
             all_tasks = all_tasks[:sample_size]
 
         for task in all_tasks:

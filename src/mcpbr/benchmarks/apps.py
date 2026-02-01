@@ -70,7 +70,7 @@ class APPSBenchmark:
             task_id_set = set(task_ids)
             tasks = [t for i, t in enumerate(tasks) if str(i) in task_id_set]
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
         augmented_tasks = []

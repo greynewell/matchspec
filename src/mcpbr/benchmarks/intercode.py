@@ -68,7 +68,7 @@ class InterCodeBenchmark:
             task_id_set = set(task_ids)
             tasks = [t for t in tasks if str(t.get("task_id", "")) in task_id_set]
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
         augmented_tasks = []

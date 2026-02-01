@@ -106,7 +106,7 @@ class MCPToolBenchmark:
         # Parameter required by Benchmark protocol
         _ = filter_tags  # Silence unused parameter warning
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
         # Augment tasks with instance_id for compatibility with harness

@@ -70,7 +70,7 @@ class GSM8KBenchmark:
             tasks = list(dataset)
             original_indices = list(range(len(tasks)))
 
-        if sample_size and len(tasks) > sample_size:
+        if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
             original_indices = original_indices[:sample_size]
 
