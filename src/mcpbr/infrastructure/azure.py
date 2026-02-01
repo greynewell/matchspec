@@ -442,7 +442,7 @@ class AzureProvider(InfrastructureProvider):
             raise
 
     async def run_evaluation(self, config: Any, run_mcp: bool, run_baseline: bool) -> Any:
-        """Execute evaluation on Azure VM (Phase 4).
+        """Execute evaluation on Azure VM.
 
         Args:
             config: Harness configuration.
@@ -453,23 +453,159 @@ class AzureProvider(InfrastructureProvider):
             EvaluationResults object.
 
         Raises:
-            NotImplementedError: This will be implemented in Phase 4.
+            RuntimeError: If evaluation fails.
         """
-        raise NotImplementedError("Phase 4: Remote execution not yet implemented")
 
-    async def collect_artifacts(self, output_dir: Path) -> Path:
-        """Download artifacts from VM (Phase 5).
+        console = Console()
+        console.print("[cyan]Starting remote evaluation on Azure VM...[/cyan]")
 
-        Args:
-            output_dir: Directory to store artifacts.
+        # Build command flags
+        flags = []
+        if run_mcp and not run_baseline:
+            flags.append("-M")
+        elif run_baseline and not run_mcp:
+            flags.append("-B")
+
+        # Execute mcpbr
+        cmd = f"mcpbr run -c ~/config.yaml {' '.join(flags)}"
+        console.print(f"[dim]Running: {cmd}[/dim]")
+
+        # Execute with streaming output
+        stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
+
+        # Stream output line by line
+        for line in stdout:
+            console.print(line.rstrip())
+
+        # Wait for completion
+        exit_code = stdout.channel.recv_exit_status()
+
+        if exit_code != 0:
+            self._error_occurred = True
+            stderr_output = stderr.read().decode()
+            console.print(f"[red]✗ Evaluation failed with exit code {exit_code}[/red]")
+            console.print(f"[red]{stderr_output[:2000]}[/red]")
+            raise RuntimeError(f"Evaluation failed: {stderr_output[:500]}")
+
+        console.print("[green]✓ Evaluation completed successfully[/green]")
+
+        # Download and parse results
+        results = await self._download_results()
+        return results
+
+    async def _download_results(self) -> Any:
+        """Download results.json from VM.
 
         Returns:
-            Path to ZIP archive.
+            EvaluationResults object parsed from JSON.
 
         Raises:
-            NotImplementedError: This will be implemented in Phase 5.
+            FileNotFoundError: If no output directory or results.json found.
         """
-        raise NotImplementedError("Phase 5: Artifact collection not yet implemented")
+        import json
+        import tempfile
+
+        from ..harness import EvaluationResults
+
+        console = Console()
+        console.print("[cyan]Downloading evaluation results...[/cyan]")
+
+        # Find latest output directory
+        exit_code, stdout, stderr = await self._ssh_exec(
+            "find ~ -maxdepth 1 -type d -name '.mcpbr_run_*' | sort -r | head -n1"
+        )
+
+        if exit_code != 0 or not stdout.strip():
+            raise FileNotFoundError("No output directory found on VM")
+
+        remote_output_dir = stdout.strip()
+        results_path = f"{remote_output_dir}/results.json"
+
+        # Download results.json
+        sftp = self.ssh_client.open_sftp()
+
+        with tempfile.NamedTemporaryFile(mode="r", suffix=".json", delete=False) as f:
+            temp_path = f.name
+
+        try:
+            sftp.get(results_path, temp_path)
+            sftp.close()
+
+            with open(temp_path) as f:
+                results_dict = json.load(f)
+
+            return EvaluationResults(**results_dict)
+        finally:
+            Path(temp_path).unlink()
+
+    async def collect_artifacts(self, output_dir: Path) -> Path | None:
+        """Download all logs and results from VM, create ZIP archive.
+
+        Args:
+            output_dir: Local directory to store downloaded artifacts.
+
+        Returns:
+            Path to ZIP archive, or None if no artifacts found.
+        """
+        console = Console()
+        console.print("[cyan]Collecting artifacts from VM...[/cyan]")
+
+        # Find output directory on VM
+        exit_code, stdout, stderr = await self._ssh_exec(
+            "find ~ -maxdepth 1 -type d -name '.mcpbr_run_*' | sort -r | head -n1"
+        )
+
+        if exit_code != 0 or not stdout.strip():
+            console.print("[yellow]⚠ No output directory found on VM[/yellow]")
+            return None
+
+        remote_output_dir = stdout.strip()
+
+        # Create local archive directory
+        local_archive_dir = output_dir
+        local_archive_dir.mkdir(parents=True, exist_ok=True)
+
+        # Recursively download
+        sftp = self.ssh_client.open_sftp()
+        await asyncio.to_thread(
+            self._recursive_download, sftp, remote_output_dir, local_archive_dir
+        )
+        sftp.close()
+
+        # Create ZIP archive
+        import zipfile
+
+        archive_path = local_archive_dir.parent / f"{local_archive_dir.name}.zip"
+
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(local_archive_dir):
+                for file in files:
+                    file_path = Path(root) / file
+                    arcname = file_path.relative_to(local_archive_dir.parent)
+                    zipf.write(file_path, arcname)
+
+        console.print(f"[green]✓ Artifacts archived: {archive_path}[/green]")
+        return archive_path
+
+    def _recursive_download(self, sftp: Any, remote_dir: str, local_dir: Path) -> None:
+        """Recursively download directory via SFTP.
+
+        Args:
+            sftp: Paramiko SFTP client.
+            remote_dir: Remote directory path.
+            local_dir: Local directory path.
+        """
+        import stat
+
+        for item in sftp.listdir_attr(remote_dir):
+            remote_path = f"{remote_dir}/{item.filename}"
+            local_path = local_dir / item.filename
+
+            if stat.S_ISDIR(item.st_mode):
+                local_path.mkdir(exist_ok=True)
+                self._recursive_download(sftp, remote_path, local_path)
+            else:
+                sftp.get(remote_path, str(local_path))
 
     async def cleanup(self, force: bool = False) -> None:
         """Delete Azure VM.
@@ -503,6 +639,9 @@ class AzureProvider(InfrastructureProvider):
             console.print(f"[yellow]VM preserved: {self.vm_name}[/yellow]")
             if self.vm_ip and self.ssh_key_path:
                 console.print(f"[dim]SSH: ssh -i {self.ssh_key_path} azureuser@{self.vm_ip}[/dim]")
+                console.print(
+                    f"[dim]Delete with: az vm delete -g {self.azure_config.resource_group} -n {self.vm_name} --yes[/dim]"
+                )
             return
 
         # Delete VM
@@ -522,10 +661,10 @@ class AzureProvider(InfrastructureProvider):
             text=True,
             check=False,
         )
-        if result.returncode != 0:
-            console.print(f"[yellow]Warning: VM deletion failed: {result.stderr}[/yellow]")
-        else:
+        if result.returncode == 0:
             console.print("[green]✓ VM deleted[/green]")
+        else:
+            console.print(f"[yellow]⚠ VM deletion may have failed: {result.stderr[:200]}[/yellow]")
 
     async def health_check(self, **kwargs: Any) -> dict[str, Any]:
         """Run Azure health checks.

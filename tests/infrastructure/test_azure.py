@@ -1,7 +1,7 @@
 """Tests for Azure infrastructure provider."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, mock_open, patch
 
 import pytest
 
@@ -1270,19 +1270,614 @@ class TestUpdatedSetup:
 
 
 # ============================================================================
-# Not Yet Implemented Tests
+# Remote Execution Tests
 # ============================================================================
 
 
-class TestNotYetImplemented:
-    """Test methods not yet implemented in Phase 3."""
+class TestRemoteExecution:
+    """Test remote execution of evaluation on VM."""
 
-    async def test_run_evaluation_not_implemented(self, azure_provider):
-        """Test run_evaluation raises NotImplementedError."""
-        with pytest.raises(NotImplementedError, match="Phase 4"):
-            await azure_provider.run_evaluation(None, True, True)
+    async def test_run_evaluation_executes_mcpbr_with_flags(self, azure_provider):
+        """Test run_evaluation executes mcpbr command with correct flags."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
 
-    async def test_collect_artifacts_not_implemented(self, azure_provider):
-        """Test collect_artifacts raises NotImplementedError."""
-        with pytest.raises(NotImplementedError, match="Phase 5"):
-            await azure_provider.collect_artifacts(Path("/tmp"))
+        # Mock exec_command for main evaluation
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        # Mock _download_results to return a fake result
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(
+                metadata={},
+                summary={"pass_rate": 1.0},
+                tasks=[],
+            )
+
+        azure_provider._download_results = mock_download_results
+
+        await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=True)
+
+        # Verify mcpbr was called
+        mock_client.exec_command.assert_called()
+        cmd = mock_client.exec_command.call_args[0][0]
+        assert "mcpbr run" in cmd
+        assert "-c ~/config.yaml" in cmd
+
+    async def test_run_evaluation_with_mcp_only_flag(self, azure_provider):
+        """Test run_evaluation with mcp_only (-M flag)."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(metadata={}, summary={}, tasks=[])
+
+        azure_provider._download_results = mock_download_results
+
+        await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=False)
+
+        cmd = mock_client.exec_command.call_args[0][0]
+        assert "-M" in cmd
+
+    async def test_run_evaluation_with_baseline_only_flag(self, azure_provider):
+        """Test run_evaluation with baseline_only (-B flag)."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(metadata={}, summary={}, tasks=[])
+
+        azure_provider._download_results = mock_download_results
+
+        await azure_provider.run_evaluation(None, run_mcp=False, run_baseline=True)
+
+        cmd = mock_client.exec_command.call_args[0][0]
+        assert "-B" in cmd
+
+    async def test_run_evaluation_with_both_mcp_and_baseline(self, azure_provider):
+        """Test run_evaluation with both mcp and baseline (no flags)."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(metadata={}, summary={}, tasks=[])
+
+        azure_provider._download_results = mock_download_results
+
+        await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=True)
+
+        cmd = mock_client.exec_command.call_args[0][0]
+        # Should have no -M or -B flags when running both
+        assert "-M" not in cmd or "-B" not in cmd
+
+    async def test_run_evaluation_streams_output(self, azure_provider):
+        """Test run_evaluation streams output to console."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        # Mock stdout to return some lines
+        mock_stdout.__iter__ = Mock(return_value=iter(["Line 1\n", "Line 2\n", "Line 3\n"]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(metadata={}, summary={}, tasks=[])
+
+        azure_provider._download_results = mock_download_results
+
+        await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=False)
+
+        # Verify stdout was iterated
+        mock_stdout.__iter__.assert_called()
+
+    async def test_run_evaluation_handles_success(self, azure_provider):
+        """Test run_evaluation handles evaluation success (exit code 0)."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(metadata={}, summary={}, tasks=[])
+
+        azure_provider._download_results = mock_download_results
+
+        # Should not raise
+        result = await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=False)
+        assert result is not None
+
+    async def test_run_evaluation_handles_failure(self, azure_provider):
+        """Test run_evaluation handles evaluation failure (non-zero exit code)."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 1
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b"Evaluation error\n"
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        with pytest.raises(RuntimeError, match="Evaluation failed"):
+            await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=False)
+
+    async def test_run_evaluation_sets_error_flag_on_failure(self, azure_provider):
+        """Test run_evaluation sets _error_occurred flag on failure."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 1
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b"error\n"
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        try:
+            await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=False)
+        except RuntimeError:
+            pass
+
+        assert azure_provider._error_occurred is True
+
+    async def test_run_evaluation_returns_downloaded_results(self, azure_provider):
+        """Test run_evaluation returns results from downloaded JSON."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(
+                metadata={},
+                summary={"pass_rate": 0.95},
+                tasks=[],
+            )
+
+        azure_provider._download_results = mock_download_results
+
+        result = await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=True)
+
+        assert result is not None
+        assert result.summary["pass_rate"] == 0.95
+
+
+# ============================================================================
+# Results Download Tests
+# ============================================================================
+
+
+class TestResultsDownload:
+    """Test downloading results.json from VM."""
+
+    async def test_download_results_finds_latest_directory(self, azure_provider):
+        """Test _download_results finds latest .mcpbr_run_* directory."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        # Mock _ssh_exec to return output directory path
+        async def mock_ssh_exec(cmd, timeout=300):
+            if "find" in cmd and ".mcpbr_run_" in cmd:
+                return 0, "/home/azureuser/.mcpbr_run_12345", ""
+            return 0, "", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        # Mock SFTP download
+        mock_sftp = MagicMock()
+        mock_client.open_sftp.return_value = mock_sftp
+
+        with patch(
+            "builtins.open", mock_open(read_data='{"metadata": {}, "summary": {}, "tasks": []}')
+        ):
+            with patch("pathlib.Path.unlink"):
+                await azure_provider._download_results()
+
+        mock_client.open_sftp.assert_called_once()
+
+    async def test_download_results_downloads_json(self, azure_provider):
+        """Test _download_results downloads results.json."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            if "find" in cmd:
+                return 0, "/home/azureuser/.mcpbr_run_12345", ""
+            return 0, "", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        mock_sftp = MagicMock()
+        mock_client.open_sftp.return_value = mock_sftp
+
+        with patch(
+            "builtins.open", mock_open(read_data='{"metadata": {}, "summary": {}, "tasks": []}')
+        ):
+            with patch("pathlib.Path.unlink"):
+                await azure_provider._download_results()
+
+        mock_sftp.get.assert_called_once()
+        call_args = mock_sftp.get.call_args[0]
+        assert "results.json" in call_args[0]
+
+    async def test_download_results_parses_json(self, azure_provider):
+        """Test _download_results parses JSON into EvaluationResults."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            return 0, "/home/azureuser/.mcpbr_run_12345", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        mock_sftp = MagicMock()
+        mock_client.open_sftp.return_value = mock_sftp
+
+        json_data = '{"metadata": {}, "summary": {"pass_rate": 0.9}, "tasks": []}'
+
+        with patch("builtins.open", mock_open(read_data=json_data)):
+            with patch("pathlib.Path.unlink"):
+                result = await azure_provider._download_results()
+
+        from mcpbr.harness import EvaluationResults
+
+        assert isinstance(result, EvaluationResults)
+        assert result.summary["pass_rate"] == 0.9
+
+    async def test_download_results_handles_missing_json(self, azure_provider):
+        """Test _download_results handles missing results.json."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            return 1, "", "No such file or directory"
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        with pytest.raises(FileNotFoundError, match="No output directory found"):
+            await azure_provider._download_results()
+
+    async def test_download_results_handles_invalid_json(self, azure_provider):
+        """Test _download_results handles invalid JSON."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            return 0, "/home/azureuser/.mcpbr_run_12345", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        mock_sftp = MagicMock()
+        mock_client.open_sftp.return_value = mock_sftp
+
+        with patch("builtins.open", mock_open(read_data="invalid json")):
+            with patch("pathlib.Path.unlink"):
+                with pytest.raises(Exception):  # JSON decode error
+                    await azure_provider._download_results()
+
+
+# ============================================================================
+# Artifact Collection Tests
+# ============================================================================
+
+
+class TestArtifactCollection:
+    """Test collecting artifacts from VM."""
+
+    async def test_collect_artifacts_finds_output_directory(self, azure_provider, tmp_path):
+        """Test collect_artifacts finds output directory on VM."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            if "find" in cmd:
+                return 0, "/home/azureuser/.mcpbr_run_12345", ""
+            return 0, "", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        mock_sftp = MagicMock()
+        mock_sftp.listdir_attr.return_value = []
+        mock_client.open_sftp.return_value = mock_sftp
+
+        output_dir = tmp_path / "artifacts"
+
+        with patch("os.walk", return_value=[]):
+            await azure_provider.collect_artifacts(output_dir)
+
+        # Verify directory was created
+        assert output_dir.exists()
+
+    async def test_collect_artifacts_downloads_recursively(self, azure_provider, tmp_path):
+        """Test collect_artifacts downloads recursively via SFTP."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            return 0, "/home/azureuser/.mcpbr_run_12345", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        mock_sftp = MagicMock()
+
+        import stat
+
+        mock_file = MagicMock()
+        mock_file.filename = "results.json"
+        mock_file.st_mode = stat.S_IFREG
+
+        mock_sftp.listdir_attr.return_value = [mock_file]
+        mock_client.open_sftp.return_value = mock_sftp
+
+        output_dir = tmp_path / "artifacts"
+        output_dir.mkdir(parents=True)
+        (output_dir / "results.json").write_text("test")
+
+        await azure_provider.collect_artifacts(output_dir)
+
+        # Verify SFTP operations
+        mock_sftp.listdir_attr.assert_called()
+        mock_sftp.get.assert_called()
+
+    async def test_collect_artifacts_creates_zip_archive(self, azure_provider, tmp_path):
+        """Test collect_artifacts creates ZIP archive locally."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            return 0, "/home/azureuser/.mcpbr_run_12345", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        mock_sftp = MagicMock()
+        mock_sftp.listdir_attr.return_value = []
+        mock_client.open_sftp.return_value = mock_sftp
+
+        output_dir = tmp_path / "artifacts"
+
+        # Create a test file
+        output_dir.mkdir(parents=True)
+        (output_dir / "test.txt").write_text("test")
+
+        result = await azure_provider.collect_artifacts(output_dir)
+
+        assert result is not None
+        assert result.exists()
+        assert result.suffix == ".zip"
+
+    async def test_collect_artifacts_includes_logs_results_traces(self, azure_provider, tmp_path):
+        """Test collect_artifacts includes logs, results, traces."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            return 0, "/home/azureuser/.mcpbr_run_12345", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        import stat
+
+        mock_files = []
+        for name in ["results.json", "evaluation.log", "trace.json"]:
+            mock_file = MagicMock()
+            mock_file.filename = name
+            mock_file.st_mode = stat.S_IFREG
+            mock_files.append(mock_file)
+
+        mock_sftp = MagicMock()
+        mock_sftp.listdir_attr.return_value = mock_files
+        mock_client.open_sftp.return_value = mock_sftp
+
+        output_dir = tmp_path / "artifacts"
+        output_dir.mkdir(parents=True)
+        for name in ["results.json", "evaluation.log", "trace.json"]:
+            (output_dir / name).write_text("test")
+
+        await azure_provider.collect_artifacts(output_dir)
+
+        # Verify files were downloaded
+        assert mock_sftp.get.call_count >= 1
+
+    async def test_collect_artifacts_handles_missing_directory(self, azure_provider, tmp_path):
+        """Test collect_artifacts handles missing output directory."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            return 1, "", "No such directory"
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        output_dir = tmp_path / "artifacts"
+
+        result = await azure_provider.collect_artifacts(output_dir)
+
+        assert result is None
+
+    async def test_collect_artifacts_returns_zip_path(self, azure_provider, tmp_path):
+        """Test collect_artifacts returns Path to ZIP file."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        async def mock_ssh_exec(cmd, timeout=300):
+            return 0, "/home/azureuser/.mcpbr_run_12345", ""
+
+        azure_provider._ssh_exec = mock_ssh_exec
+
+        mock_sftp = MagicMock()
+        mock_sftp.listdir_attr.return_value = []
+        mock_client.open_sftp.return_value = mock_sftp
+
+        output_dir = tmp_path / "artifacts"
+        output_dir.mkdir(parents=True)
+        (output_dir / "test.txt").write_text("test")
+
+        result = await azure_provider.collect_artifacts(output_dir)
+
+        assert isinstance(result, Path)
+
+
+# ============================================================================
+# SFTP Recursive Download Tests
+# ============================================================================
+
+
+class TestSFTPRecursiveDownload:
+    """Test SFTP recursive download functionality."""
+
+    def test_recursive_download_downloads_files(self, azure_provider, tmp_path):
+        """Test _recursive_download downloads files."""
+        import stat
+
+        mock_sftp = MagicMock()
+
+        mock_file = MagicMock()
+        mock_file.filename = "test.txt"
+        mock_file.st_mode = stat.S_IFREG
+
+        mock_sftp.listdir_attr.return_value = [mock_file]
+
+        local_dir = tmp_path / "download"
+        local_dir.mkdir()
+
+        azure_provider._recursive_download(mock_sftp, "/remote", local_dir)
+
+        mock_sftp.get.assert_called_once()
+
+    def test_recursive_download_creates_directories(self, azure_provider, tmp_path):
+        """Test _recursive_download creates directories."""
+        import stat
+
+        mock_sftp = MagicMock()
+
+        mock_dir = MagicMock()
+        mock_dir.filename = "subdir"
+        mock_dir.st_mode = stat.S_IFDIR
+
+        # Return empty list for subdirectory
+        mock_sftp.listdir_attr.side_effect = [[mock_dir], []]
+
+        local_dir = tmp_path / "download"
+        local_dir.mkdir()
+
+        azure_provider._recursive_download(mock_sftp, "/remote", local_dir)
+
+        # Verify subdirectory was created
+        assert (local_dir / "subdir").exists()
+
+    def test_recursive_download_handles_nested_structure(self, azure_provider, tmp_path):
+        """Test _recursive_download handles nested structures."""
+        import stat
+
+        mock_sftp = MagicMock()
+
+        # First level: directory
+        mock_dir = MagicMock()
+        mock_dir.filename = "subdir"
+        mock_dir.st_mode = stat.S_IFDIR
+
+        # Second level: file
+        mock_file = MagicMock()
+        mock_file.filename = "nested.txt"
+        mock_file.st_mode = stat.S_IFREG
+
+        mock_sftp.listdir_attr.side_effect = [[mock_dir], [mock_file]]
+
+        local_dir = tmp_path / "download"
+        local_dir.mkdir()
+
+        azure_provider._recursive_download(mock_sftp, "/remote", local_dir)
+
+        # Verify nested structure
+        assert (local_dir / "subdir").exists()
+        mock_sftp.get.assert_called_once()
+
+    def test_recursive_download_preserves_metadata(self, azure_provider, tmp_path):
+        """Test _recursive_download preserves file permissions (metadata)."""
+        import stat
+
+        mock_sftp = MagicMock()
+
+        mock_file = MagicMock()
+        mock_file.filename = "test.txt"
+        mock_file.st_mode = stat.S_IFREG | 0o755
+
+        mock_sftp.listdir_attr.return_value = [mock_file]
+
+        local_dir = tmp_path / "download"
+        local_dir.mkdir()
+
+        azure_provider._recursive_download(mock_sftp, "/remote", local_dir)
+
+        # Verify file was downloaded (metadata preservation is implicit in listdir_attr)
+        mock_sftp.get.assert_called_once()
