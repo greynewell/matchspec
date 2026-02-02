@@ -707,6 +707,9 @@ To archive:
     console.print(f"  Sample size: {config.sample_size or 'full'}")
     console.print(f"  Run MCP: {run_mcp}, Run Baseline: {run_baseline}")
     console.print(f"  Pre-built images: {config.use_prebuilt_images}")
+    infra_mode = getattr(getattr(config, "infrastructure", None), "mode", "local")
+    if infra_mode != "local":
+        console.print(f"  Infrastructure: {infra_mode}")
     if config.budget is not None:
         console.print(f"  Budget: ${config.budget:.2f}")
     if log_file_path:
@@ -724,21 +727,35 @@ To archive:
         if log_dir_path:
             log_dir_path.mkdir(parents=True, exist_ok=True)
 
-        results = asyncio.run(
-            run_evaluation(
-                config=config,
-                run_mcp=run_mcp,
-                run_baseline=run_baseline,
-                verbose=verbose,
-                verbosity=verbosity,
-                log_file=log_file,
-                log_dir=log_dir_path,
-                task_ids=selected_task_ids,
-                state_tracker=state_tracker,
-                from_task=from_task,
-                mcp_logs_dir=final_output_dir,
+        if infra_mode != "local":
+            from .infrastructure.manager import InfrastructureManager
+
+            infra_result = asyncio.run(
+                InfrastructureManager.run_with_infrastructure(
+                    config=config,
+                    config_path=Path(config_path),
+                    output_dir=final_output_dir,
+                    run_mcp=run_mcp,
+                    run_baseline=run_baseline,
+                )
             )
-        )
+            results = infra_result["results"]
+        else:
+            results = asyncio.run(
+                run_evaluation(
+                    config=config,
+                    run_mcp=run_mcp,
+                    run_baseline=run_baseline,
+                    verbose=verbose,
+                    verbosity=verbosity,
+                    log_file=log_file,
+                    log_dir=log_dir_path,
+                    task_ids=selected_task_ids,
+                    state_tracker=state_tracker,
+                    from_task=from_task,
+                    mcp_logs_dir=final_output_dir,
+                )
+            )
     except KeyboardInterrupt:
         console.print("\n[yellow]Evaluation interrupted by user[/yellow]")
         sys.exit(130)
