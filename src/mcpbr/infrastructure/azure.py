@@ -303,7 +303,9 @@ class AzureProvider(InfrastructureProvider):
             "sudo apt-get install -y -qq curl software-properties-common && "
             "curl -fsSL https://get.docker.com -o get-docker.sh && "
             "sudo sh get-docker.sh && "
-            "sudo usermod -aG docker $USER"
+            "sudo usermod -aG docker $USER && "
+            "sudo systemctl start docker && "
+            "sudo systemctl enable docker"
         )
         exit_code, _stdout, stderr = await self._ssh_exec(step1_cmd, timeout=600)
         if exit_code != 0:
@@ -410,13 +412,24 @@ class AzureProvider(InfrastructureProvider):
         py_ver = self.azure_config.python_version
         return f"python{py_ver} -m mcpbr"
 
+    def _wrap_cmd(self, cmd: str) -> str:
+        """Wrap a command with bash login shell and docker group access.
+
+        SSH exec_command uses /bin/sh by default, which doesn't source
+        .bashrc. This wraps commands to run in a bash login shell with
+        env vars loaded and docker group access (via sg).
+        """
+        return f"bash -lc {shlex.quote(f'sg docker -c {shlex.quote(cmd)}')}"
+
     async def _run_test_task(self) -> None:
         """Run single test task to validate setup."""
         console = Console()
         console.print("[cyan]Running test task to validate setup...[/cyan]")
 
         # Run mcpbr with sample_size=1, max_concurrent=1
-        test_cmd = f"source ~/.bashrc 2>/dev/null; {self._mcpbr_cmd()} run -c ~/config.yaml -M -n 1"
+        test_cmd = self._wrap_cmd(
+            f"{self._mcpbr_cmd()} run -c ~/config.yaml -M -n 1 --skip-preflight"
+        )
 
         exit_code, stdout, stderr = await self._ssh_exec(test_cmd, timeout=600)
 
@@ -509,11 +522,11 @@ class AzureProvider(InfrastructureProvider):
             flags.append("-B")
 
         # Execute mcpbr
-        cmd = f"{self._mcpbr_cmd()} run -c ~/config.yaml {' '.join(flags)}"
-        console.print(f"[dim]Running: {cmd}[/dim]")
+        raw_cmd = f"{self._mcpbr_cmd()} run -c ~/config.yaml {' '.join(flags)}"
+        console.print(f"[dim]Running: {raw_cmd}[/dim]")
 
-        # Source environment and execute with streaming output
-        cmd = f"source ~/.bashrc 2>/dev/null; {cmd}"
+        # Wrap with bash login shell + docker group access
+        cmd = self._wrap_cmd(raw_cmd)
         _stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
 
         # Stream output line by line
