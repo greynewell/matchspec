@@ -100,8 +100,14 @@ class InfrastructureManager:
         try:
             # 1. Health check
             health_result = await provider.health_check(config=config, config_path=config_path)
-            if not health_result["healthy"]:
-                failures = health_result["failures"]
+            # Support both key formats: "healthy"/"failures" and "errors" (Azure)
+            is_healthy = health_result.get("healthy")
+            if is_healthy is None:
+                # Azure format: healthy if no errors
+                errors = health_result.get("errors", [])
+                is_healthy = len(errors) == 0
+            if not is_healthy:
+                failures = health_result.get("failures") or health_result.get("errors", [])
                 raise InfrastructureHealthCheckError(failures)
 
             # 2. Setup infrastructure
