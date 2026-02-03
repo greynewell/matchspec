@@ -137,6 +137,7 @@ async def run_tests(
     timeout: int = 120,
     uses_prebuilt: bool = False,
     workdir: str | None = None,
+    repo: str | None = None,
 ) -> TestResults:
     """Run a list of tests and return results.
 
@@ -146,6 +147,7 @@ async def run_tests(
         timeout: Timeout per test in seconds.
         uses_prebuilt: Whether a pre-built SWE-bench image is being used.
         workdir: Working directory to run tests from. Defaults to env.workdir.
+        repo: Repository identifier for looking up the correct test runner.
 
     Returns:
         TestResults with pass/fail counts.
@@ -157,7 +159,7 @@ async def run_tests(
     passed = 0
 
     for test in tests:
-        test_cmd = _build_test_command(test, uses_prebuilt)
+        test_cmd = _build_test_command(test, uses_prebuilt, repo=repo)
 
         try:
             exit_code, stdout, stderr = await env.exec_command(
@@ -198,7 +200,7 @@ async def run_tests(
     )
 
 
-def _build_test_command(test: str, uses_prebuilt: bool = False) -> str:
+def _build_test_command(test: str, uses_prebuilt: bool = False, repo: str | None = None) -> str:
     """Build a test command for the given test identifier.
 
     Args:
@@ -206,17 +208,28 @@ def _build_test_command(test: str, uses_prebuilt: bool = False) -> str:
             - pytest: "tests/test_file.py::test_func" or "tests/test_file.py"
             - Django: "test_method (module.TestClass)" or "module.tests.TestClass.test_method"
         uses_prebuilt: If True, activate the testbed conda environment first.
+        repo: Repository identifier (e.g., "sympy/sympy") for looking up
+            the correct test runner from upstream SWE-bench specs.
 
     Returns:
         Shell command string to run the test.
     """
     import re
 
+    from .swebench_test_specs import get_repo_test_command
+
     # Pre-built SWE-bench images use a conda environment called 'testbed'
     if uses_prebuilt:
         activate = "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && "
     else:
         activate = ""
+
+    # Check upstream SWE-bench test command mapping for non-pytest runners
+    if repo:
+        upstream_cmd = get_repo_test_command(repo)
+        if upstream_cmd and "runtests.py" not in upstream_cmd and "pytest" not in upstream_cmd:
+            # Non-pytest, non-Django project (e.g., sympy uses bin/test)
+            return f"{activate}{upstream_cmd} {test}"
 
     # Detect Django test format: "test_method (module.TestClass)"
     if "(" in test and ")" in test and "." in test:
@@ -344,12 +357,15 @@ async def evaluate_patch(
     if not env.uses_prebuilt:
         await _install_dependencies(env)
 
+    repo = task.get("repo")
+
     fail_to_pass_results = await run_tests(
         env,
         fail_to_pass_tests,
         timeout=test_timeout,
         uses_prebuilt=env.uses_prebuilt,
         workdir=eval_workdir,
+        repo=repo,
     )
 
     pass_to_pass_results = await run_tests(
@@ -358,6 +374,7 @@ async def evaluate_patch(
         timeout=test_timeout,
         uses_prebuilt=env.uses_prebuilt,
         workdir=eval_workdir,
+        repo=repo,
     )
 
     resolved = (
