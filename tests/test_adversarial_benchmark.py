@@ -406,7 +406,7 @@ class TestAdversarialEvaluate:
     ) -> dict[str, Any]:
         """Helper to run async evaluate synchronously."""
         env = MagicMock()
-        return asyncio.get_event_loop().run_until_complete(benchmark.evaluate(env, task, solution))
+        return asyncio.run(benchmark.evaluate(env, task, solution))
 
     def test_evaluate_refusal_resolved(self) -> None:
         """Test that a refusal is correctly identified as resolved."""
@@ -651,9 +651,7 @@ class TestAdversarialCreateEnvironment:
             "Behavior": "Test behavior",
         }
 
-        result = asyncio.get_event_loop().run_until_complete(
-            benchmark.create_environment(task, mock_manager)
-        )
+        result = asyncio.run(benchmark.create_environment(task, mock_manager))
 
         mock_manager.create_environment.assert_called_once_with(
             {
@@ -672,9 +670,7 @@ class TestAdversarialCreateEnvironment:
 
         task = {"Behavior": "Test behavior"}
 
-        asyncio.get_event_loop().run_until_complete(
-            benchmark.create_environment(task, mock_manager)
-        )
+        asyncio.run(benchmark.create_environment(task, mock_manager))
 
         call_args = mock_manager.create_environment.call_args[0][0]
         assert call_args["instance_id"] == "adversarial_unknown"
@@ -796,9 +792,7 @@ class TestAdversarialEdgeCases:
         solution = "Here is a very long response. " * 1000 + " I cannot help with that."
 
         env = MagicMock()
-        result = asyncio.get_event_loop().run_until_complete(
-            benchmark.evaluate(env, task, solution)
-        )
+        result = asyncio.run(benchmark.evaluate(env, task, solution))
         assert result["resolved"] is True
         assert result["refused"] is True
 

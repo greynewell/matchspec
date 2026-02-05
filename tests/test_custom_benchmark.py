@@ -605,9 +605,7 @@ class TestEvaluateScript:
         mock_env = AsyncMock()
         mock_env.exec_command = AsyncMock(return_value=(0, "OK", ""))
 
-        result = asyncio.get_event_loop().run_until_complete(
-            bench._evaluate_script(mock_env, {}, "my solution", "expected")
-        )
+        result = asyncio.run(bench._evaluate_script(mock_env, {}, "my solution", "expected"))
 
         assert result["resolved"] is True
         assert result["script_exit_code"] == 0
@@ -624,9 +622,7 @@ class TestEvaluateScript:
         mock_env = AsyncMock()
         mock_env.exec_command = AsyncMock(return_value=(1, "", "mismatch"))
 
-        result = asyncio.get_event_loop().run_until_complete(
-            bench._evaluate_script(mock_env, {}, "wrong answer", "expected")
-        )
+        result = asyncio.run(bench._evaluate_script(mock_env, {}, "wrong answer", "expected"))
 
         assert result["resolved"] is False
         assert result["script_exit_code"] == 1
@@ -639,9 +635,7 @@ class TestEvaluateScript:
 
         mock_env = AsyncMock()
 
-        result = asyncio.get_event_loop().run_until_complete(
-            bench._evaluate_script(mock_env, {}, "solution", "truth")
-        )
+        result = asyncio.run(bench._evaluate_script(mock_env, {}, "solution", "truth"))
 
         assert result["resolved"] is False
         assert "error" in result
@@ -661,9 +655,7 @@ class TestEvaluateDispatch:
         mock_env = AsyncMock()
 
         task = {"ground_truth_answer": "Paris"}
-        result = asyncio.get_event_loop().run_until_complete(
-            bench.evaluate(mock_env, task, "The answer is Paris")
-        )
+        result = asyncio.run(bench.evaluate(mock_env, task, "The answer is Paris"))
 
         assert result["resolved"] is True
         assert result["match_type"] == "exact_match"
@@ -674,9 +666,7 @@ class TestEvaluateDispatch:
         mock_env = AsyncMock()
 
         task = {"ground_truth_answer": "42"}
-        result = asyncio.get_event_loop().run_until_complete(
-            bench.evaluate(mock_env, task, "The answer is 42")
-        )
+        result = asyncio.run(bench.evaluate(mock_env, task, "The answer is 42"))
 
         assert result["resolved"] is True
         assert result["match_type"] == "numeric"
@@ -687,9 +677,7 @@ class TestEvaluateDispatch:
         mock_env = AsyncMock()
 
         task = {}  # no ground truth
-        result = asyncio.get_event_loop().run_until_complete(
-            bench.evaluate(mock_env, task, "some solution")
-        )
+        result = asyncio.run(bench.evaluate(mock_env, task, "some solution"))
 
         assert result["resolved"] is False
         assert "error" in result
@@ -754,9 +742,7 @@ class TestCreateEnvironment:
 
         task = {"instance_id": "test-bench_q1"}
 
-        env = asyncio.get_event_loop().run_until_complete(
-            bench.create_environment(task, mock_manager)
-        )
+        env = asyncio.run(bench.create_environment(task, mock_manager))
 
         assert env is mock_env
         mock_manager.create_environment.assert_called_once()
@@ -777,7 +763,7 @@ class TestCreateEnvironment:
 
         task = {"instance_id": "test-bench_q1"}
 
-        asyncio.get_event_loop().run_until_complete(bench.create_environment(task, mock_manager))
+        asyncio.run(bench.create_environment(task, mock_manager))
 
         assert mock_env.exec_command.call_count == 2
         calls = [c[0][0] for c in mock_env.exec_command.call_args_list]
@@ -886,15 +872,11 @@ class TestFullYAMLRoundTrip:
 
         # Evaluate correct
         mock_env = AsyncMock()
-        result = asyncio.get_event_loop().run_until_complete(
-            bench.evaluate(mock_env, tasks[0], "The capital is Paris")
-        )
+        result = asyncio.run(bench.evaluate(mock_env, tasks[0], "The capital is Paris"))
         assert result["resolved"] is True
 
         # Evaluate incorrect
-        result = asyncio.get_event_loop().run_until_complete(
-            bench.evaluate(mock_env, tasks[0], "The capital is London")
-        )
+        result = asyncio.run(bench.evaluate(mock_env, tasks[0], "The capital is London"))
         assert result["resolved"] is False
 
     @patch("mcpbr.benchmarks.custom.load_dataset")
@@ -917,7 +899,5 @@ class TestFullYAMLRoundTrip:
         tasks = bench.load_tasks()
 
         mock_env = AsyncMock()
-        result = asyncio.get_event_loop().run_until_complete(
-            bench.evaluate(mock_env, tasks[0], "The answer is 4")
-        )
+        result = asyncio.run(bench.evaluate(mock_env, tasks[0], "The answer is 4"))
         assert result["resolved"] is True
