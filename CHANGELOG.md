@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Real-time web dashboard** (#58): Live monitoring of benchmark evaluations via `DashboardServer` with FastAPI + WebSocket, task progress, resolution rate, ETA, and pause/resume/cancel controls
+- **Interactive configuration wizard** (#74): Step-by-step CLI wizard for creating config files with presets (filesystem, web-search, database), model/benchmark selection, and MCP server setup
+- **Dry-run mode** (#84): Preview evaluation plan without executing — shows tasks, estimated cost/time, validates config, checks Docker and MCP server availability
+- **Task prioritization and scheduling** (#92): Intelligent task ordering with speed-first, cost-first, coverage-first, and custom scoring strategies
+- **Color and formatting options** (#105): Configurable output themes (default, minimal, plain) with NO_COLOR convention support and MCPBR_THEME env var
+- **Docker image pre-warming** (#128): Pre-pull Docker images in parallel before evaluation starts with progress reporting and cache detection
+- **Result streaming to external storage** (#131): Stream results as tasks complete to local JSONL files, S3-compatible storage, or webhooks with buffering and retry
+- **Memory-efficient large dataset handling** (#134): Streaming and chunked loading of large HuggingFace datasets with memory monitoring and automatic chunk-size adaptation
+- **Task batching with smart scheduling** (#137): Group similar tasks by repo/image/category to minimize Docker container restarts with adaptive batch sizing
+- **Resource limit configuration** (#139): Configure CPU, memory, disk, PID, and network limits for Docker containers with monitoring and violation reporting
+- **Configuration migration tool** (#195): Detect and migrate old config formats (V1→V4) with dry-run preview, backup, and chained migration steps
+- **Docker image caching optimization** (#228): LRU cache management with size limits, usage tracking, eviction, warmup recommendations, and dangling image cleanup
+
 ## [0.4.16] - 2026-02-05
 
 ### Added
