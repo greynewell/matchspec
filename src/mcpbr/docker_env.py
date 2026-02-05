@@ -724,6 +724,12 @@ CMD ["/bin/bash"]
         if self in _active_managers:
             _active_managers.remove(self)
 
+        # Close the Docker client to release background threads/connections
+        try:
+            self.client.close()
+        except Exception:
+            pass
+
         if report and cleanup_report.total_removed > 0:
             logger.info(str(cleanup_report))
 
