@@ -7,11 +7,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import docker
 from anthropic import Anthropic
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+import docker
 
 from .config import load_config
 from .config_validator import validate_config

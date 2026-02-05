@@ -5,9 +5,10 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-import docker
 from rich.console import Console
 from rich.table import Table
+
+import docker
 
 from .config import HarnessConfig
 

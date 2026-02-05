@@ -27,6 +27,7 @@ wheels/
 # PyInstaller
 *.manifest
 *.spec
+!mcpbr.spec
 
 # Installer logs
 pip-log.txt
