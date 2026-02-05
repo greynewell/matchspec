@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-05
+
 ### Added
 
 - **Real-time web dashboard** (#58): Live monitoring of benchmark evaluations via `DashboardServer` with FastAPI + WebSocket, task progress, resolution rate, ETA, and pause/resume/cancel controls
@@ -21,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Resource limit configuration** (#139): Configure CPU, memory, disk, PID, and network limits for Docker containers with monitoring and violation reporting
 - **Configuration migration tool** (#195): Detect and migrate old config formats (V1→V4) with dry-run preview, backup, and chained migration steps
 - **Docker image caching optimization** (#228): LRU cache management with size limits, usage tracking, eviction, warmup recommendations, and dangling image cleanup
+
+### Fixed
+
+- **Zero-cost metrics on evaluation timeout** (#374): Agent metrics (cost, tokens, iterations) were discarded when `benchmark.evaluate()` timed out after the agent had already completed successfully. Now preserves agent results when available.
+- **Process hang after evaluation completes** (#374): `asyncio.run()` blocked indefinitely during cleanup because Docker SDK urllib3 background threads kept the default executor alive. Now force-shuts down the executor with `wait=False`.
 
 ## [0.4.16] - 2026-02-05
 
