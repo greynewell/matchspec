@@ -498,7 +498,7 @@ CMD ["/bin/bash"]
                     for host_path, container_path in self._extra_volumes.items():
                         volumes_dict[os.path.abspath(host_path)] = {
                             "bind": container_path,
-                            "mode": "rw",
+                            "mode": "ro",
                         }
 
                     container = self.client.containers.run(

@@ -908,7 +908,7 @@ class ClaudeCodeHarness:
                 )
 
             setup_full_cmd = f"source {shlex.quote(env_file)} && {setup_cmd}"
-            setup_exit, setup_stdout, setup_stderr = await env.exec_command(
+            setup_exit, _setup_stdout, setup_stderr = await env.exec_command(
                 ["/bin/bash", "-c", setup_full_cmd],
                 timeout=setup_timeout,
             )
