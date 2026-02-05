@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-02-05
+
 ### Added
 
 - **Graceful degradation** (#70): Fault-tolerant task execution with failure isolation, classification (transient/permanent/unknown), configurable `continue_on_error` and `max_failures` policies, execution checkpointing for crash recovery, and partial report generation
@@ -780,6 +782,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.3.14]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.14
 [0.3.13]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.13
 [0.3.12]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.12
+[0.6.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.6.0
+[0.5.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.0
 [0.4.16]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.16
 [0.3.11]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.11
 [0.3.10]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.10
