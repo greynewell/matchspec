@@ -1214,8 +1214,8 @@ async def run_evaluation(
             if executor is not None:
                 executor.shutdown(wait=False, cancel_futures=True)
                 loop._default_executor = None
-        except Exception:
-            pass
+        except RuntimeError as exc:
+            console.print(f"[yellow]Default executor shutdown skipped: {exc}[/yellow]")
 
     # Check if we're in comparison mode
     if config.comparison_mode:
