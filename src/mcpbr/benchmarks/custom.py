@@ -1,5 +1,6 @@
 """Custom benchmark implementation loaded from YAML definition files."""
 
+import base64
 import re
 from pathlib import Path
 from typing import Any
@@ -461,13 +462,13 @@ class CustomBenchmark:
                 "error": "No evaluation_script configured for script evaluation",
             }
 
-        # Write solution and ground truth to temp files in the container
-        escaped_solution = solution.replace("'", "'\\''")
-        escaped_truth = ground_truth.replace("'", "'\\''")
+        # Write solution and ground truth using base64 to avoid shell injection
+        solution_b64 = base64.b64encode(solution.encode()).decode()
+        truth_b64 = base64.b64encode(ground_truth.encode()).decode()
 
         setup_cmd = (
-            f"echo '{escaped_solution}' > /tmp/solution.txt && "
-            f"echo '{escaped_truth}' > /tmp/ground_truth.txt"
+            f"echo '{solution_b64}' | base64 -d > /tmp/solution.txt && "
+            f"echo '{truth_b64}' | base64 -d > /tmp/ground_truth.txt"
         )
         await env.exec_command(setup_cmd, timeout=30)
 
