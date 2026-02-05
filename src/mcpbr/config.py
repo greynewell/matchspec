@@ -418,7 +418,7 @@ class HarnessConfig(BaseModel):
 
     volumes: dict[str, str] = Field(
         default_factory=dict,
-        description="Additional read-only volume mounts for Docker containers (host_path: container_path). "
+        description="Additional volume mounts (read-write) for Docker containers (host_path: container_path). "
         "Mounted into every container, persists across tasks. Useful for pre-computed caches.",
     )
 

@@ -900,7 +900,7 @@ class ClaudeCodeHarness:
         # pre-computing caches that should not count against timeout_seconds.
         if self.mcp_server and self.mcp_server.setup_command:
             setup_cmd = self.mcp_server.get_setup_command_for_workdir(env.workdir)
-            setup_timeout = self.mcp_server.setup_timeout_ms / 1000
+            setup_timeout = int(self.mcp_server.setup_timeout_ms / 1000)
 
             if verbose:
                 self._console.print(

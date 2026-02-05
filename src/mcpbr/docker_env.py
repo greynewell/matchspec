@@ -321,7 +321,7 @@ class DockerEnvironmentManager:
 
         Args:
             use_prebuilt: If True, try to use pre-built SWE-bench images first.
-            extra_volumes: Additional read-only volume mounts (host_path -> container_path).
+            extra_volumes: Additional volume mounts (read-write) (host_path -> container_path).
         """
         self.client = docker.from_env()
         self.use_prebuilt = use_prebuilt
@@ -498,7 +498,7 @@ CMD ["/bin/bash"]
                     for host_path, container_path in self._extra_volumes.items():
                         volumes_dict[os.path.abspath(host_path)] = {
                             "bind": container_path,
-                            "mode": "ro",
+                            "mode": "rw",
                         }
 
                     container = self.client.containers.run(
