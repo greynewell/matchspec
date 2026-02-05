@@ -1125,6 +1125,10 @@ async def run_evaluation(
                         # Wait for cancellation to complete
                         await asyncio.gather(*async_tasks, return_exceptions=True)
                         break
+
+                # Explicitly stop before exiting context to avoid
+                # deadlock between Rich's rendering thread and asyncio
+                progress.stop()
         else:
             # In non-verbose mode, show overall progress bar + per-task spinners
             with Progress(
@@ -1172,6 +1176,10 @@ async def run_evaluation(
                         # Wait for cancellation to complete
                         await asyncio.gather(*async_tasks, return_exceptions=True)
                         break
+
+                # Explicitly stop before exiting context to avoid
+                # deadlock between Rich's rendering thread and asyncio
+                progress.stop()
     finally:
         await docker_manager.cleanup_all()
 
