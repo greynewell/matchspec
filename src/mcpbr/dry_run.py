@@ -247,7 +247,7 @@ def _estimate_time(
     per_task_minutes = min(per_task_minutes, timeout_minutes)
 
     # Account for concurrency: tasks run in batches of max_concurrent
-    effective_concurrency = min(max_concurrent, num_tasks) if num_tasks > 0 else 1
+    effective_concurrency = max(1, min(max_concurrent, num_tasks)) if num_tasks > 0 else 1
     total_minutes = (num_tasks / effective_concurrency) * per_task_minutes
 
     return total_minutes

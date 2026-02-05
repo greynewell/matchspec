@@ -118,6 +118,7 @@ class DashboardState:
     task_results: list[TaskStatus] = field(default_factory=list)
     is_paused: bool = False
     is_cancelled: bool = False
+    _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     # -- Mutation helpers used by the evaluation harness --------------------
 
@@ -127,10 +128,11 @@ class DashboardState:
         Args:
             instance_id: The task's unique identifier.
         """
-        self.current_task_id = instance_id
-        task = self._find_or_create_task(instance_id)
-        task.status = "running"
-        task.started_at = time.time()
+        with self._lock:
+            self.current_task_id = instance_id
+            task = self._find_or_create_task(instance_id)
+            task.status = "running"
+            task.started_at = time.time()
 
     def update_task(
         self,
@@ -146,25 +148,26 @@ class DashboardState:
             resolved: Whether the task was resolved successfully.
             error: An error message if the task failed.
         """
-        task = self._find_or_create_task(instance_id)
-        task.finished_at = time.time()
+        with self._lock:
+            task = self._find_or_create_task(instance_id)
+            task.finished_at = time.time()
 
-        if error is not None:
-            task.status = "failed"
-            task.error = error
-            self.failed_tasks += 1
-        elif resolved:
-            task.status = "resolved"
-            self.resolved_tasks += 1
-        else:
-            task.status = "failed"
-            self.failed_tasks += 1
+            if error is not None:
+                task.status = "failed"
+                task.error = error
+                self.failed_tasks += 1
+            elif resolved:
+                task.status = "resolved"
+                self.resolved_tasks += 1
+            else:
+                task.status = "failed"
+                self.failed_tasks += 1
 
-        self.completed_tasks += 1
+            self.completed_tasks += 1
 
-        # Clear current task if it matches
-        if self.current_task_id == instance_id:
-            self.current_task_id = None
+            # Clear current task if it matches
+            if self.current_task_id == instance_id:
+                self.current_task_id = None
 
     def get_resolution_rate(self) -> float:
         """Return the current resolution rate as a fraction (0.0 -- 1.0).
@@ -172,12 +175,51 @@ class DashboardState:
         Returns:
             Resolved tasks divided by completed tasks, or 0.0 if none completed.
         """
-        if self.completed_tasks == 0:
-            return 0.0
-        return self.resolved_tasks / self.completed_tasks
+        with self._lock:
+            if self.completed_tasks == 0:
+                return 0.0
+            return self.resolved_tasks / self.completed_tasks
 
     def get_eta_seconds(self) -> float | None:
         """Estimate remaining seconds based on average task completion time.
+
+        Returns:
+            Estimated seconds remaining, or ``None`` if no tasks have completed.
+        """
+        with self._lock:
+            if self.completed_tasks == 0:
+                return None
+            elapsed = time.time() - self.start_time
+            avg_per_task = elapsed / self.completed_tasks
+            remaining_tasks = self.total_tasks - self.completed_tasks
+            return avg_per_task * remaining_tasks
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the full dashboard state to a JSON-safe dictionary.
+
+        Returns:
+            Dictionary representation of the dashboard state.
+        """
+        with self._lock:
+            eta = self._get_eta_seconds_unlocked()
+            return {
+                "total_tasks": self.total_tasks,
+                "completed_tasks": self.completed_tasks,
+                "resolved_tasks": self.resolved_tasks,
+                "failed_tasks": self.failed_tasks,
+                "current_task_id": self.current_task_id,
+                "resolution_rate": (
+                    self.resolved_tasks / self.completed_tasks if self.completed_tasks > 0 else 0.0
+                ),
+                "eta_seconds": eta,
+                "elapsed_seconds": time.time() - self.start_time,
+                "is_paused": self.is_paused,
+                "is_cancelled": self.is_cancelled,
+                "task_results": [t.to_dict() for t in self.task_results],
+            }
+
+    def _get_eta_seconds_unlocked(self) -> float | None:
+        """Estimate remaining seconds (caller must hold _lock).
 
         Returns:
             Estimated seconds remaining, or ``None`` if no tasks have completed.
@@ -188,27 +230,6 @@ class DashboardState:
         avg_per_task = elapsed / self.completed_tasks
         remaining_tasks = self.total_tasks - self.completed_tasks
         return avg_per_task * remaining_tasks
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize the full dashboard state to a JSON-safe dictionary.
-
-        Returns:
-            Dictionary representation of the dashboard state.
-        """
-        eta = self.get_eta_seconds()
-        return {
-            "total_tasks": self.total_tasks,
-            "completed_tasks": self.completed_tasks,
-            "resolved_tasks": self.resolved_tasks,
-            "failed_tasks": self.failed_tasks,
-            "current_task_id": self.current_task_id,
-            "resolution_rate": self.get_resolution_rate(),
-            "eta_seconds": eta,
-            "elapsed_seconds": time.time() - self.start_time,
-            "is_paused": self.is_paused,
-            "is_cancelled": self.is_cancelled,
-            "task_results": [t.to_dict() for t in self.task_results],
-        }
 
     # -- Internal helpers --------------------------------------------------
 
@@ -341,10 +362,19 @@ function update(d) {
     const dur = (t.started_at && t.finished_at)
       ? fmtTime(t.finished_at - t.started_at)
       : (t.started_at ? "running..." : "-");
-    tr.innerHTML = "<td>" + t.instance_id + "</td>"
-      + '<td class="status-' + t.status + '">' + t.status + "</td>"
-      + "<td>" + dur + "</td>"
-      + "<td>" + (t.error || "") + "</td>";
+    const tdId = document.createElement("td");
+    tdId.textContent = t.instance_id;
+    const tdStatus = document.createElement("td");
+    tdStatus.textContent = t.status;
+    tdStatus.className = "status-" + t.status;
+    const tdDur = document.createElement("td");
+    tdDur.textContent = dur;
+    const tdErr = document.createElement("td");
+    tdErr.textContent = t.error || "";
+    tr.appendChild(tdId);
+    tr.appendChild(tdStatus);
+    tr.appendChild(tdDur);
+    tr.appendChild(tdErr);
     tbody.appendChild(tr);
   });
 }
