@@ -418,6 +418,7 @@ async def _run_mcp_evaluation(
 
     start_time = time.time()
     env: TaskEnvironment | None = None
+    agent_result: AgentResult | None = None
     try:
         # Track Docker environment creation time
         docker_start = time.time()
@@ -480,10 +481,15 @@ async def _run_mcp_evaluation(
         return result
 
     except asyncio.TimeoutError:
-        # Note: The agent harness should have captured partial statistics in the AgentResult
-        # before raising TimeoutError, but this is a fallback for unexpected timeout locations
         end_time = time.time()
         runtime_seconds = end_time - start_time
+        # Preserve agent metrics if the agent completed before the timeout
+        # (timeout may have occurred during evaluation, not during agent solve)
+        if agent_result is not None:
+            result = agent_result_to_dict(agent_result, None, config.model, runtime_seconds)
+            result["status"] = "timeout"
+            result["error"] = "Evaluation timed out after agent completed"
+            return result
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
@@ -499,6 +505,11 @@ async def _run_mcp_evaluation(
     except Exception as e:
         end_time = time.time()
         runtime_seconds = end_time - start_time
+        # Preserve agent metrics if the agent completed before the error
+        if agent_result is not None:
+            result = agent_result_to_dict(agent_result, None, config.model, runtime_seconds)
+            result["error"] = str(e)
+            return result
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
@@ -562,6 +573,7 @@ async def _run_baseline_evaluation(
 
     start_time = time.time()
     env: TaskEnvironment | None = None
+    agent_result: AgentResult | None = None
     try:
         # Track Docker environment creation time
         docker_start = time.time()
@@ -622,10 +634,15 @@ async def _run_baseline_evaluation(
         return result
 
     except asyncio.TimeoutError:
-        # Note: The agent harness should have captured partial statistics in the AgentResult
-        # before raising TimeoutError, but this is a fallback for unexpected timeout locations
         end_time = time.time()
         runtime_seconds = end_time - start_time
+        # Preserve agent metrics if the agent completed before the timeout
+        # (timeout may have occurred during evaluation, not during agent solve)
+        if agent_result is not None:
+            result = agent_result_to_dict(agent_result, None, config.model, runtime_seconds)
+            result["status"] = "timeout"
+            result["error"] = "Evaluation timed out after agent completed"
+            return result
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
@@ -641,6 +658,11 @@ async def _run_baseline_evaluation(
     except Exception as e:
         end_time = time.time()
         runtime_seconds = end_time - start_time
+        # Preserve agent metrics if the agent completed before the error
+        if agent_result is not None:
+            result = agent_result_to_dict(agent_result, None, config.model, runtime_seconds)
+            result["error"] = str(e)
+            return result
         cost = calculate_cost(config.model, 0, 0)
         return {
             "resolved": False,
@@ -1182,6 +1204,18 @@ async def run_evaluation(
                 progress.stop()
     finally:
         await docker_manager.cleanup_all()
+        # Force-shutdown the default executor to prevent asyncio.run() from
+        # hanging during cleanup. Docker SDK background threads (urllib3
+        # connection pool) may linger after client.close(), causing
+        # executor.shutdown(wait=True) to block indefinitely.
+        try:
+            loop = asyncio.get_running_loop()
+            executor = getattr(loop, "_default_executor", None)
+            if executor is not None:
+                executor.shutdown(wait=False, cancel_futures=True)
+                loop._default_executor = None
+        except RuntimeError as exc:
+            console.print(f"[yellow]Default executor shutdown skipped: {exc}[/yellow]")
 
     # Check if we're in comparison mode
     if config.comparison_mode:
