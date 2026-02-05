@@ -1,0 +1,90 @@
+name: "mcpbr Benchmark Runner"
+description: "Run MCP server benchmarks in your CI/CD pipeline using mcpbr"
+author: "mcpbr Contributors"
+
+branding:
+  icon: "bar-chart-2"
+  color: "blue"
+
+inputs:
+  config:
+    description: "Path to benchmark configuration YAML file"
+    required: true
+  version:
+    description: "Version of mcpbr to install (e.g., '0.6.0' or 'latest')"
+    required: false
+    default: "latest"
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.11"
+  output-dir:
+    description: "Directory for benchmark results"
+    required: false
+    default: "results"
+  extra-args:
+    description: "Additional arguments to pass to mcpbr run"
+    required: false
+    default: ""
+  anthropic-api-key:
+    description: "Anthropic API key (prefer using secrets)"
+    required: false
+  openai-api-key:
+    description: "OpenAI API key (prefer using secrets)"
+    required: false
+
+outputs:
+  results-path:
+    description: "Path to the results directory"
+    value: ${{ steps.run-benchmark.outputs.results-path }}
+  exit-code:
+    description: "Exit code from mcpbr run"
+    value: ${{ steps.run-benchmark.outputs.exit-code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install mcpbr
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          pip install mcpbr
+        else
+          pip install "mcpbr==${{ inputs.version }}"
+        fi
+
+    - name: Create output directory
+      shell: bash
+      run: mkdir -p "${{ inputs.output-dir }}"
+
+    - name: Run benchmarks
+      id: run-benchmark
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+      run: |
+        set +e
+        mcpbr run \
+          --config "${{ inputs.config }}" \
+          --output-dir "${{ inputs.output-dir }}" \
+          ${{ inputs.extra-args }}
+        EXIT_CODE=$?
+        set -e
+        echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+        echo "results-path=${{ inputs.output-dir }}" >> "$GITHUB_OUTPUT"
+        exit ${EXIT_CODE}
+
+    - name: Upload results artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mcpbr-results
+        path: ${{ inputs.output-dir }}
+        retention-days: 30

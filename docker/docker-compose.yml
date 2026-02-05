@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  mcpbr:
+    build:
+      context: ..
+      dockerfile: Dockerfile.app
+    image: ghcr.io/greynewell/mcpbr:latest
+    volumes:
+      - ./configs:/home/mcpbr/configs:ro
+      - ./results:/home/mcpbr/results
+      # Mount Docker socket for Docker-in-Docker task execution
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - MCPBR_LOG_LEVEL=${MCPBR_LOG_LEVEL:-INFO}
+    command: ["run", "--config", "/home/mcpbr/configs/benchmark.yaml"]
+
+  mcpbr-smoke-test:
+    build:
+      context: ..
+      dockerfile: Dockerfile.app
+    image: ghcr.io/greynewell/mcpbr:latest
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    command: ["smoke-test"]

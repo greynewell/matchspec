@@ -1,6 +1,8 @@
 """Model provider abstractions for different LLM APIs."""
 
+import json
 import os
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
@@ -142,8 +144,6 @@ class AnthropicProvider:
             if block.type == "text":
                 content_text = block.text
             elif block.type == "tool_use":
-                import json
-
                 tool_calls.append(
                     ToolCall(
                         id=block.id,
@@ -170,8 +170,299 @@ class AnthropicProvider:
         )
 
 
+class OpenAIProvider:
+    """Provider for OpenAI API (GPT models)."""
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+    ) -> None:
+        """Initialize OpenAI provider.
+
+        Args:
+            model: OpenAI model ID (e.g., 'gpt-4o', 'gpt-4-turbo').
+            api_key: API key. If None, uses OPENAI_API_KEY env var.
+        """
+        self._model = model
+        self._api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        if not self._api_key:
+            raise ValueError(
+                "OpenAI API key required. Set OPENAI_API_KEY environment variable "
+                "or pass api_key parameter."
+            )
+        import openai
+
+        self._client = openai.OpenAI(api_key=self._api_key)
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    def get_tool_format(self) -> str:
+        return "openai"
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 4096,
+    ) -> ChatResponse:
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        if tools:
+            kwargs["tools"] = tools
+
+        response = self._client.chat.completions.create(**kwargs)
+
+        choice = response.choices[0]
+        tool_calls = []
+        if choice.message.tool_calls:
+            for tc in choice.message.tool_calls:
+                tool_calls.append(
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=tc.function.arguments,
+                    )
+                )
+
+        return ChatResponse(
+            message=ChatMessage(
+                role="assistant",
+                content=choice.message.content,
+                tool_calls=tool_calls,
+            ),
+            finish_reason=choice.finish_reason,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+        )
+
+
+class GeminiProvider:
+    """Provider for Google Gemini API."""
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+    ) -> None:
+        """Initialize Gemini provider.
+
+        Args:
+            model: Gemini model ID (e.g., 'gemini-2.0-flash', 'gemini-1.5-pro').
+            api_key: API key. If None, uses GOOGLE_API_KEY env var.
+        """
+        self._model = model
+        self._api_key = api_key or os.environ.get("GOOGLE_API_KEY")
+        if not self._api_key:
+            raise ValueError(
+                "Google API key required. Set GOOGLE_API_KEY environment variable "
+                "or pass api_key parameter."
+            )
+        import google.generativeai as genai
+
+        genai.configure(api_key=self._api_key)
+        self._genai = genai
+        self._client = genai.GenerativeModel(model)
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    def get_tool_format(self) -> str:
+        return "openai"
+
+    def _convert_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Convert OpenAI-style messages to Gemini content format.
+
+        Args:
+            messages: List of OpenAI-style message dicts.
+
+        Returns:
+            List of Gemini-style content dicts.
+        """
+        contents: list[dict[str, Any]] = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            if role == "system":
+                # Gemini treats system messages as user messages at the start
+                role = "user"
+            elif role == "assistant":
+                role = "model"
+            contents.append({"role": role, "parts": [msg.get("content", "")]})
+        return contents
+
+    def _convert_tools(self, tools: list[dict[str, Any]] | None) -> list[Any] | None:
+        """Convert OpenAI-style tool definitions to Gemini function declarations.
+
+        Args:
+            tools: List of OpenAI-style tool dicts.
+
+        Returns:
+            List of Gemini Tool objects, or None.
+        """
+        if not tools:
+            return None
+
+        function_declarations = []
+        for tool in tools:
+            func = tool.get("function", {})
+            function_declarations.append(
+                self._genai.protos.FunctionDeclaration(
+                    name=func.get("name", ""),
+                    description=func.get("description", ""),
+                    parameters=func.get("parameters"),
+                )
+            )
+        return [self._genai.protos.Tool(function_declarations=function_declarations)]
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 4096,
+    ) -> ChatResponse:
+        contents = self._convert_messages(messages)
+        gemini_tools = self._convert_tools(tools)
+
+        kwargs: dict[str, Any] = {
+            "contents": contents,
+            "generation_config": {"max_output_tokens": max_tokens},
+        }
+        if gemini_tools:
+            kwargs["tools"] = gemini_tools
+
+        response = self._client.generate_content(**kwargs)
+
+        content_text = ""
+        tool_calls = []
+        candidate = response.candidates[0]
+
+        for part in candidate.content.parts:
+            if part.function_call and part.function_call.name:
+                args_dict = dict(part.function_call.args) if part.function_call.args else {}
+                tool_calls.append(
+                    ToolCall(
+                        id=f"call_{uuid.uuid4().hex[:24]}",
+                        name=part.function_call.name,
+                        arguments=json.dumps(args_dict),
+                    )
+                )
+            elif part.text:
+                content_text = part.text
+
+        finish_reason = "stop"
+        if tool_calls:
+            finish_reason = "tool_calls"
+        elif hasattr(candidate.finish_reason, "name"):
+            reason_name = candidate.finish_reason.name
+            if reason_name == "STOP":
+                finish_reason = "stop"
+            elif reason_name == "MAX_TOKENS":
+                finish_reason = "length"
+
+        return ChatResponse(
+            message=ChatMessage(
+                role="assistant",
+                content=content_text if content_text else None,
+                tool_calls=tool_calls,
+            ),
+            finish_reason=finish_reason,
+            input_tokens=response.usage_metadata.prompt_token_count,
+            output_tokens=response.usage_metadata.candidates_token_count,
+        )
+
+
+class QwenProvider:
+    """Provider for Alibaba Qwen API (OpenAI-compatible via DashScope).
+
+    Qwen models are accessed through the DashScope international API endpoint
+    which provides an OpenAI-compatible interface.
+    """
+
+    DASHSCOPE_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+    ) -> None:
+        """Initialize Qwen provider.
+
+        Args:
+            model: Qwen model ID (e.g., 'qwen-plus', 'qwen-turbo', 'qwen-max').
+            api_key: API key. If None, uses DASHSCOPE_API_KEY env var.
+        """
+        self._model = model
+        self._api_key = api_key or os.environ.get("DASHSCOPE_API_KEY")
+        if not self._api_key:
+            raise ValueError(
+                "DashScope API key required. Set DASHSCOPE_API_KEY environment variable "
+                "or pass api_key parameter."
+            )
+        import openai
+
+        self._client = openai.OpenAI(
+            api_key=self._api_key,
+            base_url=self.DASHSCOPE_BASE_URL,
+        )
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    def get_tool_format(self) -> str:
+        return "openai"
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 4096,
+    ) -> ChatResponse:
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        if tools:
+            kwargs["tools"] = tools
+
+        response = self._client.chat.completions.create(**kwargs)
+
+        choice = response.choices[0]
+        tool_calls = []
+        if choice.message.tool_calls:
+            for tc in choice.message.tool_calls:
+                tool_calls.append(
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=tc.function.arguments,
+                    )
+                )
+
+        return ChatResponse(
+            message=ChatMessage(
+                role="assistant",
+                content=choice.message.content,
+                tool_calls=tool_calls,
+            ),
+            finish_reason=choice.finish_reason,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+        )
+
+
 PROVIDER_REGISTRY: dict[str, type] = {
     "anthropic": AnthropicProvider,
+    "openai": OpenAIProvider,
+    "gemini": GeminiProvider,
+    "qwen": QwenProvider,
 }
 
 
@@ -183,7 +474,7 @@ def create_provider(
     """Factory function to create a model provider.
 
     Args:
-        provider_name: Name of the provider (currently only 'anthropic').
+        provider_name: Name of the provider ('anthropic', 'openai', 'gemini', 'qwen').
         model: Model identifier for the provider.
         api_key: Optional API key.
 

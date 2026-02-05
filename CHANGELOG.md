@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Graceful degradation** (#70): Fault-tolerant task execution with failure isolation, classification (transient/permanent/unknown), configurable `continue_on_error` and `max_failures` policies, execution checkpointing for crash recovery, and partial report generation
+  - New config fields: `continue_on_error`, `max_failures`, `checkpoint_interval`, `resume_from_checkpoint`
+- **Multi-provider support** (#229): Added OpenAI, Google Gemini, and Alibaba Qwen as model providers alongside Anthropic
+  - `OpenAIProvider` for GPT-4o, GPT-4 Turbo, and GPT-4o Mini models
+  - `GeminiProvider` for Gemini 2.0 Flash, Gemini 1.5 Pro, and Gemini 1.5 Flash models
+  - `QwenProvider` for Qwen Plus, Qwen Turbo, and Qwen Max models via DashScope API
+  - New optional dependencies: `openai`, `gemini`, `all-providers` extras
+  - Pricing data for all 9 new models
+  - Model registry entries with context window and tool support metadata
+- **Multi-language support** (#230): Cross-language benchmark execution for Python, JavaScript, TypeScript, Java, and Go
+  - Per-language Docker images, run/compile commands, and test framework configs
+  - Automatic language detection from filenames and code patterns
+  - Cross-language metrics aggregation
+- **Structured logging** (#231): JSON and human-readable log formatters with contextual metadata
+  - File rotation, configurable log levels via `MCPBR_LOG_LEVEL` env var
+  - `LogContext` context manager for injecting task/benchmark fields into log records
+- **Public Python SDK** (#232): Programmatic API for configuring and running benchmarks
+  - `MCPBenchmark` class with config from dict, YAML, or `HarnessConfig`
+  - `list_benchmarks()`, `list_providers()`, `list_models()`, `get_version()` helpers
+  - Exported in top-level `mcpbr` package for `from mcpbr import MCPBenchmark`
+- **Platform distribution files**: Docker, Conda, Homebrew, GitHub Actions, and CI templates
+  - `Dockerfile.app` multi-stage build for container deployment
+  - `docker/docker-compose.yml` for multi-container orchestration
+  - `conda/meta.yaml` recipe for Conda packaging
+  - `action/action.yml` GitHub Action with basic and matrix examples
+  - `ci-templates/` for GitLab CI and CircleCI integration
+
 ## [0.5.0] - 2026-02-05
 
 ### Added

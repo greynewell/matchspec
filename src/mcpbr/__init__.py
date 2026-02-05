@@ -3,4 +3,23 @@
 A benchmark runner for evaluating MCP servers against SWE-bench tasks.
 """
 
-__version__ = "0.3.23"
+__version__ = "0.6.0"
+
+from .sdk import (
+    BenchmarkResult,
+    MCPBenchmark,
+    get_version,
+    list_benchmarks,
+    list_models,
+    list_providers,
+)
+
+__all__ = [
+    "__version__",
+    "BenchmarkResult",
+    "MCPBenchmark",
+    "get_version",
+    "list_benchmarks",
+    "list_models",
+    "list_providers",
+]

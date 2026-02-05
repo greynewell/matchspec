@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcpbr"
-version = "0.5.1"
+version = "0.6.0"
 description = "Model Context Protocol Benchmark Runner - evaluate MCP servers against software engineering benchmarks"
 readme = "README.md"
 license = "MIT"
@@ -49,6 +49,9 @@ docs = [
     "mkdocstrings[python]>=0.24.0",
     "mkdocs-minify-plugin>=0.7.0",
 ]
+openai = ["openai>=1.0.0"]
+gemini = ["google-generativeai>=0.3.0"]
+all-providers = ["openai>=1.0.0", "google-generativeai>=0.3.0"]
 # Note: terminal-bench package (pip install terminal-bench) can be installed
 # separately if HuggingFace dataset loading fails. It requires Python 3.12+.
 

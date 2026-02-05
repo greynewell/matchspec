@@ -107,7 +107,7 @@ class TestIsModelSupported:
 
     def test_unsupported_model(self) -> None:
         """Test that unknown model returns False."""
-        assert is_model_supported("gpt-4-turbo") is False
+        assert is_model_supported("totally-fake-model") is False
         assert is_model_supported("claude-99") is False
         assert is_model_supported("") is False
 
@@ -195,7 +195,7 @@ class TestGetModelsByProvider:
 
     def test_unknown_provider_returns_empty(self) -> None:
         """Test that unknown provider returns empty list."""
-        models = get_models_by_provider("OpenAI")
+        models = get_models_by_provider("NonexistentProvider")
         assert models == []
 
 

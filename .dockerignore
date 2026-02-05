@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov/
+.tox
+
+# Documentation
+docs/
+site/
+mkdocs.yml
+
+# CI/CD
+.github/
+ci-templates/
+
+# Docker (avoid recursive copies)
+docker/results/
+
+# Node
+node_modules/
+npm-debug.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.*
+credentials.json

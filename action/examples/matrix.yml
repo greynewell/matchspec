@@ -1,0 +1,60 @@
+# Matrix example: Run benchmarks across multiple configurations
+name: MCP Benchmark Matrix
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"  # Weekly on Monday at 6am UTC
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        benchmark:
+          - swebench
+          - humaneval
+          - mbpp
+        python-version:
+          - "3.11"
+          - "3.12"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ${{ matrix.benchmark }} benchmark
+        uses: greynewell/mcpbr@main
+        with:
+          config: benchmarks/${{ matrix.benchmark }}.yaml
+          python-version: ${{ matrix.python-version }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          output-dir: results-${{ matrix.benchmark }}-py${{ matrix.python-version }}
+
+      - name: Upload individual results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.benchmark }}-py${{ matrix.python-version }}
+          path: results-${{ matrix.benchmark }}-py${{ matrix.python-version }}
+
+  aggregate:
+    needs: benchmark
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
+
+      - name: Summary
+        run: |
+          echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          for dir in all-results/results-*; do
+            benchmark=$(basename "$dir")
+            echo "### ${benchmark}" >> $GITHUB_STEP_SUMMARY
+            if [ -f "${dir}"/*.json ]; then
+              cat "${dir}"/*.json >> $GITHUB_STEP_SUMMARY
+            fi
+          done

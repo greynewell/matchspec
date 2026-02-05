@@ -1,0 +1,68 @@
+# GitLab CI template for running mcpbr benchmarks
+# Include this in your .gitlab-ci.yml:
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/greynewell/mcpbr/main/ci-templates/gitlab/.gitlab-ci-mcpbr.yml'
+
+stages:
+  - setup
+  - benchmark
+  - report
+
+variables:
+  MCPBR_VERSION: "latest"
+  MCPBR_PYTHON_VERSION: "3.11"
+  MCPBR_CONFIG: "benchmarks/config.yaml"
+  MCPBR_OUTPUT_DIR: "results"
+  MCPBR_LOG_LEVEL: "INFO"
+
+.mcpbr_base:
+  image: python:${MCPBR_PYTHON_VERSION}-slim
+  before_script:
+    - pip install --upgrade pip
+    - |
+      if [ "$MCPBR_VERSION" = "latest" ]; then
+        pip install mcpbr
+      else
+        pip install "mcpbr==$MCPBR_VERSION"
+      fi
+
+mcpbr_install:
+  stage: setup
+  extends: .mcpbr_base
+  script:
+    - mcpbr --version
+    - mcpbr --help
+
+mcpbr_benchmark:
+  stage: benchmark
+  extends: .mcpbr_base
+  script:
+    - mkdir -p "$MCPBR_OUTPUT_DIR"
+    - mcpbr run --config "$MCPBR_CONFIG" --output-dir "$MCPBR_OUTPUT_DIR"
+  artifacts:
+    paths:
+      - ${MCPBR_OUTPUT_DIR}/
+    expire_in: 30 days
+    when: always
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+mcpbr_smoke_test:
+  stage: benchmark
+  extends: .mcpbr_base
+  script:
+    - mcpbr smoke-test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+mcpbr_report:
+  stage: report
+  extends: .mcpbr_base
+  needs:
+    - mcpbr_benchmark
+  script:
+    - echo "Benchmark results available in ${MCPBR_OUTPUT_DIR}/"
+    - ls -la "${MCPBR_OUTPUT_DIR}/"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

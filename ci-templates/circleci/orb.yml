@@ -1,0 +1,134 @@
+version: 2.1
+
+description: |
+  Run MCP server benchmarks with mcpbr in your CircleCI pipeline.
+  See https://github.com/greynewell/mcpbr for documentation.
+
+display:
+  home_url: https://github.com/greynewell/mcpbr
+  source_url: https://github.com/greynewell/mcpbr/tree/main/ci-templates/circleci
+
+orbs:
+  python: circleci/python@2.1
+
+executors:
+  default:
+    docker:
+      - image: cimg/python:3.11
+    resource_class: medium
+
+commands:
+  install:
+    description: Install mcpbr
+    parameters:
+      version:
+        type: string
+        default: "latest"
+    steps:
+      - run:
+          name: Install mcpbr
+          command: |
+            if [ "<< parameters.version >>" = "latest" ]; then
+              pip install mcpbr
+            else
+              pip install "mcpbr==<< parameters.version >>"
+            fi
+      - run:
+          name: Verify installation
+          command: mcpbr --version
+
+  run-benchmark:
+    description: Run mcpbr benchmarks
+    parameters:
+      config:
+        type: string
+        description: Path to benchmark configuration YAML
+      output-dir:
+        type: string
+        default: "results"
+      extra-args:
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: Create output directory
+          command: mkdir -p "<< parameters.output-dir >>"
+      - run:
+          name: Run benchmarks
+          command: |
+            mcpbr run \
+              --config "<< parameters.config >>" \
+              --output-dir "<< parameters.output-dir >>" \
+              << parameters.extra-args >>
+      - store_artifacts:
+          path: << parameters.output-dir >>
+          destination: mcpbr-results
+
+  smoke-test:
+    description: Run mcpbr smoke test
+    steps:
+      - run:
+          name: Smoke test
+          command: mcpbr smoke-test
+
+jobs:
+  benchmark:
+    description: Run a full benchmark suite
+    executor: default
+    parameters:
+      config:
+        type: string
+      version:
+        type: string
+        default: "latest"
+      output-dir:
+        type: string
+        default: "results"
+      extra-args:
+        type: string
+        default: ""
+    steps:
+      - checkout
+      - install:
+          version: << parameters.version >>
+      - run-benchmark:
+          config: << parameters.config >>
+          output-dir: << parameters.output-dir >>
+          extra-args: << parameters.extra-args >>
+
+  smoke-test:
+    description: Run a quick smoke test to verify setup
+    executor: default
+    parameters:
+      version:
+        type: string
+        default: "latest"
+    steps:
+      - checkout
+      - install:
+          version: << parameters.version >>
+      - smoke-test
+
+examples:
+  basic:
+    description: Run a simple benchmark
+    usage:
+      version: 2.1
+      orbs:
+        mcpbr: greynewell/mcpbr@1.0
+      workflows:
+        benchmark:
+          jobs:
+            - mcpbr/benchmark:
+                config: benchmarks/config.yaml
+
+  smoke-test-on-pr:
+    description: Run smoke test on pull requests
+    usage:
+      version: 2.1
+      orbs:
+        mcpbr: greynewell/mcpbr@1.0
+      workflows:
+        validate:
+          jobs:
+            - mcpbr/smoke-test

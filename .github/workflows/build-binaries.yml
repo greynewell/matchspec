@@ -1,0 +1,83 @@
+name: Build Binaries
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g., v0.6.0)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x86_64
+            artifact-name: mcpbr-linux-x86_64
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+            artifact-name: mcpbr-macos-arm64
+          - os: macos-13
+            platform: macos
+            arch: x86_64
+            artifact-name: mcpbr-macos-x86_64
+          - os: windows-latest
+            platform: windows
+            arch: x86_64
+            artifact-name: mcpbr-windows-x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -e "."
+
+      - name: Build binary (Unix)
+        if: matrix.platform != 'windows'
+        run: |
+          pyinstaller mcpbr.spec
+          cd dist
+          tar -czf ${{ matrix.artifact-name }}.tar.gz mcpbr
+          cd ..
+
+      - name: Build binary (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          pyinstaller mcpbr.spec
+          cd dist
+          Compress-Archive -Path mcpbr.exe -DestinationPath ${{ matrix.artifact-name }}.zip
+          cd ..
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: dist/mcpbr-*.*
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/mcpbr-*.*

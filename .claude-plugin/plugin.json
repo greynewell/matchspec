@@ -1,6 +1,6 @@
 {
   "name": "mcpbr",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Expert benchmark runner for MCP servers using mcpbr. Handles Docker checks, config generation, and result parsing.",
   "schema_version": "1.0"
 }

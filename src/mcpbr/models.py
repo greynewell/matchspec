@@ -61,6 +61,72 @@ SUPPORTED_MODELS: dict[str, ModelInfo] = {
         context_window=200000,
         notes="Resolves to latest Haiku model",
     ),
+    # OpenAI models
+    "gpt-4o": ModelInfo(
+        id="gpt-4o",
+        provider="OpenAI",
+        display_name="GPT-4o",
+        context_window=128000,
+        notes="Most capable OpenAI model with vision",
+    ),
+    "gpt-4-turbo": ModelInfo(
+        id="gpt-4-turbo",
+        provider="OpenAI",
+        display_name="GPT-4 Turbo",
+        context_window=128000,
+        notes="High capability with faster inference",
+    ),
+    "gpt-4o-mini": ModelInfo(
+        id="gpt-4o-mini",
+        provider="OpenAI",
+        display_name="GPT-4o Mini",
+        context_window=128000,
+        notes="Compact and cost-effective GPT-4o variant",
+    ),
+    # Google Gemini models
+    "gemini-2.0-flash": ModelInfo(
+        id="gemini-2.0-flash",
+        provider="Google",
+        display_name="Gemini 2.0 Flash",
+        context_window=1048576,
+        notes="Latest fast Gemini model",
+    ),
+    "gemini-1.5-pro": ModelInfo(
+        id="gemini-1.5-pro",
+        provider="Google",
+        display_name="Gemini 1.5 Pro",
+        context_window=2097152,
+        notes="High-capability model with 2M token context",
+    ),
+    "gemini-1.5-flash": ModelInfo(
+        id="gemini-1.5-flash",
+        provider="Google",
+        display_name="Gemini 1.5 Flash",
+        context_window=1048576,
+        notes="Fast and cost-effective Gemini model",
+    ),
+    # Alibaba Qwen models (via DashScope)
+    "qwen-plus": ModelInfo(
+        id="qwen-plus",
+        provider="Alibaba",
+        display_name="Qwen Plus",
+        context_window=131072,
+        notes="Balanced Qwen model for general tasks",
+    ),
+    "qwen-turbo": ModelInfo(
+        id="qwen-turbo",
+        provider="Alibaba",
+        display_name="Qwen Turbo",
+        context_window=131072,
+        notes="Fast and cost-effective Qwen model",
+    ),
+    "qwen-max": ModelInfo(
+        id="qwen-max",
+        provider="Alibaba",
+        display_name="Qwen Max",
+        context_window=131072,
+        notes="Most capable Qwen model",
+    ),
 }
 
 DEFAULT_MODEL = "sonnet"

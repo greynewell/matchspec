@@ -12,7 +12,7 @@ from .config_inheritance import load_config_with_inheritance
 from .env_expansion import expand_env_vars, load_dotenv_file, validate_config_security
 from .models import DEFAULT_MODEL
 
-VALID_PROVIDERS = ("anthropic",)
+VALID_PROVIDERS = ("anthropic", "openai", "gemini", "qwen")
 VALID_HARNESSES = ("claude-code",)
 VALID_BENCHMARKS = (
     "swe-bench-lite",
@@ -430,6 +430,42 @@ class HarnessConfig(BaseModel):
         default_factory=InfrastructureConfig,
         description="Infrastructure configuration (local or azure)",
     )
+
+    continue_on_error: bool = Field(
+        default=True,
+        description="Continue evaluation when individual tasks fail instead of stopping",
+    )
+
+    max_failures: int | None = Field(
+        default=None,
+        description="Maximum number of task failures before halting evaluation (None for unlimited)",
+    )
+
+    checkpoint_interval: int = Field(
+        default=1,
+        description="Save execution checkpoint every N completed tasks",
+    )
+
+    resume_from_checkpoint: Path | None = Field(
+        default=None,
+        description="Path to a checkpoint file to resume evaluation from",
+    )
+
+    @field_validator("checkpoint_interval")
+    @classmethod
+    def validate_checkpoint_interval(cls, v: int) -> int:
+        """Validate checkpoint_interval is at least 1."""
+        if v < 1:
+            raise ValueError("checkpoint_interval must be at least 1")
+        return v
+
+    @field_validator("max_failures")
+    @classmethod
+    def validate_max_failures(cls, v: int | None) -> int | None:
+        """Validate max_failures is positive if set."""
+        if v is not None and v < 1:
+            raise ValueError("max_failures must be at least 1")
+        return v
 
     @field_validator("provider")
     @classmethod

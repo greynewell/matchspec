@@ -1,0 +1,25 @@
+# Basic example: Run mcpbr benchmarks on push to main
+name: MCP Benchmark
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run MCP benchmarks
+        uses: greynewell/mcpbr@main
+        with:
+          config: benchmarks/config.yaml
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          output-dir: results
+
+      - name: Check results
+        run: |
+          echo "Benchmark results saved to results/"
+          ls -la results/
