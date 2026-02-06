@@ -425,7 +425,7 @@ def compare_results_files(
         if not path.exists():
             raise FileNotFoundError(f"Results file not found: {path}")
 
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
 
         label = labels[i] if labels is not None else path.stem

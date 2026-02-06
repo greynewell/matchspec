@@ -452,12 +452,22 @@ def compare_resolution_rates(
 
     # Build summary
     diff_pct = abs(rate_a - rate_b) * 100
-    direction = "higher" if rate_a > rate_b else "lower"
+    if rate_a > rate_b:
+        direction = "higher"
+    elif rate_a < rate_b:
+        direction = "lower"
+    else:
+        direction = "equal"
     sig_text = "statistically significant" if chi2_result["significant"] else "not significant"
+
+    if direction == "equal":
+        diff_text = "No difference"
+    else:
+        diff_text = f"{label_a} is {diff_pct:.1f}pp {direction}"
 
     summary = (
         f"{label_a} ({rate_a:.1%}) vs {label_b} ({rate_b:.1%}): "
-        f"{label_a} is {diff_pct:.1f}pp {direction}. "
+        f"{diff_text}. "
         f"Difference is {sig_text} (p={chi2_result['p_value']:.4f}, "
         f"phi={chi2_result['effect_size']:.3f})."
     )

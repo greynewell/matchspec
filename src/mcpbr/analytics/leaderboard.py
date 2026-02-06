@@ -237,8 +237,8 @@ class Leaderboard:
             )
             row = [
                 str(entry["rank"]),
-                entry["label"],
-                entry["model"],
+                entry["label"].replace("|", "\\|"),
+                entry["model"].replace("|", "\\|"),
                 f"{entry['resolution_rate']:.1%}",
                 f"{entry['resolved']}/{entry['total']}",
                 f"${entry['total_cost']:.4f}",

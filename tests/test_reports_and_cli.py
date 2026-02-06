@@ -678,10 +678,7 @@ class TestCLICompare:
         _make_result_file(f2, model="model-b", resolved=5)
 
         result = runner.invoke(main, ["compare", str(f1), str(f2)])
-        # The command may fail due to comparison["results"] bug in this branch,
-        # but it should at least start and load the files successfully
-        # Check that it didn't fail on file loading
-        assert "Error loading" not in result.output
+        assert result.exit_code == 0, f"compare command failed: {result.output}"
 
     def test_compare_three_files(self, runner: CliRunner, tmp_path: Path) -> None:
         """compare with 3 result files loads all of them."""
@@ -692,7 +689,7 @@ class TestCLICompare:
             files.append(str(f))
 
         result = runner.invoke(main, ["compare", *files])
-        assert "Error loading" not in result.output
+        assert result.exit_code == 0, f"compare command failed: {result.output}"
 
     def test_compare_with_json_output(self, runner: CliRunner, tmp_path: Path) -> None:
         """compare --output saves comparison JSON file."""
@@ -702,11 +699,11 @@ class TestCLICompare:
         _make_result_file(f2, model="model-b")
 
         out_json = tmp_path / "comparison.json"
-        runner.invoke(main, ["compare", str(f1), str(f2), "--output", str(out_json)])
-        # If the command got far enough to write the JSON, verify it
-        if out_json.exists():
-            data = json.loads(out_json.read_text())
-            assert isinstance(data, dict)
+        result = runner.invoke(main, ["compare", str(f1), str(f2), "--output", str(out_json)])
+        assert result.exit_code == 0, f"compare command failed: {result.output}"
+        assert out_json.exists()
+        data = json.loads(out_json.read_text())
+        assert isinstance(data, dict)
 
     def test_compare_with_html_output(self, runner: CliRunner, tmp_path: Path) -> None:
         """compare --output-html saves an HTML report file."""
@@ -716,10 +713,11 @@ class TestCLICompare:
         _make_result_file(f2, model="model-b")
 
         out_html = tmp_path / "comparison.html"
-        runner.invoke(main, ["compare", str(f1), str(f2), "--output-html", str(out_html)])
-        if out_html.exists():
-            content = out_html.read_text()
-            assert "<!DOCTYPE html>" in content
+        result = runner.invoke(main, ["compare", str(f1), str(f2), "--output-html", str(out_html)])
+        assert result.exit_code == 0, f"compare command failed: {result.output}"
+        assert out_html.exists()
+        content = out_html.read_text()
+        assert "<!DOCTYPE html>" in content
 
     def test_compare_with_markdown_output(self, runner: CliRunner, tmp_path: Path) -> None:
         """compare --output-markdown saves a markdown report file."""
@@ -729,10 +727,13 @@ class TestCLICompare:
         _make_result_file(f2, model="model-b")
 
         out_md = tmp_path / "comparison.md"
-        runner.invoke(main, ["compare", str(f1), str(f2), "--output-markdown", str(out_md)])
-        if out_md.exists():
-            content = out_md.read_text()
-            assert "# mcpbr" in content
+        result = runner.invoke(
+            main, ["compare", str(f1), str(f2), "--output-markdown", str(out_md)]
+        )
+        assert result.exit_code == 0, f"compare command failed: {result.output}"
+        assert out_md.exists()
+        content = out_md.read_text()
+        assert "# mcpbr" in content
 
     def test_compare_too_few_files(self, runner: CliRunner, tmp_path: Path) -> None:
         """compare with only 1 file exits with error."""
@@ -928,12 +929,7 @@ def _populate_analytics_db(db_path: Path, num_runs: int = 5) -> None:
 
 
 class TestCLIAnalyticsTrends:
-    """Tests for analytics trends functionality.
-
-    Note: The CLI 'analytics trends' command on this branch has a bug
-    where it passes raw floats to calculate_trends (which expects dicts).
-    We test the underlying trends API directly and the CLI empty-DB case.
-    """
+    """Tests for analytics trends functionality."""
 
     def test_trends_empty_db_cli(self, runner: CliRunner, tmp_path: Path) -> None:
         """analytics trends on empty database shows appropriate message."""
@@ -1073,13 +1069,7 @@ class TestCLIAnalyticsTrends:
 
 
 class TestCLIAnalyticsLeaderboard:
-    """Tests for analytics leaderboard functionality.
-
-    Note: The CLI 'analytics leaderboard' command on this branch has a
-    bug where Leaderboard() is called with sort_by kwarg not supported
-    by __init__. We test the underlying Leaderboard API directly and
-    the CLI empty-DB case.
-    """
+    """Tests for analytics leaderboard functionality."""
 
     def test_leaderboard_empty_db_cli(self, runner: CliRunner, tmp_path: Path) -> None:
         """analytics leaderboard on empty database shows message."""

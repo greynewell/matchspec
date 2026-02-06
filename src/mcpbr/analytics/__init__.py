@@ -45,47 +45,35 @@ from .statistical import (
 from .trends import calculate_moving_average, calculate_trends, detect_trend_direction
 
 __all__ = [
-    # Database
-    "ResultsDatabase",
-    # Trends
-    "calculate_moving_average",
-    "calculate_trends",
-    "detect_trend_direction",
-    # Statistical
-    "bootstrap_confidence_interval",
-    "chi_squared_test",
-    "compare_resolution_rates",
-    "effect_size_cohens_d",
-    "mann_whitney_u",
-    "permutation_test",
-    # Comparison
-    "ComparisonEngine",
-    "compare_results_files",
-    "format_comparison_table",
-    # Error analysis
-    "ErrorPatternAnalyzer",
-    "identify_flaky_tasks",
-    # Anomaly detection
-    "detect_anomalies",
-    "detect_metric_anomalies",
-    # Correlation
-    "analyze_metric_correlations",
-    "find_strong_correlations",
-    "pearson_correlation",
-    "spearman_correlation",
-    # Difficulty
-    "aggregate_difficulty_stats",
-    "estimate_difficulty",
-    "estimate_task_difficulty_score",
-    # A/B testing
     "ABTest",
-    "run_ab_test",
-    # Leaderboard
+    "ComparisonEngine",
+    "ErrorPatternAnalyzer",
     "Leaderboard",
-    "generate_leaderboard",
-    # Metrics
     "MetricDefinition",
     "MetricsRegistry",
-    # Regression detection
     "RegressionDetector",
+    "ResultsDatabase",
+    "aggregate_difficulty_stats",
+    "analyze_metric_correlations",
+    "bootstrap_confidence_interval",
+    "calculate_moving_average",
+    "calculate_trends",
+    "chi_squared_test",
+    "compare_resolution_rates",
+    "compare_results_files",
+    "detect_anomalies",
+    "detect_metric_anomalies",
+    "detect_trend_direction",
+    "effect_size_cohens_d",
+    "estimate_difficulty",
+    "estimate_task_difficulty_score",
+    "find_strong_correlations",
+    "format_comparison_table",
+    "generate_leaderboard",
+    "identify_flaky_tasks",
+    "mann_whitney_u",
+    "pearson_correlation",
+    "permutation_test",
+    "run_ab_test",
+    "spearman_correlation",
 ]

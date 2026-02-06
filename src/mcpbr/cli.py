@@ -2199,27 +2199,26 @@ def compare(
     console.print(table_output)
 
     # Statistical significance
-    labels = list(comparison["results"].keys())
-    if len(labels) >= 2:
+    summary_table = comparison.get("summary_table", [])
+    if len(summary_table) >= 2:
         from .analytics.statistical import compare_resolution_rates
 
         console.print("\n[bold]Statistical Significance[/bold]")
-        for i in range(len(labels)):
-            for j in range(i + 1, len(labels)):
-                a_data = comparison["results"][labels[i]]
-                b_data = comparison["results"][labels[j]]
-                a_resolved = a_data.get("resolved", 0)
-                a_total = a_data.get("total", 1)
-                b_resolved = b_data.get("resolved", 0)
-                b_total = b_data.get("total", 1)
+        for i in range(len(summary_table)):
+            for j in range(i + 1, len(summary_table)):
+                a_data = summary_table[i]
+                b_data = summary_table[j]
 
-                result = compare_resolution_rates(a_resolved, a_total, b_resolved, b_total)
+                result = compare_resolution_rates(a_data, b_data)
+                chi2 = result["chi2_test"]
                 sig = (
                     "[green]significant[/green]"
-                    if result["significant"]
+                    if chi2["significant"]
                     else "[dim]not significant[/dim]"
                 )
-                console.print(f"  {labels[i]} vs {labels[j]}: p={result['p_value']:.4f} ({sig})")
+                a_label = a_data.get("label", f"model-{i}")
+                b_label = b_data.get("label", f"model-{j}")
+                console.print(f"  {a_label} vs {b_label}: p={chi2['p_value']:.4f} ({sig})")
 
     # Winner analysis
     winners = engine.get_winner_analysis()
@@ -2460,7 +2459,7 @@ def trends(
 
     values = [r.get(metric, 0) for r in filtered]
 
-    trend_result = calculate_trends(values)
+    trend_result = calculate_trends(filtered)
     direction = detect_trend_direction(values)
 
     direction_style = {
@@ -2628,14 +2627,14 @@ def regression_cmd(
         console.print(f"[red]Error loading files: {e}[/red]")
         sys.exit(1)
 
-    detector = RegressionDetector(significance_threshold=threshold)
-    result = detector.detect(baseline_data, current_data)
-    report = detector.format_report(result)
+    detector = RegressionDetector(threshold=threshold)
+    result = detector.detect(current_data, baseline_data)
+    report = detector.format_report()
 
     console.print(report)
 
     # Exit with non-zero if regressions detected
-    if result.get("status") == "fail":
+    if result.get("overall_status") == "fail":
         sys.exit(1)
 
 
