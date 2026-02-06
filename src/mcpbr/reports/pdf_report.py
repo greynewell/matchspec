@@ -9,8 +9,16 @@ custom branding.
 from __future__ import annotations
 
 import html
+import re
 from pathlib import Path
 from typing import Any
+
+_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3,8})$|^[a-zA-Z]{1,30}$")
+
+
+def _safe_color(value: str, default: str) -> str:
+    """Return value if it looks like a CSS color, otherwise default."""
+    return value if _COLOR_RE.match(value) else default
 
 
 class PDFReportGenerator:
@@ -51,7 +59,9 @@ class PDFReportGenerator:
         logo_text = "mcpbr"
 
         if self.branding:
-            primary_color = self.branding.get("primary_color", primary_color)
+            primary_color = _safe_color(
+                self.branding.get("primary_color", primary_color), primary_color
+            )
             company_name = html.escape(self.branding.get("company_name", company_name))
             logo_text = html.escape(self.branding.get("logo_text", logo_text))
         else:
@@ -343,13 +353,13 @@ class PDFReportGenerator:
                 installation instructions in the error message.
         """
         try:
-            import weasyprint  # noqa: F401
-        except (ImportError, ModuleNotFoundError):
+            import weasyprint
+        except (ImportError, ModuleNotFoundError) as err:
             raise ImportError(
                 "weasyprint is required for PDF export but is not installed. "
                 "Install it with: pip install weasyprint\n"
                 "For more information, see: https://doc.courtbouillon.org/weasyprint/stable/first_steps.html"
-            )
+            ) from err
 
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -482,14 +492,14 @@ class PDFReportGenerator:
             parts.append("<table>")
             parts.append("<tr><th>Metric</th><th>MCP</th><th>Baseline</th></tr>")
             parts.append(
-                f"<tr><td>Input Tokens</td>"
-                f"<td>{mcp_tokens.get('total_input', 'N/A'):,}</td>"
-                f"<td>{baseline_tokens.get('total_input', 'N/A'):,}</td></tr>"
+                "<tr><td>Input Tokens</td>"
+                f"<td>{mcp_tokens.get('total_input', 0):,}</td>"
+                f"<td>{baseline_tokens.get('total_input', 0):,}</td></tr>"
             )
             parts.append(
-                f"<tr><td>Output Tokens</td>"
-                f"<td>{mcp_tokens.get('total_output', 'N/A'):,}</td>"
-                f"<td>{baseline_tokens.get('total_output', 'N/A'):,}</td></tr>"
+                "<tr><td>Output Tokens</td>"
+                f"<td>{mcp_tokens.get('total_output', 0):,}</td>"
+                f"<td>{baseline_tokens.get('total_output', 0):,}</td></tr>"
             )
             parts.append("</table>")
 

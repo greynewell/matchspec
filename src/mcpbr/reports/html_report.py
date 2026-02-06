@@ -301,8 +301,8 @@ def _generate_summary_cards(summary: dict[str, Any]) -> str:
     baseline = summary.get("baseline", {})
     improvement = summary.get("improvement", "N/A")
 
-    mcp_rate = mcp.get("rate", 0)
-    baseline_rate = baseline.get("rate", 0)
+    mcp_rate = mcp.get("rate", 0) or 0
+    baseline_rate = baseline.get("rate", 0) or 0
     mcp_resolved = mcp.get("resolved", 0)
     mcp_total = mcp.get("total", 0)
     baseline_resolved = baseline.get("resolved", 0)
@@ -443,10 +443,10 @@ def _generate_chart_js(results_data: dict[str, Any]) -> str:
     baseline = summary.get("baseline", {})
     comp_stats = summary.get("comprehensive_stats", {})
 
-    mcp_rate = mcp.get("rate", 0) * 100
-    baseline_rate = baseline.get("rate", 0) * 100
-    mcp_cost = mcp.get("total_cost", 0)
-    baseline_cost = baseline.get("total_cost", 0)
+    mcp_rate = (mcp.get("rate", 0) or 0) * 100
+    baseline_rate = (baseline.get("rate", 0) or 0) * 100
+    mcp_cost = mcp.get("total_cost", 0) or 0
+    baseline_cost = baseline.get("total_cost", 0) or 0
 
     js_parts: list[str] = []
 

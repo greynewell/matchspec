@@ -330,10 +330,10 @@ class EnhancedMarkdownGenerator:
             header += " | Baseline Resolved | Baseline Cost"
             sep += " |:-----------------:|-------------:"
         header += " |"
-        sep += " |" if not has_baseline else ""
-        # fix trailing separator
+        if not has_baseline:
+            sep += " |"
         if not sep.endswith("|"):
-            sep += ""
+            sep += " |"
 
         lines = [header, sep]
         for task in tasks:
