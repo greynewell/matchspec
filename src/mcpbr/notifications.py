@@ -124,65 +124,88 @@ def send_slack_notification(webhook_url: str, event: NotificationEvent) -> None:
     response.raise_for_status()
 
 
-def upload_slack_file(
+def send_slack_bot_notification(
     bot_token: str,
     channel: str,
-    content: str,
-    filename: str = "results.json",
-    title: str | None = None,
-) -> None:
-    """Upload a file to a Slack channel via the sequenced upload API.
+    event: NotificationEvent,
+) -> str | None:
+    """Send notification via Slack Bot API and return the message timestamp.
 
-    Uses the files.getUploadURLExternal → PUT → files.completeUploadExternal
-    flow (files.upload was sunset Nov 2025).
-
-    Requires a bot token with files:write scope.
+    Uses chat.postMessage so we can thread replies (e.g. results JSON).
+    Returns the message ``ts`` on success, or ``None`` on failure.
 
     Args:
         bot_token: Slack bot token (xoxb-...).
         channel: Slack channel ID.
-        content: File content as string.
-        filename: Filename for the upload.
-        title: Optional title for the file.
+        event: Notification event payload.
     """
-    headers = {"Authorization": f"Bearer {bot_token}"}
-    content_bytes = content.encode("utf-8")
+    color_emoji = "\u2705" if event.resolution_rate >= 0.3 else "\u26a0\ufe0f"
+    if event.event_type == "regression" and event.regression_count:
+        color_emoji = "\ud83d\udea8"
 
-    # Step 1: Get upload URL
-    url_resp = requests.get(
-        "https://slack.com/api/files.getUploadURLExternal",
-        headers=headers,
-        params={"filename": filename, "length": len(content_bytes)},
+    title = f"*mcpbr {event.event_type.title()}: {event.benchmark}*"
+
+    lines = [title, ""]
+
+    text = _build_slack_text(event)
+    if text:
+        lines.append(text)
+        lines.append("")
+
+    summary_parts = [
+        f"*Model:* {event.model}",
+        f"*Resolution Rate:* {color_emoji} {event.resolution_rate:.1%}",
+        f"*Tasks:* {event.resolved_tasks}/{event.total_tasks}",
+    ]
+    if event.total_cost is not None:
+        summary_parts.append(f"*Cost:* ${event.total_cost:.2f}")
+    if event.runtime_seconds is not None:
+        mins = event.runtime_seconds / 60
+        summary_parts.append(f"*Runtime:* {mins:.1f} min")
+    lines.append(" | ".join(summary_parts))
+
+    message_text = "\n".join(lines)
+
+    resp = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        data={"token": bot_token, "channel": channel, "text": message_text},
         timeout=30,
     )
-    url_resp.raise_for_status()
-    url_data = url_resp.json()
-    if not url_data.get("ok"):
-        raise RuntimeError(f"Slack getUploadURLExternal failed: {url_data.get('error', 'unknown')}")
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"Slack chat.postMessage failed: {data.get('error', 'unknown')}")
+    return data.get("ts")
 
-    upload_url = url_data["upload_url"]
-    file_id = url_data["file_id"]
 
-    # Step 2: Upload file content
-    put_resp = requests.put(upload_url, data=content_bytes, timeout=30)
-    put_resp.raise_for_status()
+def post_slack_thread_reply(
+    bot_token: str,
+    channel: str,
+    thread_ts: str,
+    content: str,
+) -> None:
+    """Post a code-block reply in a Slack thread.
 
-    # Step 3: Complete the upload
-    complete_resp = requests.post(
-        "https://slack.com/api/files.completeUploadExternal",
-        headers={**headers, "Content-Type": "application/json"},
-        json={
-            "files": [{"id": file_id, "title": title or filename}],
-            "channel_id": channel,
+    Args:
+        bot_token: Slack bot token (xoxb-...).
+        channel: Slack channel ID.
+        thread_ts: Parent message timestamp to reply to.
+        content: Text content to wrap in a code block.
+    """
+    resp = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        data={
+            "token": bot_token,
+            "channel": channel,
+            "thread_ts": thread_ts,
+            "text": f"```\n{content}\n```",
         },
         timeout=30,
     )
-    complete_resp.raise_for_status()
-    complete_data = complete_resp.json()
-    if not complete_data.get("ok"):
-        raise RuntimeError(
-            f"Slack completeUploadExternal failed: {complete_data.get('error', 'unknown')}"
-        )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"Slack thread reply failed: {data.get('error', 'unknown')}")
 
 
 def create_gist_report(
@@ -348,26 +371,35 @@ def dispatch_notification(config: dict[str, Any], event: NotificationEvent) -> N
         except Exception as e:
             logger.warning("Failed to create Gist: %s", e)
 
-    if config.get("slack_webhook"):
+    # Prefer bot API (supports threaded results reply) over webhook
+    slack_ts: str | None = None
+    if config.get("slack_bot_token") and config.get("slack_channel"):
+        try:
+            slack_ts = send_slack_bot_notification(
+                bot_token=config["slack_bot_token"],
+                channel=config["slack_channel"],
+                event=event,
+            )
+        except Exception as e:
+            logger.warning("Failed to send Slack bot notification: %s", e)
+
+        # Post results JSON as a threaded reply
+        if slack_ts and event.extra.get("results_json"):
+            try:
+                post_slack_thread_reply(
+                    bot_token=config["slack_bot_token"],
+                    channel=config["slack_channel"],
+                    thread_ts=slack_ts,
+                    content=event.extra["results_json"],
+                )
+            except Exception as e:
+                logger.warning("Failed to post Slack thread reply: %s", e)
+    elif config.get("slack_webhook"):
+        # Fall back to webhook when bot token is not configured
         try:
             send_slack_notification(config["slack_webhook"], event)
         except Exception as e:
             logger.warning("Failed to send Slack notification: %s", e)
-
-    # Upload results file to Slack when bot token is configured
-    if config.get("slack_bot_token") and config.get("slack_channel"):
-        try:
-            results_json = event.extra.get("results_json", "")
-            if results_json:
-                upload_slack_file(
-                    bot_token=config["slack_bot_token"],
-                    channel=config["slack_channel"],
-                    content=results_json,
-                    filename=f"mcpbr-{event.benchmark}-results.json",
-                    title=f"mcpbr {event.benchmark} — {event.resolution_rate:.1%}",
-                )
-        except Exception as e:
-            logger.warning("Failed to upload Slack file: %s", e)
 
     if config.get("discord_webhook"):
         try:

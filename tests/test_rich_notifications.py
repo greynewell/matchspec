@@ -8,8 +8,9 @@ import pytest
 from mcpbr.notifications import (
     NotificationEvent,
     create_gist_report,
+    post_slack_thread_reply,
+    send_slack_bot_notification,
     send_slack_notification,
-    upload_slack_file,
 )
 
 # ---------------------------------------------------------------------------
@@ -144,88 +145,84 @@ class TestEnrichedSlackMessage:
 
 
 # ---------------------------------------------------------------------------
-# #396: Slack file upload
+# #396: Slack bot notification + threaded reply
 # ---------------------------------------------------------------------------
 
 
-class TestSlackFileUpload:
-    """Upload results.json to Slack via sequenced upload API."""
+class TestSlackBotNotification:
+    """Send notification via bot API and post results as threaded reply."""
 
-    @patch("mcpbr.notifications.requests.put")
     @patch("mcpbr.notifications.requests.post")
-    @patch("mcpbr.notifications.requests.get")
-    def test_three_step_upload_flow(self, mock_get, mock_post, mock_put):
-        # Step 1: getUploadURLExternal
-        mock_get.return_value = MagicMock(status_code=200)
-        mock_get.return_value.raise_for_status = MagicMock()
-        mock_get.return_value.json.return_value = {
-            "ok": True,
-            "upload_url": "https://files.slack.com/upload/v1/abc123",
-            "file_id": "F123",
-        }
-        # Step 2: PUT (no json needed)
-        mock_put.return_value = MagicMock(status_code=200)
-        mock_put.return_value.raise_for_status = MagicMock()
-        # Step 3: completeUploadExternal
+    def test_sends_message_and_returns_ts(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200)
+        mock_post.return_value.raise_for_status = MagicMock()
+        mock_post.return_value.json.return_value = {"ok": True, "ts": "1234.5678"}
+
+        event = _make_event(extra={"mcp_server": "supermodel (npx mcp-server)"})
+        ts = send_slack_bot_notification("xoxb-test", "C12345", event)
+
+        assert ts == "1234.5678"
+        mock_post.assert_called_once()
+        call_data = mock_post.call_args[1]["data"]
+        assert call_data["token"] == "xoxb-test"
+        assert call_data["channel"] == "C12345"
+        assert "swe-bench-verified" in call_data["text"]
+
+    @patch("mcpbr.notifications.requests.post")
+    def test_message_includes_enriched_text(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200)
+        mock_post.return_value.raise_for_status = MagicMock()
+        mock_post.return_value.json.return_value = {"ok": True, "ts": "1234.5678"}
+
+        event = _make_event(
+            extra={
+                "mcp_server": "supermodel",
+                "task_results": [{"instance_id": "task-1", "resolved": True}],
+                "tool_stats": {"total_tool_calls": 30, "total_failures": 7, "failure_rate": 0.233},
+            }
+        )
+        send_slack_bot_notification("xoxb-test", "C12345", event)
+
+        text = mock_post.call_args[1]["data"]["text"]
+        assert "supermodel" in text
+        assert "task-1" in text
+        assert "30" in text
+
+    @patch("mcpbr.notifications.requests.post")
+    def test_raises_on_error(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200)
+        mock_post.return_value.raise_for_status = MagicMock()
+        mock_post.return_value.json.return_value = {"ok": False, "error": "channel_not_found"}
+
+        with pytest.raises(RuntimeError, match="channel_not_found"):
+            send_slack_bot_notification("xoxb-test", "C12345", _make_event())
+
+
+class TestSlackThreadReply:
+    """Post results JSON as a code block in a Slack thread."""
+
+    @patch("mcpbr.notifications.requests.post")
+    def test_posts_code_block_in_thread(self, mock_post):
         mock_post.return_value = MagicMock(status_code=200)
         mock_post.return_value.raise_for_status = MagicMock()
         mock_post.return_value.json.return_value = {"ok": True}
 
-        upload_slack_file(
-            bot_token="xoxb-test-token",
-            channel="C12345",
-            content=json.dumps(SAMPLE_RESULTS_DICT),
-            filename="results.json",
-            title="mcpbr results",
-        )
+        post_slack_thread_reply("xoxb-test", "C12345", "1234.5678", '{"test": true}')
 
-        # Verify step 1: GET to getUploadURLExternal
-        mock_get.assert_called_once()
-        get_url = mock_get.call_args[0][0]
-        assert "getUploadURLExternal" in get_url
-
-        # Verify step 2: PUT to upload URL
-        mock_put.assert_called_once()
-        assert mock_put.call_args[0][0] == "https://files.slack.com/upload/v1/abc123"
-
-        # Verify step 3: POST to completeUploadExternal
         mock_post.assert_called_once()
-        post_url = mock_post.call_args[0][0]
-        assert "completeUploadExternal" in post_url
+        call_data = mock_post.call_args[1]["data"]
+        assert call_data["thread_ts"] == "1234.5678"
+        assert "```" in call_data["text"]
+        assert '{"test": true}' in call_data["text"]
 
-    @patch("mcpbr.notifications.requests.get")
-    def test_includes_auth_header(self, mock_get):
-        mock_get.return_value = MagicMock(status_code=200)
-        mock_get.return_value.raise_for_status = MagicMock()
-        mock_get.return_value.json.return_value = {
-            "ok": False,
-            "error": "not_authed",
-        }
-
-        with pytest.raises(RuntimeError, match="not_authed"):
-            upload_slack_file(
-                bot_token="xoxb-test-token",
-                channel="C12345",
-                content="{}",
-                filename="results.json",
-            )
-
-        headers = mock_get.call_args[1].get("headers", {})
-        assert "Bearer xoxb-test-token" in headers.get("Authorization", "")
-
-    @patch("mcpbr.notifications.requests.get")
-    def test_raises_on_get_url_error(self, mock_get):
-        mock_get.return_value = MagicMock(status_code=200)
-        mock_get.return_value.raise_for_status = MagicMock()
-        mock_get.return_value.json.return_value = {"ok": False, "error": "not_authed"}
+    @patch("mcpbr.notifications.requests.post")
+    def test_raises_on_error(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200)
+        mock_post.return_value.raise_for_status = MagicMock()
+        mock_post.return_value.json.return_value = {"ok": False, "error": "not_authed"}
 
         with pytest.raises(RuntimeError, match="not_authed"):
-            upload_slack_file(
-                bot_token="bad-token",
-                channel="C12345",
-                content="{}",
-                filename="results.json",
-            )
+            post_slack_thread_reply("xoxb-bad", "C12345", "1234.5678", "{}")
 
 
 # ---------------------------------------------------------------------------
@@ -294,10 +291,10 @@ class TestGistCreation:
 
 
 class TestDispatchWithExtras:
-    """dispatch_notification passes extra data through."""
+    """dispatch_notification wires bot notification + threaded reply."""
 
     @patch("mcpbr.notifications.send_slack_notification")
-    def test_passes_results_dict_for_file_upload(self, mock_send):
+    def test_falls_back_to_webhook_without_bot_token(self, mock_send):
         from mcpbr.notifications import dispatch_notification
 
         event = _make_event(extra={"results_json": '{"test": true}'})
@@ -306,23 +303,63 @@ class TestDispatchWithExtras:
         dispatch_notification(config, event)
         mock_send.assert_called_once()
 
-    @patch("mcpbr.notifications.upload_slack_file")
-    def test_uploads_file_when_bot_token_present(self, mock_upload):
+    @patch("mcpbr.notifications.post_slack_thread_reply")
+    @patch("mcpbr.notifications.send_slack_bot_notification")
+    def test_bot_sends_notification_and_thread_reply(self, mock_bot, mock_reply):
         from mcpbr.notifications import dispatch_notification
 
+        mock_bot.return_value = "1234.5678"
+
         event = _make_event(extra={"results_json": '{"test": true}'})
+        config = {
+            "slack_bot_token": "xoxb-test",
+            "slack_channel": "C12345",
+        }
+
+        dispatch_notification(config, event)
+
+        mock_bot.assert_called_once()
+        mock_reply.assert_called_once()
+        call_kwargs = mock_reply.call_args[1]
+        assert call_kwargs["thread_ts"] == "1234.5678"
+        assert call_kwargs["content"] == '{"test": true}'
+
+    @patch("mcpbr.notifications.post_slack_thread_reply")
+    @patch("mcpbr.notifications.send_slack_bot_notification")
+    def test_skips_thread_reply_without_results_json(self, mock_bot, mock_reply):
+        from mcpbr.notifications import dispatch_notification
+
+        mock_bot.return_value = "1234.5678"
+
+        event = _make_event()
+        config = {
+            "slack_bot_token": "xoxb-test",
+            "slack_channel": "C12345",
+        }
+
+        dispatch_notification(config, event)
+
+        mock_bot.assert_called_once()
+        mock_reply.assert_not_called()
+
+    @patch("mcpbr.notifications.send_slack_bot_notification")
+    @patch("mcpbr.notifications.send_slack_notification")
+    def test_bot_takes_priority_over_webhook(self, mock_webhook, mock_bot):
+        from mcpbr.notifications import dispatch_notification
+
+        mock_bot.return_value = "1234.5678"
+
+        event = _make_event()
         config = {
             "slack_webhook": "https://hooks.slack.com/test",
             "slack_bot_token": "xoxb-test",
             "slack_channel": "C12345",
         }
 
-        with patch("mcpbr.notifications.send_slack_notification"):
-            dispatch_notification(config, event)
+        dispatch_notification(config, event)
 
-        mock_upload.assert_called_once()
-        call_kwargs = mock_upload.call_args[1]
-        assert call_kwargs["bot_token"] == "xoxb-test"
+        mock_bot.assert_called_once()
+        mock_webhook.assert_not_called()
 
     @patch("mcpbr.notifications.create_gist_report")
     @patch("mcpbr.notifications.send_slack_notification")
@@ -340,6 +377,5 @@ class TestDispatchWithExtras:
         dispatch_notification(config, event)
 
         mock_gist.assert_called_once()
-        # Gist URL should be added to event before sending Slack
         sent_event = mock_send.call_args[0][1]
         assert sent_event.extra.get("gist_url") == "https://gist.github.com/user/abc123"
