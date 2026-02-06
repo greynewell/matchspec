@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Analytics package** (#178, #179, #183, #61, #63, #57, #60, #180, #181, #182, #184, #185, #187, #226, #227): Comprehensive analytics and insights engine
+  - **Historical results database** (#178): SQLite-backed `ResultsDatabase` for storing, querying, and tracking evaluation runs over time
+  - **Performance regression detection** (#179): `RegressionDetector` with statistical significance testing for score, cost, latency, and token regressions
+  - **Multi-model comparison** (#183): `ComparisonEngine` with Pareto frontier analysis, winner analysis, and pairwise statistical significance testing
+  - **Statistical significance testing** (#61, #63): Chi-squared test, bootstrap confidence intervals, Cohen's d effect size, Mann-Whitney U, and permutation tests — all implemented with stdlib only (no numpy/scipy)
+  - **Trend analysis** (#57, #60): Time-series trend detection with linear regression, moving averages, and direction classification
+  - **A/B testing framework** (#180): `ABTest` class for controlled experiment analysis with resolution rate comparison
+  - **Leaderboard generation** (#181): Ranked leaderboards with ASCII table and Markdown output, sortable by any metric
+  - **Custom metrics registry** (#182): `MetricsRegistry` with 5 built-in metrics and extensible custom metric registration
+  - **Benchmark difficulty estimation** (#184): Task difficulty scoring based on resolution rates, cost, and iterations
+  - **Correlation analysis** (#185): Pearson and Spearman correlation with automatic metric pair analysis
+  - **Anomaly detection** (#187): Z-score, IQR, and MAD methods for detecting outlier tasks across cost, tokens, runtime, and iterations
+  - **Error pattern analysis** (#227): `ErrorPatternAnalyzer` with Jaccard similarity clustering, temporal pattern detection, and actionable recommendations
+  - **Cross-benchmark comparison** (#226): Side-by-side comparison with task-level overlap analysis and unique-win identification
+- **Interactive HTML reports** (#39, #55): `HTMLReportGenerator` with Chart.js charts, dark mode toggle, sortable task tables, and responsive layout
+- **Enhanced Markdown reports** (#42): `EnhancedMarkdownGenerator` with shields.io badges, mermaid pie/bar charts, collapsible sections, and analysis tables
+- **PDF reports** (#56): `PDFReportGenerator` with CSS @media print styles, page numbers, custom branding, and optional weasyprint PDF export
+- **Comparison reports** (#53, #59): `mcpbr compare` CLI command for multi-run comparison with statistical significance, winner analysis, and Pareto frontier
+- **CLI report output flags**: `--output-html`, `--output-markdown`, `--output-pdf` options on the `mcpbr run` command for generating reports alongside evaluation
+- **CLI analytics subcommands**: `mcpbr analytics store`, `mcpbr analytics trends`, `mcpbr analytics leaderboard`, `mcpbr analytics regression` for database-backed analytics workflows
+- **310 new tests** for analytics modules, report generators, and CLI commands
+
 ## [0.6.0] - 2026-02-05
 
 ### Added
