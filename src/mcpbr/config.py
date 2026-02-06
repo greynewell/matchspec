@@ -539,6 +539,15 @@ class HarnessConfig(BaseModel):
     notify_email: dict[str, Any] | None = Field(
         default=None, description="Email config dict (smtp_host, smtp_port, from_addr, to_addrs)."
     )
+    slack_bot_token: str | None = Field(
+        default=None, description="Slack bot token for file uploads (xoxb-...)."
+    )
+    slack_channel: str | None = Field(
+        default=None, description="Slack channel ID for file uploads."
+    )
+    github_token: str | None = Field(
+        default=None, description="GitHub token for creating Gist reports."
+    )
 
     @model_validator(mode="after")
     def validate_stratified_sampling(self) -> "HarnessConfig":
