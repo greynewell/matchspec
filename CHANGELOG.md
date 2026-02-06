@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-02-06
+
 ### Added
 
 - **Analytics package** (#178, #179, #183, #61, #63, #57, #60, #180, #181, #182, #184, #185, #187, #226, #227): Comprehensive analytics and insights engine
@@ -806,6 +808,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.3.14]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.14
 [0.3.13]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.13
 [0.3.12]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.12
+[0.7.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.7.0
 [0.6.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.6.0
 [0.5.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.0
 [0.4.16]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.16
