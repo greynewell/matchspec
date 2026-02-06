@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Retry empty workspace after Docker copy** (#405): Under high concurrency, the Docker
+  filesystem copy from `/testbed` to `/workspace` can silently produce an empty workspace.
+  Now retries with a sync and, if necessary, a full re-copy before raising an error.
 - **setup_command runs as mcpbr user in Docker** (#386): setup_command now executes as the
   mcpbr user instead of root, preventing EACCES permission errors when the agent accesses
   files created during setup (e.g., npm cache)
@@ -135,6 +138,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `conda/meta.yaml` recipe for Conda packaging
   - `action/action.yml` GitHub Action with basic and matrix examples
   - `ci-templates/` for GitLab CI and CircleCI integration
+
+## [0.5.5] - 2026-02-06
+
+### Fixed
+
+- **Retry empty workspace after Docker copy** (#405): Under high concurrency, the Docker
+  filesystem copy from `/testbed` to `/workspace` can silently produce an empty workspace.
+  Now retries with a sync and, if necessary, a full re-copy before raising an error.
 
 ## [0.5.0] - 2026-02-05
 
@@ -857,6 +868,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--no-prebuilt` CLI flag to disable pre-built images and build from scratch
 - Network access for containers to enable API calls from within Docker
 
+[0.5.5]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.5
 [0.4.4]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.4
 [0.4.3]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.3
 [0.4.2]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.2

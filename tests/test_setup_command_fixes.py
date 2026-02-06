@@ -1,11 +1,12 @@
-"""Tests for setup_command bug fixes (#386, #387, #388).
+"""Tests for setup_command bug fixes (#386, #387, #388) and workspace retry (#405).
 
 Bug #386: setup_command runs as root but agent runs as mcpbr user
 Bug #387: setup_command may execute before workspace is fully populated
 Bug #388: setup_command failures are silent unless --verbose is used
+Bug #405: Retry empty workspace after Docker copy
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -306,8 +307,9 @@ class TestWorkspaceVerification:
         assert len(find_calls) == 1
 
     @pytest.mark.asyncio
-    async def test_copy_repo_raises_on_empty_workspace(self):
-        """If workspace is empty after copy, a RuntimeError should be raised."""
+    @patch("asyncio.sleep", return_value=None)
+    async def test_copy_repo_raises_on_empty_workspace(self, _mock_sleep):
+        """If workspace is empty after all retries, a RuntimeError should be raised."""
         container = MagicMock()
 
         def _exec_run(cmd, **kwargs):
@@ -358,6 +360,108 @@ class TestWorkspaceVerification:
         await manager._copy_repo_to_workspace(env)
 
         assert env.workdir == "/workspace"
+
+    @pytest.mark.asyncio
+    @patch("asyncio.sleep", return_value=None)
+    async def test_copy_repo_succeeds_after_sync_retry(self, mock_sleep):
+        """If workspace is empty initially but populated after sync retry, succeed."""
+        container = MagicMock()
+
+        wc_call_count = {"n": 0}
+
+        def _exec_run(cmd, **kwargs):
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+            result = MagicMock()
+            result.exit_code = 0
+            if "wc -l" in cmd_str:
+                wc_call_count["n"] += 1
+                if wc_call_count["n"] == 1:
+                    result.output = (b"0", b"")  # First check: empty
+                else:
+                    result.output = (b"3", b"")  # Second check: populated
+            else:
+                result.output = (b"", b"")
+            return result
+
+        container.exec_run = _exec_run
+
+        env = _make_task_env(container)
+        env.workdir = "/testbed"
+
+        from mcpbr.docker_env import DockerEnvironmentManager
+
+        manager = DockerEnvironmentManager.__new__(DockerEnvironmentManager)
+        await manager._copy_repo_to_workspace(env)
+
+        assert env.workdir == "/workspace"
+        mock_sleep.assert_awaited_once_with(2)
+
+    @pytest.mark.asyncio
+    @patch("asyncio.sleep", return_value=None)
+    async def test_copy_repo_succeeds_after_full_copy_retry(self, mock_sleep):
+        """If workspace is empty after sync retry but populated after full copy retry."""
+        container = MagicMock()
+
+        wc_call_count = {"n": 0}
+
+        def _exec_run(cmd, **kwargs):
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+            result = MagicMock()
+            result.exit_code = 0
+            if "wc -l" in cmd_str:
+                wc_call_count["n"] += 1
+                if wc_call_count["n"] <= 2:
+                    result.output = (b"0", b"")  # First two checks: empty
+                else:
+                    result.output = (b"5", b"")  # Third check: populated
+            else:
+                result.output = (b"", b"")
+            return result
+
+        container.exec_run = _exec_run
+
+        env = _make_task_env(container)
+        env.workdir = "/testbed"
+
+        from mcpbr.docker_env import DockerEnvironmentManager
+
+        manager = DockerEnvironmentManager.__new__(DockerEnvironmentManager)
+        await manager._copy_repo_to_workspace(env)
+
+        assert env.workdir == "/workspace"
+        # Verify sleep was called during sync retry phase
+        mock_sleep.assert_awaited_once_with(2)
+
+    @pytest.mark.asyncio
+    @patch("asyncio.sleep", return_value=None)
+    async def test_copy_repo_raises_after_all_retries_exhausted(self, mock_sleep):
+        """If workspace is empty after all retries, RuntimeError should be raised."""
+        container = MagicMock()
+
+        def _exec_run(cmd, **kwargs):
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+            result = MagicMock()
+            result.exit_code = 0
+            if "wc -l" in cmd_str:
+                result.output = (b"0", b"")  # Always empty
+            else:
+                result.output = (b"", b"")
+            return result
+
+        container.exec_run = _exec_run
+
+        env = _make_task_env(container)
+        env.workdir = "/testbed"
+
+        from mcpbr.docker_env import DockerEnvironmentManager
+
+        manager = DockerEnvironmentManager.__new__(DockerEnvironmentManager)
+
+        with pytest.raises(RuntimeError, match="appears empty after copy"):
+            await manager._copy_repo_to_workspace(env)
+
+        # Verify sleep was called (sync retry phase)
+        mock_sleep.assert_awaited_once_with(2)
 
 
 # ===========================================================================

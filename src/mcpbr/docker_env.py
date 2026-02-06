@@ -583,12 +583,32 @@ CMD ["/bin/bash"]
 
         return env
 
+    async def _check_workspace_file_count(self, env: TaskEnvironment) -> int:
+        """Check whether /workspace has any top-level entries.
+
+        Args:
+            env: Task environment to check.
+
+        Returns:
+            Number of top-level files/directories found (capped at 5).
+        """
+        exit_code, stdout, _ = await env.exec_command(
+            "find /workspace -maxdepth 1 -mindepth 1 | head -5 | wc -l",
+            timeout=10,
+        )
+        return int(stdout.strip()) if exit_code == 0 and stdout.strip().isdigit() else 0
+
     async def _copy_repo_to_workspace(self, env: TaskEnvironment) -> None:
         """Copy repo from pre-built image /testbed to /workspace for agent access.
+
+        Under high concurrency the Docker filesystem copy can silently produce
+        an empty workspace.  This method retries with a sync and, if necessary,
+        a full re-copy before giving up.
 
         Args:
             env: Task environment with pre-built image.
         """
+        # --- Phase 1: initial copy + verify ---
         exit_code, stdout, stderr = await env.exec_command(
             "cp -r /testbed/. /workspace/",
             timeout=120,
@@ -612,19 +632,61 @@ CMD ["/bin/bash"]
         # before any subsequent commands (e.g., setup_command) run.
         await env.exec_command("sync", timeout=10)
 
-        # Verify workspace is populated — catch copy failures early
-        exit_code, stdout, _ = await env.exec_command(
-            "find /workspace -maxdepth 1 -mindepth 1 | head -5 | wc -l",
-            timeout=10,
-        )
-        file_count = int(stdout.strip()) if exit_code == 0 and stdout.strip().isdigit() else 0
-        if file_count == 0:
-            raise RuntimeError(
-                "Workspace /workspace appears empty after copy from /testbed. "
-                "The filesystem may not have synced correctly."
-            )
+        file_count = await self._check_workspace_file_count(env)
+        if file_count > 0:
+            env.workdir = "/workspace"
+            return
 
-        env.workdir = "/workspace"
+        # --- Phase 2: sync retry ---
+        logger.warning(
+            "Workspace /workspace empty after initial copy — retrying with sync "
+            f"(instance={env.instance_id})"
+        )
+        await asyncio.sleep(2)
+        await env.exec_command("sync", timeout=10)
+
+        file_count = await self._check_workspace_file_count(env)
+        if file_count > 0:
+            logger.info(
+                "Workspace populated after sync retry "
+                f"(instance={env.instance_id}, files={file_count})"
+            )
+            env.workdir = "/workspace"
+            return
+
+        # --- Phase 3: full copy retry ---
+        logger.warning(
+            "Workspace still empty after sync retry — re-copying from /testbed "
+            f"(instance={env.instance_id})"
+        )
+        exit_code, _, stderr = await env.exec_command(
+            "cp -r /testbed/. /workspace/",
+            timeout=120,
+        )
+        if exit_code != 0:
+            raise RuntimeError(f"Failed to re-copy repo to workspace: {stderr}")
+
+        await env.exec_command(
+            "cd /workspace && git checkout -- . && git clean -fd",
+            timeout=30,
+        )
+        await env.exec_command("sync", timeout=10)
+
+        file_count = await self._check_workspace_file_count(env)
+        if file_count > 0:
+            logger.info(
+                "Workspace populated after full copy retry "
+                f"(instance={env.instance_id}, files={file_count})"
+            )
+            env.workdir = "/workspace"
+            return
+
+        # --- Exhausted ---
+        raise RuntimeError(
+            f"Workspace /workspace appears empty after copy from /testbed "
+            f"(instance={env.instance_id}). "
+            f"The filesystem may not have synced correctly."
+        )
 
     async def _install_claude_cli(self, env: TaskEnvironment) -> None:
         """Install Node.js and Claude CLI in the container.
