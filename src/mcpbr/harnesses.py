@@ -455,7 +455,8 @@ MCP_PROMPT_SUFFIX = (
     "\n\nYou have access to an MCP server with additional tools for codebase analysis. "
     "Use these tools to understand the codebase structure, find definitions, trace call chains, "
     "and navigate dependencies before making changes. The MCP tools are especially useful for "
-    "understanding how code is connected across files."
+    "understanding how code is connected across files. "
+    "The repository is located at {workdir}."
 )
 
 
@@ -637,7 +638,7 @@ class ClaudeCodeHarness:
             )
 
         problem_statement = task.get("problem_statement", "")
-        prompt = self.prompt_template.format(problem_statement=problem_statement)
+        prompt = self.prompt_template.format(problem_statement=problem_statement, workdir=workdir)
         instance_id = task_id or task.get("instance_id", "unknown")
 
         mcp_server_name = None
@@ -802,7 +803,9 @@ class ClaudeCodeHarness:
     ) -> AgentResult:
         """Solve task using Claude Code CLI inside Docker container."""
         problem_statement = task.get("problem_statement", "")
-        prompt = self.prompt_template.format(problem_statement=problem_statement)
+        prompt = self.prompt_template.format(
+            problem_statement=problem_statement, workdir=env.workdir
+        )
         instance_id = task_id or task.get("instance_id", "unknown")
 
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")

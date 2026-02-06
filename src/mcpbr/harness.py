@@ -466,7 +466,10 @@ async def _run_mcp_evaluation(
             profiler.sample_memory()
 
         if agent_result.patch:
-            eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
+            eval_result_dict = await asyncio.wait_for(
+                benchmark.evaluate(env, task, agent_result.patch),
+                timeout=config.eval_timeout_seconds,
+            )
             # Convert benchmark result format to EvaluationResult-like object
             eval_result = dict_to_namespace(eval_result_dict)
         else:
@@ -619,7 +622,10 @@ async def _run_baseline_evaluation(
             profiler.sample_memory()
 
         if agent_result.patch:
-            eval_result_dict = await benchmark.evaluate(env, task, agent_result.patch)
+            eval_result_dict = await asyncio.wait_for(
+                benchmark.evaluate(env, task, agent_result.patch),
+                timeout=config.eval_timeout_seconds,
+            )
             # Convert benchmark result format to EvaluationResult-like object
             eval_result = dict_to_namespace(eval_result_dict)
         else:

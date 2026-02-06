@@ -339,6 +339,12 @@ class HarnessConfig(BaseModel):
         description="Timeout for each task in seconds",
     )
 
+    eval_timeout_seconds: int = Field(
+        default=600,
+        description="Timeout for post-agent evaluation (applying patches and running tests) "
+        "in seconds. Set higher for benchmarks with slow test suites (e.g., Django).",
+    )
+
     max_concurrent: int = Field(
         default=4,
         description="Maximum concurrent task evaluations",

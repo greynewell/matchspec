@@ -1,6 +1,7 @@
 """Evaluation logic for applying patches and running tests."""
 
 import ast
+import asyncio
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -182,7 +183,7 @@ async def run_tests(
                 }
             )
 
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             results.append(
                 {
                     "test": test,

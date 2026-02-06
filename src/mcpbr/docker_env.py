@@ -441,17 +441,17 @@ CMD ["/bin/bash"]
                     rm=True,
                 )
         except Exception as e:
-            # Last resort: just tag the base image
-            logger.warning(
-                f"Failed to build comprehensive fallback image: {e}. "
-                f"Falling back to tagging python:3.11-slim as {self.FALLBACK_IMAGE}"
+            # Do NOT tag bare python:3.11-slim as the fallback image — it lacks
+            # git, build tools, etc. and will poison all subsequent tasks.
+            # Instead, mark the build as failed so callers get a clear error.
+            logger.error(
+                f"Failed to build fallback image: {e}. "
+                f"Tasks requiring the fallback image will fail."
             )
-            try:
-                img = self.client.images.get("python:3.11-slim")
-                img.tag(self.FALLBACK_IMAGE)
-            except Exception as tag_error:
-                logger.error(f"Failed to create fallback image {self.FALLBACK_IMAGE}: {tag_error}")
-                raise
+            raise RuntimeError(
+                f"Cannot create fallback image '{self.FALLBACK_IMAGE}': {e}. "
+                f"Ensure Docker has enough disk space and network access."
+            ) from e
 
     async def create_environment(
         self,
@@ -485,7 +485,10 @@ CMD ["/bin/bash"]
         self._temp_dirs.append(temp_dir)
         host_workdir = temp_dir.name
 
-        container_name = f"mcpbr-{self._session_id}-{instance_id}"
+        # Use a unique suffix per container to prevent name collisions when
+        # MCP and baseline runs create containers for the same task.
+        unique_suffix = uuid.uuid4().hex[:6]
+        container_name = f"mcpbr-{self._session_id}-{instance_id}-{unique_suffix}"
 
         container_workdir = "/testbed" if uses_prebuilt else "/workspace"
 
@@ -523,18 +526,35 @@ CMD ["/bin/bash"]
                     )
                     return container
                 except docker.errors.APIError as e:
-                    # Only retry on 500 errors (transient Docker daemon issues)
                     response = getattr(e, "response", None)
-                    if response is not None and getattr(response, "status_code", None) == 500:
-                        if attempt < max_retries:
-                            delay = base_delay * (2**attempt)  # Exponential backoff: 1s, 2s, 4s
-                            logger.warning(
-                                f"Docker API error (attempt {attempt + 1}/{max_retries + 1}): {e}. "
-                                f"Retrying in {delay}s..."
-                            )
-                            time.sleep(delay)
-                            continue
-                    # Re-raise for non-500 errors or after max retries
+                    status_code = getattr(response, "status_code", None) if response else None
+
+                    # On 409 Conflict (container name already in use), try to
+                    # remove the stale container and retry once.
+                    if status_code == 409 and attempt < max_retries:
+                        logger.warning(
+                            f"Container name conflict (attempt {attempt + 1}): {e}. "
+                            f"Removing stale container and retrying..."
+                        )
+                        try:
+                            stale = self.client.containers.get(container_name)
+                            stale.remove(force=True)
+                        except Exception:
+                            pass  # Container may already be gone
+                        time.sleep(1)
+                        continue
+
+                    # Retry on 500 errors (transient Docker daemon issues)
+                    if status_code == 500 and attempt < max_retries:
+                        delay = base_delay * (2**attempt)
+                        logger.warning(
+                            f"Docker API error (attempt {attempt + 1}/{max_retries + 1}): {e}. "
+                            f"Retrying in {delay}s..."
+                        )
+                        time.sleep(delay)
+                        continue
+
+                    # Re-raise for unrecoverable errors or after max retries
                     raise
 
         loop = asyncio.get_event_loop()
