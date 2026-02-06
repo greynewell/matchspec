@@ -17,6 +17,7 @@ except ImportError:
 
 from rich.console import Console
 
+from .. import __version__
 from ..config import HarnessConfig
 from .base import InfrastructureProvider
 
@@ -342,9 +343,9 @@ class AzureProvider(InfrastructureProvider):
         else:
             console.print("[green]✓ Node.js installed[/green]")
 
-        # Step 4: Install mcpbr
-        console.print("[cyan]Installing mcpbr...[/cyan]")
-        step4_cmd = f"python{py_ver} -m pip install mcpbr"
+        # Step 4: Install mcpbr (pin to local version)
+        console.print(f"[cyan]Installing mcpbr=={__version__}...[/cyan]")
+        step4_cmd = f"python{py_ver} -m pip install mcpbr=={__version__}"
         exit_code, _stdout, stderr = await self._ssh_exec(step4_cmd, timeout=300)
         if exit_code != 0:
             console.print(f"[yellow]⚠ mcpbr install issues: {stderr[:300]}[/yellow]")
