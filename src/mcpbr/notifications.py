@@ -166,16 +166,11 @@ def send_slack_bot_notification(
 
     message_text = "\n".join(lines)
 
-    resp = requests.post(
-        "https://slack.com/api/chat.postMessage",
-        data={"token": bot_token, "channel": channel, "text": message_text},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data.get("ok"):
-        raise RuntimeError(f"Slack chat.postMessage failed: {data.get('error', 'unknown')}")
-    return data.get("ts")
+    from slack_sdk import WebClient  # pip install mcpbr[slack]
+
+    client = WebClient(token=bot_token)
+    response = client.chat_postMessage(channel=channel, text=message_text)
+    return response.get("ts")
 
 
 def post_slack_thread_reply(
@@ -196,7 +191,7 @@ def post_slack_thread_reply(
         thread_ts: Parent message timestamp to reply to.
         content: Text content to upload as a JSON snippet.
     """
-    from slack_sdk import WebClient
+    from slack_sdk import WebClient  # pip install mcpbr[slack]
 
     client = WebClient(token=bot_token)
     client.files_upload_v2(
@@ -372,7 +367,8 @@ def dispatch_notification(config: dict[str, Any], event: NotificationEvent) -> N
         except Exception as e:
             logger.warning("Failed to create Gist: %s", e)
 
-    # Prefer bot API (supports threaded results reply) over webhook
+    # Prefer bot API (supports threaded results reply); fall back to webhook
+    slack_sent = False
     slack_ts: str | None = None
     if config.get("slack_bot_token") and config.get("slack_channel"):
         try:
@@ -381,6 +377,7 @@ def dispatch_notification(config: dict[str, Any], event: NotificationEvent) -> N
                 channel=config["slack_channel"],
                 event=event,
             )
+            slack_sent = True
         except Exception as e:
             logger.warning("Failed to send Slack bot notification: %s", e)
 
@@ -395,8 +392,8 @@ def dispatch_notification(config: dict[str, Any], event: NotificationEvent) -> N
                 )
             except Exception as e:
                 logger.warning("Failed to post Slack thread reply: %s", e)
-    elif config.get("slack_webhook"):
-        # Fall back to webhook when bot token is not configured
+
+    if not slack_sent and config.get("slack_webhook"):
         try:
             send_slack_notification(config["slack_webhook"], event)
         except Exception as e:
