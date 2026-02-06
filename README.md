@@ -729,6 +729,17 @@ Run SWE-bench evaluation with the configured MCP server.
 | `--smtp-port PORT` | | SMTP server port (default: 587) |
 | `--smtp-user USER` | | SMTP username for authentication |
 | `--smtp-password PASS` | | SMTP password for authentication |
+| `--sampling-strategy TEXT` | | Task sampling strategy (`sequential`, `random`, `stratified`) |
+| `--random-seed INT` | | Random seed for reproducible sampling |
+| `--stratify-field TEXT` | | Field to stratify by (requires `--sampling-strategy stratified`) |
+| `--notify-slack URL` | | Slack webhook URL for completion notifications |
+| `--notify-discord URL` | | Discord webhook URL for completion notifications |
+| `--notify-email JSON` | | Email config as JSON string |
+| `--slack-bot-token TOKEN` | | Slack bot token (`xoxb-...`) for uploading results.json to a channel |
+| `--slack-channel ID` | | Slack channel ID for file uploads (used with `--slack-bot-token`) |
+| `--github-token TOKEN` | | GitHub token for auto-creating a Gist with full results (linked in notifications) |
+| `--wandb/--no-wandb` | | Enable/disable Weights & Biases logging |
+| `--wandb-project TEXT` | | W&B project name |
 | `--profile` | | Enable comprehensive performance profiling (tool latency, memory, overhead) |
 | `--help` | `-h` | Show help message |
 

@@ -1452,6 +1452,8 @@ async def run_evaluation(
 
     # Fire completion notification (v0.10.0)
     try:
+        import json as _json
+
         from .notifications import NotificationEvent, dispatch_notification
 
         notify_config = {}
@@ -1461,10 +1463,55 @@ async def run_evaluation(
             notify_config["discord_webhook"] = config.notify_discord_webhook
         if hasattr(config, "notify_email") and config.notify_email:
             notify_config["email"] = config.notify_email
+        if hasattr(config, "slack_bot_token") and config.slack_bot_token:
+            notify_config["slack_bot_token"] = config.slack_bot_token
+        if hasattr(config, "slack_channel") and config.slack_channel:
+            notify_config["slack_channel"] = config.slack_channel
+        if hasattr(config, "github_token") and config.github_token:
+            notify_config["github_token"] = config.github_token
         if notify_config:
             total = len(results)
             resolved = sum(1 for t in results if t.mcp and t.mcp.get("resolved"))
             cost = sum((t.mcp.get("cost", 0) or 0) for t in results if t.mcp)
+
+            # Build extra data for enriched notifications
+            task_results = [
+                {
+                    "instance_id": t.instance_id,
+                    "resolved": bool(t.mcp and t.mcp.get("resolved")),
+                }
+                for t in results
+            ]
+            extra: dict[str, Any] = {"task_results": task_results}
+
+            # Include MCP server identity
+            if hasattr(config, "mcp_server") and config.mcp_server:
+                srv = config.mcp_server
+                server_desc = srv.name or "unknown"
+                if srv.command:
+                    cmd_parts = [srv.command] + (srv.args or [])
+                    server_desc += f" ({' '.join(cmd_parts)})"
+                extra["mcp_server"] = server_desc
+
+            # Include tool stats if available
+            if mcp_tool_stats:
+                extra["tool_stats"] = mcp_tool_stats
+
+            # Serialize results for file upload / Gist
+            results_data = {
+                "metadata": metadata,
+                "summary": summary,
+                "tasks": [
+                    {
+                        "instance_id": t.instance_id,
+                        "mcp": t.mcp,
+                        "baseline": t.baseline,
+                    }
+                    for t in results
+                ],
+            }
+            extra["results_json"] = _json.dumps(results_data, default=str, indent=2)
+
             event = NotificationEvent(
                 event_type="completion",
                 benchmark=config.benchmark,
@@ -1473,6 +1520,7 @@ async def run_evaluation(
                 resolved_tasks=resolved,
                 resolution_rate=resolved / total if total > 0 else 0.0,
                 total_cost=cost,
+                extra=extra,
             )
             dispatch_notification(notify_config, event)
     except Exception:

@@ -33,6 +33,47 @@ class NotificationEvent:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+def _build_slack_text(event: NotificationEvent) -> str:
+    """Build the text block for enriched Slack notifications.
+
+    Includes per-task results, tool stats, and Gist link when available
+    in event.extra.
+    """
+    sections = []
+
+    # MCP server info
+    mcp_server = event.extra.get("mcp_server")
+    if mcp_server:
+        sections.append(f"*MCP Server:* `{mcp_server}`")
+
+    # Per-task results
+    task_results = event.extra.get("task_results")
+    if task_results:
+        lines = ["*Per-Task Results:*"]
+        for t in task_results:
+            status = "\u2705" if t.get("resolved") else "\u274c"
+            lines.append(f"  {status} `{t['instance_id']}`")
+        sections.append("\n".join(lines))
+
+    # Tool stats
+    tool_stats = event.extra.get("tool_stats")
+    if tool_stats:
+        total = tool_stats.get("total_calls", 0)
+        success = tool_stats.get("successful_calls", 0)
+        failed = tool_stats.get("failed_calls", 0)
+        rate = tool_stats.get("failure_rate", 0)
+        sections.append(
+            f"*Tool Usage:* {total} calls ({success} ok, {failed} failed, {rate:.0%} failure rate)"
+        )
+
+    # Gist link
+    gist_url = event.extra.get("gist_url")
+    if gist_url:
+        sections.append(f"*Full Report:* <{gist_url}|View on GitHub Gist>")
+
+    return "\n\n".join(sections)
+
+
 def send_slack_notification(webhook_url: str, event: NotificationEvent) -> None:
     """Send notification to Slack via webhook.
 
@@ -70,10 +111,116 @@ def send_slack_notification(webhook_url: str, event: NotificationEvent) -> None:
             {"title": "Improvements", "value": str(event.improvement_count), "short": True}
         )
 
-    payload = {"attachments": [{"color": color, "title": title, "fields": fields}]}
+    attachment: dict[str, Any] = {"color": color, "title": title, "fields": fields}
+
+    # Add enriched text block when extra data is available
+    text = _build_slack_text(event)
+    if text:
+        attachment["text"] = text
+
+    payload = {"attachments": [attachment]}
 
     response = requests.post(webhook_url, json=payload, timeout=10)
     response.raise_for_status()
+
+
+def upload_slack_file(
+    bot_token: str,
+    channel: str,
+    content: str,
+    filename: str = "results.json",
+    title: str | None = None,
+) -> None:
+    """Upload a file to a Slack channel via the sequenced upload API.
+
+    Uses the files.getUploadURLExternal → PUT → files.completeUploadExternal
+    flow (files.upload was sunset Nov 2025).
+
+    Requires a bot token with files:write scope.
+
+    Args:
+        bot_token: Slack bot token (xoxb-...).
+        channel: Slack channel ID.
+        content: File content as string.
+        filename: Filename for the upload.
+        title: Optional title for the file.
+    """
+    headers = {"Authorization": f"Bearer {bot_token}"}
+    content_bytes = content.encode("utf-8")
+
+    # Step 1: Get upload URL
+    url_resp = requests.get(
+        "https://slack.com/api/files.getUploadURLExternal",
+        headers=headers,
+        params={"filename": filename, "length": len(content_bytes)},
+        timeout=30,
+    )
+    url_resp.raise_for_status()
+    url_data = url_resp.json()
+    if not url_data.get("ok"):
+        raise RuntimeError(f"Slack getUploadURLExternal failed: {url_data.get('error', 'unknown')}")
+
+    upload_url = url_data["upload_url"]
+    file_id = url_data["file_id"]
+
+    # Step 2: Upload file content
+    put_resp = requests.put(upload_url, data=content_bytes, timeout=30)
+    put_resp.raise_for_status()
+
+    # Step 3: Complete the upload
+    complete_resp = requests.post(
+        "https://slack.com/api/files.completeUploadExternal",
+        headers={**headers, "Content-Type": "application/json"},
+        json={
+            "files": [{"id": file_id, "title": title or filename}],
+            "channel_id": channel,
+        },
+        timeout=30,
+    )
+    complete_resp.raise_for_status()
+    complete_data = complete_resp.json()
+    if not complete_data.get("ok"):
+        raise RuntimeError(
+            f"Slack completeUploadExternal failed: {complete_data.get('error', 'unknown')}"
+        )
+
+
+def create_gist_report(
+    github_token: str,
+    results_json: str,
+    description: str = "mcpbr evaluation results",
+) -> str | None:
+    """Create a GitHub Gist with evaluation results.
+
+    Args:
+        github_token: GitHub personal access token with gist scope.
+        results_json: JSON string of evaluation results.
+        description: Gist description.
+
+    Returns:
+        Gist HTML URL, or None on failure.
+    """
+    try:
+        response = requests.post(
+            "https://api.github.com/gists",
+            headers={
+                "Authorization": f"token {github_token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            json={
+                "description": description,
+                "public": False,
+                "files": {
+                    "results.json": {"content": results_json},
+                },
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json().get("html_url")
+    except Exception as e:
+        logger.warning("Failed to create GitHub Gist: %s", e)
+        return None
 
 
 def send_discord_notification(webhook_url: str, event: NotificationEvent) -> None:
@@ -135,7 +282,9 @@ def send_email_notification(config: dict[str, Any], event: NotificationEvent) ->
                 and optional smtp_user, smtp_password, use_tls.
         event: Notification event payload.
     """
-    subject = f"mcpbr {event.event_type.title()}: {event.benchmark} — {event.resolution_rate:.1%}"
+    subject = (
+        f"mcpbr {event.event_type.title()}: {event.benchmark} \u2014 {event.resolution_rate:.1%}"
+    )
 
     body_lines = [
         f"Benchmark: {event.benchmark}",
@@ -182,14 +331,43 @@ def dispatch_notification(config: dict[str, Any], event: NotificationEvent) -> N
 
     Args:
         config: Notification configuration with optional keys:
-                slack_webhook, discord_webhook, email (dict).
+                slack_webhook, discord_webhook, email (dict),
+                slack_bot_token, slack_channel, github_token.
         event: Notification event payload.
     """
+    # Create Gist first so the URL can be included in notifications
+    if config.get("github_token") and event.extra.get("results_json"):
+        try:
+            gist_url = create_gist_report(
+                github_token=config["github_token"],
+                results_json=event.extra["results_json"],
+                description=f"mcpbr {event.benchmark} results — {event.model}",
+            )
+            if gist_url:
+                event.extra["gist_url"] = gist_url
+        except Exception as e:
+            logger.warning("Failed to create Gist: %s", e)
+
     if config.get("slack_webhook"):
         try:
             send_slack_notification(config["slack_webhook"], event)
         except Exception as e:
             logger.warning("Failed to send Slack notification: %s", e)
+
+    # Upload results file to Slack when bot token is configured
+    if config.get("slack_bot_token") and config.get("slack_channel"):
+        try:
+            results_json = event.extra.get("results_json", "")
+            if results_json:
+                upload_slack_file(
+                    bot_token=config["slack_bot_token"],
+                    channel=config["slack_channel"],
+                    content=results_json,
+                    filename=f"mcpbr-{event.benchmark}-results.json",
+                    title=f"mcpbr {event.benchmark} — {event.resolution_rate:.1%}",
+                )
+        except Exception as e:
+            logger.warning("Failed to upload Slack file: %s", e)
 
     if config.get("discord_webhook"):
         try:

@@ -466,6 +466,16 @@ def _build_results_dict(results):
     help="Discord webhook URL for completion notifications.",
 )
 @click.option("--notify-email", type=str, default=None, help="Email config JSON string.")
+@click.option(
+    "--slack-bot-token", type=str, default=None, help="Slack bot token for file uploads (xoxb-...)."
+)
+@click.option("--slack-channel", type=str, default=None, help="Slack channel ID for file uploads.")
+@click.option(
+    "--github-token",
+    type=str,
+    default=None,
+    help="GitHub token for creating Gist reports in notifications.",
+)
 @click.option("--wandb/--no-wandb", default=None, help="Enable/disable W&B logging.")
 @click.option("--wandb-project", type=str, default=None, help="W&B project name.")
 def run(
@@ -523,6 +533,9 @@ def run(
     notify_slack: str | None,
     notify_discord: str | None,
     notify_email: str | None,
+    slack_bot_token: str | None,
+    slack_channel: str | None,
+    github_token: str | None,
     wandb: bool | None,
     wandb_project: str | None,
 ) -> None:
@@ -678,6 +691,12 @@ def run(
         except json.JSONDecodeError as e:
             console.print(f"[red]Error: --notify-email must be valid JSON: {e}[/red]")
             sys.exit(1)
+    if slack_bot_token:
+        config.slack_bot_token = slack_bot_token
+    if slack_channel:
+        config.slack_channel = slack_channel
+    if github_token:
+        config.github_token = github_token
     if wandb is not None:
         config.wandb_enabled = wandb
     if wandb_project:
