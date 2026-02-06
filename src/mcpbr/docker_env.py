@@ -11,7 +11,10 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .sandbox import SandboxProfile
 
 from docker.models.containers import Container
 from docker.models.networks import Network
@@ -319,17 +322,22 @@ class DockerEnvironmentManager:
     DOCKERFILE_PATH = Path(__file__).parent.parent.parent / "Dockerfile"
 
     def __init__(
-        self, use_prebuilt: bool = True, extra_volumes: dict[str, str] | None = None
+        self,
+        use_prebuilt: bool = True,
+        extra_volumes: dict[str, str] | None = None,
+        sandbox_profile: "SandboxProfile | None" = None,
     ) -> None:
         """Initialize the Docker environment manager.
 
         Args:
             use_prebuilt: If True, try to use pre-built SWE-bench images first.
             extra_volumes: Additional volume mounts (read-write) (host_path -> container_path).
+            sandbox_profile: Security sandbox profile for containers. None uses defaults.
         """
         self.client = docker.from_env()
         self.use_prebuilt = use_prebuilt
         self._extra_volumes = extra_volumes or {}
+        self._sandbox_profile = sandbox_profile
         self._fallback_image_built = False
         self._temp_dirs: list[tempfile.TemporaryDirectory[str]] = []
         self._containers: list[Container] = []
@@ -508,13 +516,21 @@ CMD ["/bin/bash"]
                             "mode": "rw",
                         }
 
+                    # Build sandbox kwargs if a profile is configured
+                    sandbox_kwargs: dict = {}
+                    if self._sandbox_profile is not None:
+                        sandbox_kwargs = self._sandbox_profile.to_docker_kwargs()
+
+                    # Default network mode; sandbox may override
+                    network_mode = sandbox_kwargs.pop("network_mode", "bridge")
+
                     container = self.client.containers.run(
                         image_name,
                         command="tail -f /dev/null",
                         name=container_name,
                         detach=True,
                         platform="linux/amd64" if uses_prebuilt else None,
-                        network_mode="bridge",  # Enable network for API calls
+                        network_mode=network_mode,
                         volumes=volumes_dict,
                         working_dir=container_workdir,
                         remove=False,
@@ -524,6 +540,7 @@ CMD ["/bin/bash"]
                             MCPBR_SESSION_LABEL: self._session_id,
                             MCPBR_TIMESTAMP_LABEL: self._session_timestamp,
                         },
+                        **sandbox_kwargs,
                     )
                     return container
                 except docker.errors.APIError as e:

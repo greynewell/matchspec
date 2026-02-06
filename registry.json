@@ -1,0 +1,24 @@
+{
+  "version": "1",
+  "plugins": [
+    {
+      "name": "mcpbr",
+      "description": "MCP Benchmark Runner - evaluate MCP servers against standard benchmarks",
+      "version": "0.11.0",
+      "homepage": "https://github.com/greynewell/mcpbr",
+      "benchmark_type": "multi",
+      "tags": ["mcp", "benchmark", "evaluation", "swe-bench", "humaneval", "testing"],
+      "supported_benchmarks": [
+        "swe-bench-lite",
+        "swe-bench-full",
+        "swe-bench-verified",
+        "humaneval",
+        "mbpp",
+        "gsm8k",
+        "custom"
+      ],
+      "author": "Grey Newell",
+      "license": "MIT"
+    }
+  ]
+}

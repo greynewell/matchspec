@@ -47,7 +47,7 @@ VALID_BENCHMARKS = (
     "longbench",
     "adversarial",
 )
-VALID_INFRASTRUCTURE_MODES = ("local", "azure")
+VALID_INFRASTRUCTURE_MODES = ("local", "azure", "aws", "gcp", "kubernetes", "cloudflare")
 
 # Valid Azure regions (common ones)
 VALID_AZURE_REGIONS = (
@@ -200,6 +200,10 @@ class AzureConfig(BaseModel):
         default="3.11",
         description="Python version to install on VM",
     )
+    quota_check_timeout: int = Field(
+        default=120,
+        description="Timeout in seconds for Azure quota check commands (e.g., az vm list-skus)",
+    )
 
     @field_validator("resource_group")
     @classmethod
@@ -259,23 +263,247 @@ class AzureConfig(BaseModel):
         return v
 
 
+class AWSConfig(BaseModel):
+    """Configuration for AWS EC2 infrastructure."""
+
+    region: str = Field(default="us-east-1", description="AWS region")
+    instance_type: str | None = Field(
+        default=None, description="AWS EC2 instance type (e.g., t3.2xlarge)"
+    )
+    cpu_cores: int = Field(default=8, description="Number of CPU cores")
+    memory_gb: int = Field(default=32, description="Memory in GB")
+    disk_gb: int = Field(default=250, description="EBS volume size in GB")
+    ami: str | None = Field(
+        default=None, description="AMI ID (auto-selects Ubuntu 22.04 if not specified)"
+    )
+    auto_shutdown: bool = Field(default=True, description="Terminate instance after evaluation")
+    preserve_on_error: bool = Field(default=True, description="Keep instance on error")
+    env_keys_to_export: list[str] = Field(
+        default_factory=lambda: ["ANTHROPIC_API_KEY"],
+        description="Environment variables to export",
+    )
+    ssh_key_path: Path | None = Field(default=None, description="Path to SSH private key")
+    vpc_id: str | None = Field(default=None, description="VPC ID (uses default if not set)")
+    subnet_id: str | None = Field(default=None, description="Subnet ID")
+    security_group_ids: list[str] | None = Field(default=None, description="Security group IDs")
+    iam_role: str | None = Field(default=None, description="IAM instance profile name")
+    tags: dict[str, str] = Field(default_factory=dict, description="EC2 instance tags")
+    python_version: str = Field(default="3.11", description="Python version to install")
+
+
+class GCPConfig(BaseModel):
+    """Configuration for GCP Compute Engine infrastructure."""
+
+    project_id: str | None = Field(
+        default=None,
+        description="GCP project ID (uses default project if not specified)",
+    )
+    region: str = Field(
+        default="us-central1",
+        description="GCP region (e.g., us-central1, us-east1, europe-west1)",
+    )
+    zone: str = Field(
+        default="us-central1-a",
+        description="GCP zone (e.g., us-central1-a, us-east1-b)",
+    )
+    machine_type: str | None = Field(
+        default=None,
+        description="GCE machine type (e.g., n2-standard-8). Alternative to cpu_cores/memory_gb.",
+    )
+    cpu_cores: int = Field(
+        default=8,
+        description="Number of CPU cores (used if machine_type not specified)",
+    )
+    memory_gb: int = Field(
+        default=32,
+        description="Memory in GB (used if machine_type not specified)",
+    )
+    disk_gb: int = Field(
+        default=250,
+        description="Boot disk size in GB",
+    )
+    disk_type: str = Field(
+        default="pd-balanced",
+        description="Boot disk type (pd-standard, pd-balanced, pd-ssd)",
+    )
+    image_family: str = Field(
+        default="ubuntu-2204-lts",
+        description="Image family for the boot disk",
+    )
+    image_project: str = Field(
+        default="ubuntu-os-cloud",
+        description="Image project for the boot disk",
+    )
+    preemptible: bool = Field(
+        default=False,
+        description="Use preemptible instance (cheaper but can be terminated)",
+    )
+    spot: bool = Field(
+        default=False,
+        description="Use Spot VM (cheaper but can be terminated, replaces preemptible)",
+    )
+    labels: dict[str, str] = Field(
+        default_factory=dict,
+        description="Labels to apply to the instance",
+    )
+    service_account: str | None = Field(
+        default=None,
+        description="Service account email to attach to the instance",
+    )
+    scopes: list[str] | None = Field(
+        default=None,
+        description="API scopes for the instance (e.g., ['compute-rw', 'storage-ro'])",
+    )
+    env_keys_to_export: list[str] = Field(
+        default_factory=lambda: ["ANTHROPIC_API_KEY"],
+        description="Environment variables to export to GCE instance",
+    )
+    auto_shutdown: bool = Field(
+        default=True,
+        description="Automatically delete instance after evaluation completes",
+    )
+    preserve_on_error: bool = Field(
+        default=True,
+        description="Keep instance running if evaluation fails for debugging",
+    )
+    ssh_key_path: Path | None = Field(
+        default=None,
+        description="Path to SSH key for instance access (optional, auto-generated if not provided)",
+    )
+    python_version: str = Field(
+        default="3.11",
+        description="Python version to install on instance",
+    )
+
+    @field_validator("cpu_cores")
+    @classmethod
+    def validate_cpu_cores(cls, v: int) -> int:
+        """Validate CPU cores is at least 1."""
+        if v < 1:
+            raise ValueError("cpu_cores must be at least 1")
+        return v
+
+    @field_validator("memory_gb")
+    @classmethod
+    def validate_memory_gb(cls, v: int) -> int:
+        """Validate memory is at least 1 GB."""
+        if v < 1:
+            raise ValueError("memory_gb must be at least 1")
+        return v
+
+    @field_validator("disk_gb")
+    @classmethod
+    def validate_disk_gb(cls, v: int) -> int:
+        """Validate disk size is at least 10 GB."""
+        if v < 10:
+            raise ValueError("disk_gb must be at least 10 GB")
+        return v
+
+    @field_validator("disk_type")
+    @classmethod
+    def validate_disk_type(cls, v: str) -> str:
+        """Validate disk type."""
+        valid = ("pd-standard", "pd-balanced", "pd-ssd")
+        if v not in valid:
+            raise ValueError(f"Invalid disk_type: {v}. Must be one of: {', '.join(valid)}")
+        return v
+
+    @field_validator("env_keys_to_export")
+    @classmethod
+    def validate_env_keys(cls, v: list[str]) -> list[str]:
+        """Validate env_keys_to_export is a list of strings."""
+        if not all(isinstance(key, str) for key in v):
+            raise ValueError("env_keys_to_export must be a list of strings")
+        return v
+
+
+class KubernetesConfig(BaseModel):
+    """Configuration for Kubernetes infrastructure."""
+
+    context: str | None = Field(default=None, description="kubectl context (auto-detect if None)")
+    namespace: str = Field(default="mcpbr-benchmarks", description="Kubernetes namespace")
+    image: str = Field(default="python:3.11-slim", description="Base image for pods")
+    image_pull_policy: str = Field(default="IfNotPresent", description="Image pull policy")
+    cpu_request: str = Field(default="2000m", description="CPU request per pod")
+    cpu_limit: str = Field(default="4000m", description="CPU limit per pod")
+    memory_request: str = Field(default="4Gi", description="Memory request per pod")
+    memory_limit: str = Field(default="8Gi", description="Memory limit per pod")
+    parallelism: int = Field(default=10, description="Max concurrent pods")
+    backoff_limit: int = Field(default=3, description="Retry failed pods")
+    ttl_seconds_after_finished: int = Field(default=600, description="Cleanup pods after N seconds")
+    env_keys_to_export: list[str] = Field(
+        default_factory=lambda: ["ANTHROPIC_API_KEY"],
+        description="Environment variables to export as Secret",
+    )
+    enable_dind: bool = Field(default=True, description="Enable Docker-in-Docker sidecar")
+    auto_cleanup: bool = Field(default=True, description="Delete resources after evaluation")
+    preserve_on_error: bool = Field(default=True, description="Keep resources on error")
+    node_selector: dict[str, str] = Field(default_factory=dict, description="Node selector")
+    tolerations: list[dict[str, str]] = Field(default_factory=list, description="Pod tolerations")
+    labels: dict[str, str] = Field(default_factory=dict, description="Resource labels")
+
+
+class CloudflareConfig(BaseModel):
+    """Configuration for Cloudflare Workers infrastructure."""
+
+    account_id: str = Field(description="Cloudflare account ID")
+    workers_subdomain: str | None = Field(
+        default=None, description="Workers subdomain (<subdomain>.workers.dev)"
+    )
+    worker_name: str | None = Field(
+        default=None, description="Worker name (auto-generated if not set)"
+    )
+    auto_cleanup: bool = Field(default=True, description="Delete Worker after evaluation")
+    preserve_on_error: bool = Field(default=True, description="Keep Worker on error")
+    env_keys_to_export: list[str] = Field(
+        default_factory=lambda: ["ANTHROPIC_API_KEY"],
+        description="Environment variables to set as Worker secrets",
+    )
+    kv_namespace: str | None = Field(default=None, description="KV namespace for result storage")
+    r2_bucket: str | None = Field(default=None, description="R2 bucket for artifact storage")
+    compatibility_date: str = Field(default="2024-01-01", description="Worker compatibility date")
+
+
 class InfrastructureConfig(BaseModel):
     """Configuration for infrastructure mode."""
 
-    mode: Literal["local", "azure"] = Field(
+    mode: Literal["local", "azure", "aws", "gcp", "kubernetes", "cloudflare"] = Field(
         default="local",
-        description="Infrastructure mode: local or azure",
+        description="Infrastructure mode: local, azure, aws, gcp, kubernetes, or cloudflare",
     )
     azure: AzureConfig | None = Field(
         default=None,
         description="Azure configuration (required when mode=azure)",
     )
+    aws: AWSConfig | None = Field(
+        default=None,
+        description="AWS configuration (required when mode=aws)",
+    )
+    gcp: GCPConfig | None = Field(
+        default=None,
+        description="GCP configuration (required when mode=gcp)",
+    )
+    kubernetes: KubernetesConfig | None = Field(
+        default=None,
+        description="Kubernetes configuration (required when mode=kubernetes)",
+    )
+    cloudflare: CloudflareConfig | None = Field(
+        default=None,
+        description="Cloudflare configuration (required when mode=cloudflare)",
+    )
 
     @model_validator(mode="after")
-    def validate_azure_config(self) -> "InfrastructureConfig":
-        """Ensure azure config is provided when mode is azure."""
-        if self.mode == "azure" and self.azure is None:
-            raise ValueError("azure configuration is required when mode=azure")
+    def validate_provider_config(self) -> "InfrastructureConfig":
+        """Ensure the correct provider config is present for the selected mode."""
+        mode_config_map = {
+            "azure": self.azure,
+            "aws": self.aws,
+            "gcp": self.gcp,
+            "kubernetes": self.kubernetes,
+            "cloudflare": self.cloudflare,
+        }
+        if self.mode in mode_config_map and mode_config_map[self.mode] is None:
+            raise ValueError(f"{self.mode} configuration is required when mode={self.mode}")
         return self
 
 
@@ -376,6 +604,12 @@ class HarnessConfig(BaseModel):
             raise ValueError("thinking_budget cannot exceed 31999 tokens (Claude Code maximum)")
         return v
 
+    task_ids: list[str] | None = Field(
+        default=None,
+        description="Specific task instance IDs to evaluate (None for all). "
+        "CLI --task/-t flags are merged into this field for remote execution.",
+    )
+
     use_prebuilt_images: bool = Field(
         default=True,
         description="Use pre-built SWE-bench Docker images when available",
@@ -430,6 +664,15 @@ class HarnessConfig(BaseModel):
         default_factory=dict,
         description="Additional volume mounts (read-write) for Docker containers (host_path: container_path). "
         "Mounted into every container, persists across tasks. Useful for pre-computed caches.",
+    )
+
+    sandbox: dict | None = Field(
+        default=None,
+        description="Sandbox security profile for Docker containers. "
+        "Use {'level': 'standard'} for default security, "
+        "{'level': 'strict'} for maximum isolation, "
+        "or {'level': 'permissive'} for no restrictions. "
+        "Custom overrides: cap_drop, cap_add, read_only_rootfs, network_disabled, tmpfs_mounts.",
     )
 
     infrastructure: InfrastructureConfig = Field(

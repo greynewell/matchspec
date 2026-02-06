@@ -1,4 +1,4 @@
-"""Azure VM infrastructure provider."""
+"""GCP Compute Engine infrastructure provider."""
 
 import asyncio
 import json
@@ -12,7 +12,7 @@ from typing import Any
 try:
     import paramiko
 except ImportError:
-    # paramiko is optional, only needed when actually using Azure provider
+    # paramiko is optional, only needed when actually using GCP provider
     paramiko = None  # type: ignore
 
 from rich.console import Console
@@ -23,75 +23,80 @@ from ..run_state import RunState
 from .base import InfrastructureProvider
 
 
-class AzureProvider(InfrastructureProvider):
-    """Azure VM infrastructure provider.
+class GCPProvider(InfrastructureProvider):
+    """GCP Compute Engine infrastructure provider.
 
-    This provider manages the lifecycle of Azure VMs for running evaluations:
-    - Provisions VMs with appropriate sizing
+    This provider manages the lifecycle of GCE instances for running evaluations:
+    - Provisions instances with appropriate machine types
     - Manages SSH connectivity
-    - Handles VM cleanup with configurable preservation policies
+    - Handles instance cleanup with configurable preservation policies
     """
 
     def __init__(self, config: HarnessConfig):
-        """Initialize Azure provider.
+        """Initialize GCP provider.
 
         Args:
-            config: Harness configuration with Azure settings.
+            config: Harness configuration with GCP settings.
         """
         self.config = config
-        self.azure_config = config.infrastructure.azure
-        self.vm_name: str | None = None
-        self.vm_ip: str | None = None
+        self.gcp_config = config.infrastructure.gcp
+        self.instance_name: str | None = None
+        self.instance_ip: str | None = None
         self.ssh_client: paramiko.SSHClient | None = None
         self.ssh_key_path: Path | None = None
         self._error_occurred = False
 
-    def _determine_vm_size(self) -> str:
-        """Map cpu_cores/memory_gb to Azure VM size.
+    def _determine_machine_type(self) -> str:
+        """Map cpu_cores/memory_gb to GCP machine type.
 
         Returns:
-            Azure VM size string (e.g., "Standard_D8s_v3").
+            GCP machine type string (e.g., "e2-standard-4").
         """
-        # If explicit VM size specified, use it
-        if self.azure_config.vm_size:
-            return self.azure_config.vm_size
+        # If explicit machine_type specified, use it
+        if self.gcp_config.machine_type:
+            return self.gcp_config.machine_type
 
-        cores = self.azure_config.cpu_cores
-        memory = self.azure_config.memory_gb
+        cores = self.gcp_config.cpu_cores
+        memory = self.gcp_config.memory_gb
 
-        # Standard_D series mapping (general purpose, good balance)
-        if cores <= 2 and memory <= 8:
-            return "Standard_D2s_v3"
+        # e2-series for smaller workloads (cost-effective)
+        if cores <= 1 and memory <= 1:
+            return "e2-micro"
+        elif cores <= 2 and memory <= 8:
+            return "e2-standard-2"
         elif cores <= 4 and memory <= 16:
-            return "Standard_D4s_v3"
+            return "e2-standard-4"
         elif cores <= 8 and memory <= 32:
-            return "Standard_D8s_v3"
-        elif cores <= 16 and memory <= 64:
-            return "Standard_D16s_v3"
-        elif cores <= 32 and memory <= 128:
-            return "Standard_D32s_v3"
+            return "e2-standard-8"
+        # n2-series for larger workloads (better performance)
+        elif cores <= 2 and memory <= 8:
+            return "n2-standard-2"
+        elif cores <= 4 and memory <= 16:
+            return "n2-standard-4"
+        elif cores <= 8 and memory <= 32:
+            return "n2-standard-8"
         else:
-            return "Standard_D64s_v3"
+            return "n2-standard-16"
 
-    async def _create_vm(self, vm_size: str) -> None:
-        """Create Azure VM using az CLI.
+    async def _create_instance(self, machine_type: str) -> None:
+        """Create GCE instance using gcloud CLI.
 
         Args:
-            vm_size: Azure VM size (e.g., "Standard_D8s_v3").
+            machine_type: GCP machine type (e.g., "e2-standard-4").
 
         Raises:
-            RuntimeError: If VM creation fails.
+            RuntimeError: If instance creation fails.
         """
         console = Console()
 
-        # Generate unique VM name
+        # Generate unique instance name
         timestamp = int(time.time())
-        self.vm_name = f"mcpbr-eval-{timestamp}"
+        self.instance_name = f"mcpbr-eval-{timestamp}"
 
         # Generate or use existing SSH key
-        ssh_key_path = self.azure_config.ssh_key_path
+        ssh_key_path = self.gcp_config.ssh_key_path
         if not ssh_key_path:
-            ssh_key_path = Path.home() / ".ssh" / "mcpbr_azure"
+            ssh_key_path = Path.home() / ".ssh" / "mcpbr_gcp"
             if not ssh_key_path.exists():
                 console.print("[cyan]Generating SSH key...[/cyan]")
                 ssh_key_path.parent.mkdir(parents=True, exist_ok=True)
@@ -115,110 +120,189 @@ class AzureProvider(InfrastructureProvider):
                     raise RuntimeError(f"SSH key generation failed: {result.stderr}")
         self.ssh_key_path = ssh_key_path
 
-        # Check if resource group exists, create if needed
-        console.print(f"[cyan]Checking resource group: {self.azure_config.resource_group}[/cyan]")
-        result = subprocess.run(
-            [
-                "az",
-                "group",
-                "show",
-                "--name",
-                self.azure_config.resource_group,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            console.print("[cyan]Creating resource group...[/cyan]")
-            result = subprocess.run(
-                [
-                    "az",
-                    "group",
-                    "create",
-                    "--name",
-                    self.azure_config.resource_group,
-                    "--location",
-                    self.azure_config.location,
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f"Resource group creation failed: {result.stderr}")
+        # Determine SSH username (GCP uses OS Login or current username)
+        self._ssh_user = os.environ.get("USER", os.environ.get("USERNAME", "mcpbr"))
 
-        # Create VM
-        console.print(f"[cyan]Creating VM: {self.vm_name} ({vm_size})...[/cyan]")
-        vm_create_cmd = [
-            "az",
-            "vm",
+        # Build instance create command
+        console.print(
+            f"[cyan]Creating GCE instance: {self.instance_name} ({machine_type})...[/cyan]"
+        )
+
+        image_family = self.gcp_config.image_family
+        image_project = self.gcp_config.image_project
+        disk_gb = self.gcp_config.disk_gb
+        disk_type = self.gcp_config.disk_type
+        zone = self.gcp_config.zone
+
+        instance_create_cmd = [
+            "gcloud",
+            "compute",
+            "instances",
             "create",
-            "--resource-group",
-            self.azure_config.resource_group,
-            "--name",
-            self.vm_name,
-            "--image",
-            "Ubuntu2204",
-            "--size",
-            vm_size,
-            "--admin-username",
-            "azureuser",
-            "--ssh-key-values",
-            f"{ssh_key_path}.pub",
-            "--public-ip-sku",
-            "Standard",
-            "--os-disk-size-gb",
-            str(self.azure_config.disk_gb),
-            "--output",
+            self.instance_name,
+            "--zone",
+            zone,
+            "--machine-type",
+            machine_type,
+            "--image-family",
+            image_family,
+            "--image-project",
+            image_project,
+            "--boot-disk-size",
+            f"{disk_gb}GB",
+            "--boot-disk-type",
+            disk_type,
+            "--format",
             "json",
         ]
-        if self.azure_config.zone:
-            vm_create_cmd.extend(["--zone", self.azure_config.zone])
+
+        # Add project if specified
+        if self.gcp_config.project_id:
+            instance_create_cmd.extend(["--project", self.gcp_config.project_id])
+
+        # Add SSH key metadata
+        pub_key_path = f"{ssh_key_path}.pub"
+        if Path(pub_key_path).exists():
+            pub_key_content = Path(pub_key_path).read_text().strip()
+            metadata_value = f"{self._ssh_user}:{pub_key_content}"
+            instance_create_cmd.extend(["--metadata", f"ssh-keys={metadata_value}"])
+
+        # Add preemptible/spot flags
+        if self.gcp_config.spot:
+            instance_create_cmd.append("--provisioning-model=SPOT")
+            instance_create_cmd.append("--instance-termination-action=STOP")
+        elif self.gcp_config.preemptible:
+            instance_create_cmd.append("--preemptible")
+
+        # Add labels
+        if self.gcp_config.labels:
+            label_str = ",".join(f"{k}={v}" for k, v in self.gcp_config.labels.items())
+            instance_create_cmd.extend(["--labels", label_str])
+
+        # Add service account
+        if self.gcp_config.service_account:
+            instance_create_cmd.extend(["--service-account", self.gcp_config.service_account])
+
+        # Add scopes
+        if self.gcp_config.scopes:
+            instance_create_cmd.extend(["--scopes", ",".join(self.gcp_config.scopes)])
+
+        # Add network tags for firewall (allow SSH)
+        instance_create_cmd.extend(["--tags", "mcpbr-ssh"])
+
         result = subprocess.run(
-            vm_create_cmd,
+            instance_create_cmd,
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"VM creation failed: {result.stderr}")
+            raise RuntimeError(f"GCE instance creation failed: {result.stderr}")
 
-        console.print(f"[green]✓ VM created: {self.vm_name}[/green]")
+        console.print(f"[green]  Instance created: {self.instance_name}[/green]")
 
-    async def _get_vm_ip(self) -> str:
-        """Get VM public IP address.
+        # Ensure firewall rule exists for SSH access
+        await self._ensure_ssh_firewall_rule()
+
+    async def _ensure_ssh_firewall_rule(self) -> None:
+        """Ensure a firewall rule exists to allow SSH access to mcpbr instances.
+
+        Creates the rule if it does not already exist.
+        """
+        console = Console()
+        rule_name = "mcpbr-allow-ssh"
+
+        # Check if rule already exists
+        check_cmd = [
+            "gcloud",
+            "compute",
+            "firewall-rules",
+            "describe",
+            rule_name,
+            "--format",
+            "json",
+        ]
+        if self.gcp_config.project_id:
+            check_cmd.extend(["--project", self.gcp_config.project_id])
+
+        result = subprocess.run(
+            check_cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            # Rule already exists
+            return
+
+        # Create firewall rule
+        console.print("[cyan]Creating SSH firewall rule...[/cyan]")
+        create_cmd = [
+            "gcloud",
+            "compute",
+            "firewall-rules",
+            "create",
+            rule_name,
+            "--allow",
+            "tcp:22",
+            "--target-tags",
+            "mcpbr-ssh",
+            "--source-ranges",
+            "0.0.0.0/0",
+            "--description",
+            "Allow SSH access for mcpbr evaluation instances",
+        ]
+        if self.gcp_config.project_id:
+            create_cmd.extend(["--project", self.gcp_config.project_id])
+
+        result = subprocess.run(
+            create_cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            console.print(
+                f"[yellow]  Firewall rule creation warning: {result.stderr[:300]}[/yellow]"
+            )
+        else:
+            console.print("[green]  SSH firewall rule created[/green]")
+
+    async def _get_public_ip(self) -> str:
+        """Get instance public IP address.
 
         Returns:
-            Public IP address of the VM.
+            Public IP address of the instance.
 
         Raises:
             RuntimeError: If IP retrieval fails.
         """
         result = subprocess.run(
             [
-                "az",
-                "vm",
-                "show",
-                "--resource-group",
-                self.azure_config.resource_group,
-                "--name",
-                self.vm_name,
-                "--show-details",
-                "--query",
-                "publicIps",
-                "--output",
-                "json",
-            ],
+                "gcloud",
+                "compute",
+                "instances",
+                "describe",
+                self.instance_name,
+                "--zone",
+                self.gcp_config.zone,
+                "--format",
+                "json(networkInterfaces[0].accessConfigs[0].natIP)",
+            ]
+            + (["--project", self.gcp_config.project_id] if self.gcp_config.project_id else []),
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"Failed to get VM IP: {result.stderr}")
+            raise RuntimeError(f"Failed to get instance IP: {result.stderr}")
 
-        ip = json.loads(result.stdout)
-        return ip
+        try:
+            data = json.loads(result.stdout)
+            ip = data["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
+            return ip
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
+            raise RuntimeError(f"Failed to parse instance IP from response: {e}") from e
 
     async def _wait_for_ssh(self, timeout: int = 300) -> None:
         """Wait for SSH to become available.
@@ -231,7 +315,7 @@ class AzureProvider(InfrastructureProvider):
         """
         if paramiko is None:
             raise RuntimeError(
-                "paramiko is required for Azure provider. Install with: pip install paramiko"
+                "paramiko is required for GCP provider. Install with: pip install paramiko"
             )
 
         console = Console()
@@ -242,18 +326,18 @@ class AzureProvider(InfrastructureProvider):
             try:
                 # Create SSH client
                 self.ssh_client = paramiko.SSHClient()
-                # AutoAddPolicy is used because we just provisioned this VM and
+                # AutoAddPolicy is used because we just provisioned this instance and
                 # its host key is not yet in known_hosts. This is acceptable for
                 # automated provisioning where MITM risk is low, but enterprise
                 # deployments may want to use RejectPolicy with pre-seeded keys.
                 self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 self.ssh_client.connect(
-                    self.vm_ip,
-                    username="azureuser",
+                    self.instance_ip,
+                    username=self._ssh_user,
                     key_filename=str(self.ssh_key_path),
                     timeout=10,
                 )
-                console.print("[green]✓ SSH connection established[/green]")
+                console.print("[green]  SSH connection established[/green]")
                 return
             except Exception:
                 # Close failed client
@@ -264,7 +348,8 @@ class AzureProvider(InfrastructureProvider):
                 await asyncio.sleep(5)
 
         raise RuntimeError(
-            f"SSH connection failed after {timeout}s. VM may not be ready or network issues exist."
+            f"SSH connection failed after {timeout}s. "
+            f"Instance may not be ready or network issues exist."
         )
 
     async def _ssh_exec(self, command: str, timeout: int = 300) -> tuple[int, str, str]:
@@ -293,9 +378,9 @@ class AzureProvider(InfrastructureProvider):
             raise RuntimeError(f"SSH command failed: {e}") from e
 
     async def _install_dependencies(self) -> None:
-        """Install Docker, Python, Node.js, and mcpbr on VM."""
+        """Install Docker, Python, Node.js, and mcpbr on instance."""
         console = Console()
-        py_ver = self.azure_config.python_version
+        py_ver = self.gcp_config.python_version
 
         # Step 1: System packages + Docker
         console.print("[cyan]Installing system packages and Docker...[/cyan]")
@@ -312,10 +397,10 @@ class AzureProvider(InfrastructureProvider):
         exit_code, _stdout, stderr = await self._ssh_exec(step1_cmd, timeout=600)
         if exit_code != 0:
             console.print(
-                f"[yellow]⚠ System packages/Docker install issues: {stderr[:300]}[/yellow]"
+                f"[yellow]  System packages/Docker install issues: {stderr[:300]}[/yellow]"
             )
         else:
-            console.print("[green]✓ Docker installed[/green]")
+            console.print("[green]  Docker installed[/green]")
 
         # Step 2: Python (from deadsnakes PPA if needed)
         console.print(f"[cyan]Installing Python {py_ver}...[/cyan]")
@@ -323,14 +408,15 @@ class AzureProvider(InfrastructureProvider):
             "export DEBIAN_FRONTEND=noninteractive && "
             f"sudo add-apt-repository -y ppa:deadsnakes/ppa && "
             "sudo apt-get update -qq && "
-            f"sudo apt-get install -y -qq python{py_ver} python{py_ver}-venv python{py_ver}-distutils && "
+            f"sudo apt-get install -y -qq python{py_ver} python{py_ver}-venv "
+            f"python{py_ver}-distutils && "
             f"curl -sS https://bootstrap.pypa.io/get-pip.py | sudo python{py_ver}"
         )
         exit_code, _stdout, stderr = await self._ssh_exec(step2_cmd, timeout=300)
         if exit_code != 0:
-            console.print(f"[yellow]⚠ Python install issues: {stderr[:300]}[/yellow]")
+            console.print(f"[yellow]  Python install issues: {stderr[:300]}[/yellow]")
         else:
-            console.print(f"[green]✓ Python {py_ver} installed[/green]")
+            console.print(f"[green]  Python {py_ver} installed[/green]")
 
         # Step 3: Node.js (for npx / MCP servers)
         console.print("[cyan]Installing Node.js...[/cyan]")
@@ -340,21 +426,21 @@ class AzureProvider(InfrastructureProvider):
         )
         exit_code, _stdout, stderr = await self._ssh_exec(step3_cmd, timeout=300)
         if exit_code != 0:
-            console.print(f"[yellow]⚠ Node.js install issues: {stderr[:300]}[/yellow]")
+            console.print(f"[yellow]  Node.js install issues: {stderr[:300]}[/yellow]")
         else:
-            console.print("[green]✓ Node.js installed[/green]")
+            console.print("[green]  Node.js installed[/green]")
 
         # Step 4: Install mcpbr (pin to local version)
         console.print(f"[cyan]Installing mcpbr=={__version__}...[/cyan]")
         step4_cmd = f"python{py_ver} -m pip install mcpbr=={__version__}"
         exit_code, _stdout, stderr = await self._ssh_exec(step4_cmd, timeout=300)
         if exit_code != 0:
-            console.print(f"[yellow]⚠ mcpbr install issues: {stderr[:300]}[/yellow]")
+            console.print(f"[yellow]  mcpbr install issues: {stderr[:300]}[/yellow]")
         else:
-            console.print("[green]✓ mcpbr installed[/green]")
+            console.print("[green]  mcpbr installed[/green]")
 
     async def _transfer_config(self) -> None:
-        """Transfer configuration file to VM via SFTP."""
+        """Transfer configuration file to instance via SFTP."""
         console = Console()
         console.print("[cyan]Transferring configuration...[/cyan]")
 
@@ -366,7 +452,7 @@ class AzureProvider(InfrastructureProvider):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             # Serialize config to YAML (convert Pydantic model to dict)
             config_dict = self.config.model_dump()
-            # Override infrastructure mode to local — the VM IS the infrastructure
+            # Override infrastructure mode to local -- the instance IS the infrastructure
             if "infrastructure" in config_dict:
                 config_dict["infrastructure"]["mode"] = "local"
             yaml.dump(config_dict, f)
@@ -376,28 +462,29 @@ class AzureProvider(InfrastructureProvider):
         try:
             # Upload via SFTP
             sftp = self.ssh_client.open_sftp()
-            sftp.put(temp_config_path, "/home/azureuser/config.yaml")
-            console.print("[green]✓ Configuration transferred[/green]")
+            remote_home = f"/home/{self._ssh_user}"
+            sftp.put(temp_config_path, f"{remote_home}/config.yaml")
+            console.print("[green]  Configuration transferred[/green]")
         finally:
             if sftp:
                 sftp.close()
             Path(temp_config_path).unlink()
 
     async def _export_env_vars(self) -> None:
-        """Export environment variables to VM."""
+        """Export environment variables to instance."""
         console = Console()
         console.print("[cyan]Exporting environment variables...[/cyan]")
 
         env_vars = {}
-        for key in self.azure_config.env_keys_to_export:
+        for key in self.gcp_config.env_keys_to_export:
             value = os.environ.get(key)
             if value:
                 env_vars[key] = value
             else:
-                console.print(f"[yellow]⚠ Environment variable {key} not found locally[/yellow]")
+                console.print(f"[yellow]  Environment variable {key} not found locally[/yellow]")
 
         if not env_vars:
-            console.print("[yellow]⚠ No environment variables to export[/yellow]")
+            console.print("[yellow]  No environment variables to export[/yellow]")
             return
 
         # Write to .bashrc and .profile using shlex.quote to prevent shell injection
@@ -410,11 +497,11 @@ class AzureProvider(InfrastructureProvider):
         heredoc_cmd = f"cat << 'MCPBR_ENV_EOF' >> ~/.profile\n{bashrc_append}\nMCPBR_ENV_EOF"
         await self._ssh_exec(heredoc_cmd)
 
-        console.print(f"[green]✓ Exported {len(env_vars)} environment variables[/green]")
+        console.print(f"[green]  Exported {len(env_vars)} environment variables[/green]")
 
     def _mcpbr_cmd(self) -> str:
         """Return the mcpbr command for the configured Python version."""
-        py_ver = self.azure_config.python_version
+        py_ver = self.gcp_config.python_version
         return f"python{py_ver} -m mcpbr"
 
     def _wrap_cmd(self, cmd: str) -> str:
@@ -439,7 +526,7 @@ class AzureProvider(InfrastructureProvider):
         exit_code, stdout, stderr = await self._ssh_exec(test_cmd, timeout=600)
 
         if exit_code != 0:
-            console.print("[red]✗ Test task failed![/red]")
+            console.print("[red]  Test task failed![/red]")
             console.print(f"[red]STDOUT:[/red]\n{stdout[:1000]}")
             console.print(f"[red]STDERR:[/red]\n{stderr[:1000]}")
             raise RuntimeError(
@@ -447,31 +534,31 @@ class AzureProvider(InfrastructureProvider):
                 f"This indicates the MCP server or evaluation setup has issues."
             )
 
-        console.print("[green]✓ Test task passed - setup validated[/green]")
+        console.print("[green]  Test task passed - setup validated[/green]")
 
     @staticmethod
     def get_run_status(state: "RunState") -> dict:
-        """Get the status of an Azure VM run.
+        """Get the status of a GCE instance run.
 
         Args:
-            state: RunState with vm_name and resource_group.
+            state: RunState with instance_name and zone.
 
         Returns:
-            Dict with status information from az vm show.
+            Dict with status information from gcloud compute instances describe.
         """
+        cmd = [
+            "gcloud",
+            "compute",
+            "instances",
+            "describe",
+            state.vm_name,
+            "--zone",
+            state.location,
+            "--format",
+            "json",
+        ]
         result = subprocess.run(
-            [
-                "az",
-                "vm",
-                "show",
-                "--name",
-                state.vm_name,
-                "--resource-group",
-                state.resource_group,
-                "--show-details",
-                "-o",
-                "json",
-            ],
+            cmd,
             capture_output=True,
             text=True,
             timeout=30,
@@ -482,7 +569,7 @@ class AzureProvider(InfrastructureProvider):
 
     @staticmethod
     def get_ssh_command(state: "RunState") -> str:
-        """Get SSH command to connect to Azure VM.
+        """Get SSH command to connect to GCE instance.
 
         Args:
             state: RunState with vm_ip and ssh_key_path.
@@ -490,35 +577,36 @@ class AzureProvider(InfrastructureProvider):
         Returns:
             SSH command string.
         """
-        return f"ssh -i {state.ssh_key_path} azureuser@{state.vm_ip}"
+        user = os.environ.get("USER", os.environ.get("USERNAME", "mcpbr"))
+        return f"ssh -i {state.ssh_key_path} {user}@{state.vm_ip}"
 
     @staticmethod
     def stop_run(state: "RunState") -> None:
-        """Stop and deallocate an Azure VM.
+        """Stop a GCE instance.
 
         Args:
-            state: RunState with vm_name and resource_group.
+            state: RunState with instance name and zone.
         """
         subprocess.run(
             [
-                "az",
-                "vm",
-                "deallocate",
-                "--name",
+                "gcloud",
+                "compute",
+                "instances",
+                "stop",
                 state.vm_name,
-                "--resource-group",
-                state.resource_group,
+                "--zone",
+                state.location,
             ],
             check=True,
             timeout=300,
         )
 
     async def setup(self) -> None:
-        """Provision Azure VM and prepare for evaluation.
+        """Provision GCE instance and prepare for evaluation.
 
         This method:
-        1. Determines appropriate VM size
-        2. Creates the VM
+        1. Determines appropriate machine type
+        2. Creates the instance
         3. Retrieves the public IP
         4. Waits for SSH to become available
         5. Installs dependencies (Docker, Python, mcpbr)
@@ -530,19 +618,19 @@ class AzureProvider(InfrastructureProvider):
             RuntimeError: If setup fails at any step.
         """
         console = Console()
-        console.print("[cyan]Provisioning Azure VM...[/cyan]")
+        console.print("[cyan]Provisioning GCE instance...[/cyan]")
 
         try:
-            # Determine VM size
-            vm_size = self._determine_vm_size()
-            console.print(f"[cyan]  VM Size: {vm_size}[/cyan]")
+            # Determine machine type
+            machine_type = self._determine_machine_type()
+            console.print(f"[cyan]  Machine Type: {machine_type}[/cyan]")
 
-            # Create VM
-            await self._create_vm(vm_size)
+            # Create instance
+            await self._create_instance(machine_type)
 
             # Get IP
-            self.vm_ip = await self._get_vm_ip()
-            console.print(f"[cyan]  VM IP: {self.vm_ip}[/cyan]")
+            self.instance_ip = await self._get_public_ip()
+            console.print(f"[cyan]  Instance IP: {self.instance_ip}[/cyan]")
 
             # Wait for SSH
             await self._wait_for_ssh()
@@ -563,10 +651,10 @@ class AzureProvider(InfrastructureProvider):
             from datetime import datetime
 
             run_state = RunState(
-                vm_name=self.vm_name,
-                vm_ip=self.vm_ip,
-                resource_group=self.azure_config.resource_group,
-                location=self.azure_config.location,
+                vm_name=self.instance_name,
+                vm_ip=self.instance_ip,
+                resource_group=self.gcp_config.project_id or "",
+                location=self.gcp_config.zone,
                 ssh_key_path=str(self.ssh_key_path),
                 config_path=str(self.config.config_path)
                 if hasattr(self.config, "config_path")
@@ -576,14 +664,14 @@ class AzureProvider(InfrastructureProvider):
             state_dir = Path.home() / ".mcpbr"
             run_state.save(state_dir / "run_state.json")
 
-            console.print("[green]✓ Azure VM ready for evaluation[/green]")
+            console.print("[green]  GCE instance ready for evaluation[/green]")
 
         except Exception:
             self._error_occurred = True
             raise
 
     async def run_evaluation(self, config: Any, run_mcp: bool, run_baseline: bool) -> Any:
-        """Execute evaluation on Azure VM.
+        """Execute evaluation on GCE instance.
 
         Args:
             config: Harness configuration.
@@ -596,9 +684,8 @@ class AzureProvider(InfrastructureProvider):
         Raises:
             RuntimeError: If evaluation fails.
         """
-
         console = Console()
-        console.print("[cyan]Starting remote evaluation on Azure VM...[/cyan]")
+        console.print("[cyan]Starting remote evaluation on GCE instance...[/cyan]")
 
         # Build command flags
         flags = []
@@ -630,18 +717,18 @@ class AzureProvider(InfrastructureProvider):
         if exit_code != 0:
             self._error_occurred = True
             stderr_output = stderr.read().decode()
-            console.print(f"[red]✗ Evaluation failed with exit code {exit_code}[/red]")
+            console.print(f"[red]  Evaluation failed with exit code {exit_code}[/red]")
             console.print(f"[red]{stderr_output[:2000]}[/red]")
             raise RuntimeError(f"Evaluation failed: {stderr_output[:500]}")
 
-        console.print("[green]✓ Evaluation completed successfully[/green]")
+        console.print("[green]  Evaluation completed successfully[/green]")
 
         # Download and parse results
         results = await self._download_results()
         return results
 
     async def _download_results(self) -> Any:
-        """Download results.json from VM.
+        """Download results.json from instance.
 
         Returns:
             EvaluationResults object parsed from JSON.
@@ -663,7 +750,7 @@ class AzureProvider(InfrastructureProvider):
         )
 
         if exit_code != 0 or not stdout.strip():
-            raise FileNotFoundError("No output directory found on VM")
+            raise FileNotFoundError("No output directory found on instance")
 
         remote_output_dir = stdout.strip()
         results_path = f"{remote_output_dir}/results.json"
@@ -686,7 +773,7 @@ class AzureProvider(InfrastructureProvider):
             Path(temp_path).unlink()
 
     async def collect_artifacts(self, output_dir: Path) -> Path | None:
-        """Download all logs and results from VM, create ZIP archive.
+        """Download all logs and results from instance, create ZIP archive.
 
         Args:
             output_dir: Local directory to store downloaded artifacts.
@@ -695,15 +782,15 @@ class AzureProvider(InfrastructureProvider):
             Path to ZIP archive, or None if no artifacts found.
         """
         console = Console()
-        console.print("[cyan]Collecting artifacts from VM...[/cyan]")
+        console.print("[cyan]Collecting artifacts from instance...[/cyan]")
 
-        # Find output directory on VM
+        # Find output directory on instance
         exit_code, stdout, _stderr = await self._ssh_exec(
             "find ~ -maxdepth 1 -type d -name '.mcpbr_run_*' | sort -r | head -n1"
         )
 
         if exit_code != 0 or not stdout.strip():
-            console.print("[yellow]⚠ No output directory found on VM[/yellow]")
+            console.print("[yellow]  No output directory found on instance[/yellow]")
             return None
 
         remote_output_dir = stdout.strip()
@@ -731,7 +818,7 @@ class AzureProvider(InfrastructureProvider):
                     arcname = file_path.relative_to(local_archive_dir.parent)
                     zipf.write(file_path, arcname)
 
-        console.print(f"[green]✓ Artifacts archived: {archive_path}[/green]")
+        console.print(f"[green]  Artifacts archived: {archive_path}[/green]")
         return archive_path
 
     def _recursive_download(self, sftp: Any, remote_dir: str, local_dir: Path) -> None:
@@ -755,7 +842,7 @@ class AzureProvider(InfrastructureProvider):
                 sftp.get(remote_path, str(local_path))
 
     async def cleanup(self, force: bool = False) -> None:
-        """Delete Azure VM.
+        """Delete GCE instance.
 
         This method respects the auto_shutdown and preserve_on_error settings
         unless force=True is specified.
@@ -773,52 +860,62 @@ class AzureProvider(InfrastructureProvider):
                 console.print(f"[dim]Note: SSH close warning: {e}[/dim]")
 
         # Check if we should cleanup
-        if not self.vm_name:
+        if not self.instance_name:
             return
 
         # Determine if should cleanup
         should_cleanup = force or (
-            self.azure_config.auto_shutdown
-            and not (self._error_occurred and self.azure_config.preserve_on_error)
+            self.gcp_config.auto_shutdown
+            and not (self._error_occurred and self.gcp_config.preserve_on_error)
         )
 
         if not should_cleanup:
-            console.print(f"[yellow]VM preserved: {self.vm_name}[/yellow]")
-            if self.vm_ip and self.ssh_key_path:
-                console.print(f"[dim]SSH: ssh -i {self.ssh_key_path} azureuser@{self.vm_ip}[/dim]")
+            console.print(f"[yellow]Instance preserved: {self.instance_name}[/yellow]")
+            if self.instance_ip and self.ssh_key_path:
                 console.print(
-                    f"[dim]Delete with: az vm delete -g {self.azure_config.resource_group} -n {self.vm_name} --yes[/dim]"
+                    f"[dim]SSH: ssh -i {self.ssh_key_path} "
+                    f"{self._ssh_user}@{self.instance_ip}[/dim]"
+                )
+                console.print(
+                    f"[dim]Delete with: gcloud compute instances delete "
+                    f"{self.instance_name} --zone={self.gcp_config.zone} --quiet[/dim]"
                 )
             return
 
-        # Delete VM
-        console.print(f"[cyan]Deleting VM: {self.vm_name}...[/cyan]")
+        # Delete instance
+        console.print(f"[cyan]Deleting instance: {self.instance_name}...[/cyan]")
+        delete_cmd = [
+            "gcloud",
+            "compute",
+            "instances",
+            "delete",
+            self.instance_name,
+            "--zone",
+            self.gcp_config.zone,
+            "--quiet",
+        ]
+        if self.gcp_config.project_id:
+            delete_cmd.extend(["--project", self.gcp_config.project_id])
+
         result = subprocess.run(
-            [
-                "az",
-                "vm",
-                "delete",
-                "--resource-group",
-                self.azure_config.resource_group,
-                "--name",
-                self.vm_name,
-                "--yes",
-            ],
+            delete_cmd,
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode == 0:
-            console.print("[green]✓ VM deleted[/green]")
+            console.print("[green]  Instance deleted[/green]")
         else:
-            console.print(f"[yellow]⚠ VM deletion may have failed: {result.stderr[:200]}[/yellow]")
+            console.print(
+                f"[yellow]  Instance deletion may have failed: {result.stderr[:200]}[/yellow]"
+            )
 
     async def health_check(self, **kwargs: Any) -> dict[str, Any]:
-        """Run Azure health checks.
+        """Run GCP health checks.
 
         Returns:
             Dictionary with health check results.
         """
-        from .azure_health import run_azure_health_checks
+        from .gcp_health import run_gcp_health_checks
 
-        return run_azure_health_checks(self.azure_config)
+        return run_gcp_health_checks(self.gcp_config)

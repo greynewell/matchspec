@@ -1729,6 +1729,75 @@ class TestRemoteExecution:
         assert result is not None
         assert result.summary["pass_rate"] == 0.95
 
+    async def test_run_evaluation_forwards_task_ids(
+        self,
+    ) -> None:
+        """Test that task_ids from config are forwarded as -t flags (#367)."""
+        config = HarnessConfig(
+            mcp_server=MCPServerConfig(command="npx", args=[]),
+            infrastructure=InfrastructureConfig(
+                mode="azure",
+                azure=AzureConfig(resource_group="test-rg"),
+            ),
+            task_ids=["sympy__sympy-11400", "sympy__sympy-11870"],
+        )
+        provider = AzureProvider(config)
+
+        mock_client = MagicMock()
+        provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(metadata={}, summary={}, tasks=[])
+
+        provider._download_results = mock_download_results
+
+        await provider.run_evaluation(None, run_mcp=True, run_baseline=True)
+
+        cmd = mock_client.exec_command.call_args[0][0]
+        assert "-t" in cmd
+        assert "sympy__sympy-11400" in cmd
+        assert "sympy__sympy-11870" in cmd
+
+    async def test_run_evaluation_no_task_ids_omits_t_flag(
+        self,
+        azure_provider: AzureProvider,
+    ) -> None:
+        """Test that no -t flags when task_ids is None."""
+        mock_client = MagicMock()
+        azure_provider.ssh_client = mock_client
+
+        mock_stdin = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.__iter__ = Mock(return_value=iter([]))
+        mock_stdout.channel.recv_exit_status.return_value = 0
+        mock_stderr = MagicMock()
+        mock_stderr.read.return_value = b""
+
+        mock_client.exec_command.return_value = (mock_stdin, mock_stdout, mock_stderr)
+
+        async def mock_download_results():
+            from mcpbr.harness import EvaluationResults
+
+            return EvaluationResults(metadata={}, summary={}, tasks=[])
+
+        azure_provider._download_results = mock_download_results
+
+        await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=True)
+
+        cmd = mock_client.exec_command.call_args[0][0]
+        assert "-t" not in cmd
+
 
 # ============================================================================
 # Results Download Tests

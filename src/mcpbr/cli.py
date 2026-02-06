@@ -867,6 +867,10 @@ To archive:
         if infra_mode != "local":
             from .infrastructure.manager import InfrastructureManager
 
+            # Merge CLI-only parameters into config so they propagate to remote VMs
+            if selected_task_ids:
+                config.task_ids = selected_task_ids
+
             infra_result = asyncio.run(
                 InfrastructureManager.run_with_infrastructure(
                     config=config,

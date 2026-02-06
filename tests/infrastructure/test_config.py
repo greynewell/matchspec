@@ -254,3 +254,26 @@ class TestHarnessConfigWithInfrastructure:
         assert config.infrastructure.azure.memory_gb == 64
         assert config.infrastructure.azure.disk_gb == 500
         assert config.infrastructure.azure.auto_shutdown is False
+
+    def test_harness_config_with_task_ids(self) -> None:
+        """Test HarnessConfig with task_ids for remote forwarding (#367)."""
+        config = HarnessConfig(
+            mcp_server=MCPServerConfig(command="npx", args=[]),
+            task_ids=["sympy__sympy-11400", "django__django-16379"],
+        )
+        assert config.task_ids == ["sympy__sympy-11400", "django__django-16379"]
+
+    def test_harness_config_task_ids_default_none(self) -> None:
+        """Test HarnessConfig task_ids defaults to None."""
+        config = HarnessConfig(mcp_server=MCPServerConfig(command="npx", args=[]))
+        assert config.task_ids is None
+
+    def test_azure_config_quota_check_timeout(self) -> None:
+        """Test AzureConfig quota_check_timeout field (#375)."""
+        config = AzureConfig(resource_group="test-rg", quota_check_timeout=180)
+        assert config.quota_check_timeout == 180
+
+    def test_azure_config_quota_check_timeout_default(self) -> None:
+        """Test AzureConfig quota_check_timeout defaults to 120."""
+        config = AzureConfig(resource_group="test-rg")
+        assert config.quota_check_timeout == 120

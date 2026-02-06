@@ -3,6 +3,8 @@
 from pathlib import Path
 from typing import Any
 
+from rich.console import Console
+
 from .base import InfrastructureProvider
 from .local import LocalProvider
 
@@ -56,6 +58,22 @@ class InfrastructureManager:
             from .azure import AzureProvider
 
             return AzureProvider(config)
+        elif mode == "aws":
+            from .aws import AWSProvider
+
+            return AWSProvider(config)
+        elif mode == "gcp":
+            from .gcp import GCPProvider
+
+            return GCPProvider(config)
+        elif mode == "kubernetes":
+            from .k8s import KubernetesProvider
+
+            return KubernetesProvider(config)
+        elif mode == "cloudflare":
+            from .cloudflare import CloudflareProvider
+
+            return CloudflareProvider(config)
         else:
             raise UnknownInfrastructureModeError(mode)
 
@@ -109,6 +127,13 @@ class InfrastructureManager:
             if not is_healthy:
                 failures = health_result.get("failures") or health_result.get("errors", [])
                 raise InfrastructureHealthCheckError(failures)
+
+            # Display non-fatal warnings (e.g., quota check timeouts)
+            warnings = health_result.get("warnings", [])
+            if warnings:
+                console = Console()
+                for warning in warnings:
+                    console.print(f"[yellow]⚠ Health check warning: {warning}[/yellow]")
 
             # 2. Setup infrastructure
             await provider.setup()

@@ -29,9 +29,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after copying the repo to /workspace, raising an early error if the workspace is empty
 - **setup_command failures are always visible** (#388): Non-zero exit codes from
   setup_command now always print a warning, not just in `--verbose` mode
+- **Azure health check timeout** (#375): Increased Azure quota health check timeout from
+  60s to 120s (configurable) and made quota check non-fatal with warnings instead of errors
+- **CLI task filters not forwarded** (#367): Task IDs specified via `-t` CLI flags are now
+  correctly forwarded to remote infrastructure providers during evaluation
 
 ### Added
 
+- **Sandbox execution environment** (#109): Configurable Docker security profiles for
+  benchmark evaluation containers
+  - Three security levels: permissive, standard (default), and strict
+  - Seccomp profile generation with syscall allow/deny lists
+  - Network, filesystem, and capability controls per security level
+  - YAML config integration via `sandbox` section
+- **Database backend** (#86): SQLite storage backend for persistent evaluation results
+  - Async `SQLiteStorage` with automatic schema creation (runs + task_results tables)
+  - Store, query, list, and delete evaluation runs
+  - Task-level result storage with JSON serialization
+  - `StorageBackend` abstract base class for future backends
+- **Cloud storage support** (#87): Upload results and artifacts to cloud object storage
+  - `S3Storage` for AWS S3 with presigned URL generation
+  - `GCSStorage` for Google Cloud Storage
+  - `AzureBlobStorage` for Azure Blob Storage with SAS URL generation
+  - `create_cloud_storage()` factory for provider selection
+  - CLI tool-based implementation (no SDK dependencies)
+- **AWS EC2 infrastructure provider** (#352): Run evaluations on AWS EC2 instances
+  - Automatic instance provisioning with configurable instance types and AMIs
+  - SSH connectivity via paramiko with key management
+  - Remote Docker/Python/Node.js dependency installation
+  - Health checks for AWS CLI, authentication, and instance type availability
+  - Full lifecycle: setup, evaluation, artifact collection, cleanup
+- **GCP Compute Engine infrastructure provider** (#353): Run evaluations on GCP VMs
+  - Instance provisioning via `gcloud compute` CLI
+  - SSH connectivity with GCP-managed keys
+  - Health checks for gcloud CLI, authentication, project, and zone configuration
+  - Configurable machine types, disk sizes, and network settings
+- **Kubernetes infrastructure provider** (#355): Run evaluations as Kubernetes Jobs
+  - Job manifest generation with configurable resource requests/limits
+  - ConfigMap and Secret creation for benchmark configuration
+  - Pod log streaming and artifact collection
+  - Health checks for kubectl, cluster access, namespace, and resource quotas
+  - Automatic cleanup of Jobs, ConfigMaps, and Secrets
+- **Cloudflare Workers infrastructure provider** (#354): Hybrid Worker-based evaluation
+  - Wrangler CLI integration for Worker deployment
+  - KV namespace management for result storage
+  - Worker script generation with benchmark compatibility checks
+  - Health checks for wrangler CLI, authentication, and Node.js
+  - Supports custom and HumanEval benchmarks via Worker execution
+- **Distributed execution coordinator** (#116): Coordinate running evaluations across multiple
+  workers/machines with automatic task partitioning and result merging
+  - `TaskPartitioner` with even round-robin and difficulty-balanced (LPT) partitioning strategies
+  - `WorkerResult` dataclass for per-worker execution results with timing and error tracking
+  - `DistributedCoordinator` that partitions tasks, launches workers concurrently via
+    `asyncio.gather`, and merges results into a unified `EvaluationResults` object
+  - Supports all infrastructure providers: local, AWS, GCP, Kubernetes, Azure
+- **Multi-benchmark runner** (#359): Run multiple benchmarks in a single invocation with parallel
+  execution and aggregated results
+  - `MultiBenchmarkRunner` with asyncio semaphore-based concurrency control
+  - `BenchmarkRun`, `BenchmarkResult`, and `MultiBenchmarkResults` dataclasses for configuration
+    and result aggregation
+  - `partition_tasks` utility for sharding task lists across runners
+  - Summary property with aggregate pass rate, task counts, and duration
+- **REST API server** (#83): HTTP API for querying evaluation results and server status
+  - `GET /api/v1/health` — server health check
+  - `GET /api/v1/runs` — list all evaluation runs
+  - `GET /api/v1/runs/{id}` — get a specific run with results
+  - `GET /api/v1/runs/{id}/tasks` — get task-level results for a run
+  - `DELETE /api/v1/runs/{id}` — delete an evaluation run
+  - `GET /api/v1/stats` — aggregate statistics across all runs
+  - Built on Python `http.server` (no external dependencies)
+  - `mcpbr serve` CLI command for starting the API server
+- **Cross-platform compatibility** (#161): Windows support utilities and path normalization
+  - Platform detection helpers (`is_windows`, `is_macos`, `is_linux`)
+  - Platform-aware directory paths for data, cache, config, and temp
+  - Windows Docker path normalization (e.g., `C:\Users\...` → `/c/Users/...`)
+  - Shell detection (PowerShell/cmd fallback on Windows, bash on Unix)
+  - Docker socket path abstraction (Unix socket vs Windows named pipe)
+- **VS Code extension scaffold** (#163): Extension for running benchmarks from VS Code
+  - Sidebar views for benchmark results and configuration
+  - Commands: run benchmark, stop, select config, view results, open dashboard
+  - `BenchmarkRunner` class spawning mcpbr CLI as child process
+  - Tree data providers for results and config display
+  - Configuration settings for Python path and API host
+- **Plugin registry** (#267): Discover and register MCP server benchmark plugins
+  - `PluginEntry` and `Registry` dataclasses with search by name, description, and tags
+  - `RegistryClient` with HTTP fetch, caching, search, and list operations
+  - `generate_registry_entry()` for mcpbr self-registration
+  - JSON-based registry format hosted on GitHub
 - **Rate limiting for API calls** (#196): Intelligent rate limiting to prevent API quota exhaustion
   - Token bucket algorithm with configurable requests-per-minute (`rate_limit_rpm`)
   - Three backoff strategies: fixed, exponential, and adaptive (with jitter)

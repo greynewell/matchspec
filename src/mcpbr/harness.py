@@ -1151,9 +1151,17 @@ async def run_evaluation(
                 "args": config.mcp_server.args if config.mcp_server else [],
             }
 
+    # Initialize sandbox profile if configured
+    sandbox_profile = None
+    if config.sandbox:
+        from .sandbox import parse_sandbox_config
+
+        sandbox_profile = parse_sandbox_config(config.sandbox)
+
     docker_manager = DockerEnvironmentManager(
         use_prebuilt=config.use_prebuilt_images,
         extra_volumes=config.volumes,
+        sandbox_profile=sandbox_profile,
     )
 
     results: list[TaskResult] = []

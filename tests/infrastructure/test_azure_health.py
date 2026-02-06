@@ -338,6 +338,38 @@ class TestCheckAzureQuotas:
         assert success is False
         assert "error" in result.lower()
 
+    @patch("subprocess.run")
+    def test_custom_timeout(self, mock_run: MagicMock) -> None:
+        """Test that custom timeout is passed to subprocess."""
+        skus = [{"name": "Standard_D4s_v3", "locations": ["eastus"], "restrictions": []}]
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(skus))
+
+        check_azure_quotas("eastus", "Standard_D4s_v3", timeout=180)
+
+        assert mock_run.call_args.kwargs.get("timeout") == 180
+
+    @patch("subprocess.run")
+    def test_default_timeout_is_120(self, mock_run: MagicMock) -> None:
+        """Test that default timeout is 120 seconds."""
+        skus = [{"name": "Standard_D4s_v3", "locations": ["eastus"], "restrictions": []}]
+        mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps(skus))
+
+        check_azure_quotas("eastus", "Standard_D4s_v3")
+
+        assert mock_run.call_args.kwargs.get("timeout") == 120
+
+    @patch("subprocess.run")
+    def test_timeout_returns_error(self, mock_run: MagicMock) -> None:
+        """Test that subprocess timeout is handled gracefully."""
+        import subprocess as sp
+
+        mock_run.side_effect = sp.TimeoutExpired(cmd="az", timeout=120)
+
+        success, result = check_azure_quotas("eastus", "Standard_D4s_v3")
+
+        assert success is False
+        assert "error" in result.lower()
+
 
 class TestRunAzureHealthChecks:
     """Tests for run_azure_health_checks function."""
@@ -431,14 +463,14 @@ class TestRunAzureHealthChecks:
     @patch("mcpbr.infrastructure.azure_health.check_az_subscription")
     @patch("mcpbr.infrastructure.azure_health.check_az_authenticated")
     @patch("mcpbr.infrastructure.azure_health.check_az_cli_installed")
-    def test_quota_check_fails(
+    def test_quota_check_fails_produces_warning_not_error(
         self,
         mock_cli: MagicMock,
         mock_auth: MagicMock,
         mock_sub: MagicMock,
         mock_quotas: MagicMock,
     ) -> None:
-        """Test when quota check fails."""
+        """Test when quota check fails it produces a warning, not a hard error."""
         mock_cli.return_value = (True, "/usr/local/bin/az")
         mock_auth.return_value = (True, "test@example.com")
         mock_sub.return_value = (True, "Test Subscription")
@@ -455,8 +487,37 @@ class TestRunAzureHealthChecks:
         assert result["authenticated"] is True
         assert result["subscription"] is True
         assert result["quotas"] is False
-        assert len(result["errors"]) > 0
-        assert any("VM size not available" in error for error in result["errors"])
+        # Quota failures are warnings, not errors — evaluation should still proceed
+        assert len(result["errors"]) == 0
+        assert len(result.get("warnings", [])) > 0
+        assert any("VM size not available" in w for w in result["warnings"])
+
+    @patch("mcpbr.infrastructure.azure_health.check_azure_quotas")
+    @patch("mcpbr.infrastructure.azure_health.check_az_subscription")
+    @patch("mcpbr.infrastructure.azure_health.check_az_authenticated")
+    @patch("mcpbr.infrastructure.azure_health.check_az_cli_installed")
+    def test_quota_check_uses_config_timeout(
+        self,
+        mock_cli: MagicMock,
+        mock_auth: MagicMock,
+        mock_sub: MagicMock,
+        mock_quotas: MagicMock,
+    ) -> None:
+        """Test that quota check passes the configured timeout."""
+        mock_cli.return_value = (True, "/usr/local/bin/az")
+        mock_auth.return_value = (True, "test@example.com")
+        mock_sub.return_value = (True, "Test Subscription")
+        mock_quotas.return_value = (True, "")
+
+        config = AzureConfig(
+            resource_group="test-rg",
+            vm_size="Standard_D4s_v3",
+            quota_check_timeout=180,
+        )
+
+        run_azure_health_checks(config)
+
+        mock_quotas.assert_called_once_with(config.location, "Standard_D4s_v3", None, timeout=180)
 
     @patch("mcpbr.infrastructure.azure_health.check_azure_quotas")
     @patch("mcpbr.infrastructure.azure_health.check_az_subscription")

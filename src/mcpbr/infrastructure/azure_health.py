@@ -113,7 +113,9 @@ def check_az_subscription(subscription_id: str | None) -> tuple[bool, str]:
         return False, f"Error checking Azure subscription: {e}"
 
 
-def check_azure_quotas(location: str, vm_size: str, zone: str | None = None) -> tuple[bool, str]:
+def check_azure_quotas(
+    location: str, vm_size: str, zone: str | None = None, timeout: int = 120
+) -> tuple[bool, str]:
     """Check if VM size is available in the specified location and zone.
 
     Args:
@@ -121,6 +123,7 @@ def check_azure_quotas(location: str, vm_size: str, zone: str | None = None) -> 
         vm_size: Azure VM size (e.g., Standard_D4s_v3).
         zone: Azure availability zone (e.g., "1"). If specified, zone-specific
             restrictions are checked instead of treating all restrictions as blocking.
+        timeout: Timeout in seconds for the az vm list-skus command.
 
     Returns:
         Tuple of (success, result).
@@ -142,7 +145,7 @@ def check_azure_quotas(location: str, vm_size: str, zone: str | None = None) -> 
             ],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=timeout,
         )
 
         if result.returncode == 0:
@@ -205,6 +208,7 @@ def run_azure_health_checks(config: AzureConfig) -> dict[str, Any]:
             "subscription": bool,
             "quotas": bool,
             "errors": list[str],
+            "warnings": list[str],  # Non-fatal issues (e.g., quota check failures)
         }
     """
     results: dict[str, Any] = {
@@ -237,12 +241,18 @@ def run_azure_health_checks(config: AzureConfig) -> dict[str, Any]:
         return results  # Can't proceed without subscription
 
     # Check 4: VM size/quota (only if vm_size is specified)
+    # Quota check is non-fatal — failures are reported as warnings, not hard errors.
+    # This prevents slow `az vm list-skus` calls from blocking the entire evaluation.
     if config.vm_size:
         zone = getattr(config, "zone", None)
-        quota_success, quota_result = check_azure_quotas(config.location, config.vm_size, zone)
+        timeout = getattr(config, "quota_check_timeout", 120)
+        quota_success, quota_result = check_azure_quotas(
+            config.location, config.vm_size, zone, timeout=timeout
+        )
         results["quotas"] = quota_success
         if not quota_success:
-            results["errors"].append(f"Quotas: {quota_result}")
+            results["warnings"] = results.get("warnings", [])
+            results["warnings"].append(f"Quotas: {quota_result}")
     else:
         # Skip quota check if no vm_size specified
         results["quotas"] = True
