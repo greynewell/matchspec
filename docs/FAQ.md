@@ -14,6 +14,8 @@ Quick answers to common questions about mcpbr. For detailed information, follow 
 
 mcpbr (Model Context Protocol Benchmark Runner) is a tool for evaluating MCP servers against real GitHub issues from benchmarks like SWE-bench and CyberGym. It provides quantitative comparison between tool-assisted and baseline agent performance, helping you prove whether your MCP server actually improves AI coding capabilities.
 
+Read the full backstory: **[Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/)**
+
 ### How do I get started with mcpbr?
 
 1. Install mcpbr: `pip install mcpbr`
@@ -1016,6 +1018,9 @@ Key areas:
 ### Where can I get help?
 
 - **Documentation**: [mcpbr.org](https://mcpbr.org/)
+- **About mcpbr**: [About page](about.md) — the project story and vision
+- **Blog**: [Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/) — the origin story
+- **Testing Philosophy**: [Philosophy page](philosophy.md) — evaluation design principles
 - **GitHub Issues**: [github.com/greynewell/mcpbr/issues](https://github.com/greynewell/mcpbr/issues)
 - **GitHub Discussions**: [github.com/greynewell/mcpbr/discussions](https://github.com/greynewell/mcpbr/discussions)
 

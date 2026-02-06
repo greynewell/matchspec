@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **About page**: New docs/about.md page with the mcpbr origin story, project vision, community
+  links, and prominent links to the [Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/) blog post
+- **Testing Philosophy page**: New docs/philosophy.md page expanding on the principle that
+  "MCP servers should be tested like APIs, not like plugins" with detailed evaluation design guidance
+- **Blog post integration**: Added links to the origin story blog post across README, docs homepage,
+  FAQ, architecture, MCP integration, best practices, and contributing pages
+- **Navigation update**: Added About section to mkdocs.yml with About and Testing Philosophy pages
+
 ### Fixed
 
 - **setup_command runs as mcpbr user in Docker** (#386): setup_command now executes as the

@@ -15,6 +15,8 @@ faq:
 
 Thank you for your interest in contributing to mcpbr! This guide covers everything you need to get started.
 
+To understand the project's vision and motivation, read [Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/) and the [About](about.md) page.
+
 ## Ways to Contribute
 
 - **Bug Reports**: Found a bug? [Open an issue](https://github.com/greynewell/mcpbr/issues/new)

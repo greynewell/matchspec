@@ -19,6 +19,8 @@ This page explains how mcpbr works internally and the design decisions behind it
 
 mcpbr is a benchmark runner that evaluates MCP (Model Context Protocol) servers by comparing agent performance with and without MCP tools on real GitHub issues from the SWE-bench dataset.
 
+A key architectural principle is that **MCP servers should be tested like APIs, not like plugins** — meaning mcpbr measures defined contracts, handles non-deterministic agent behavior statistically, and prioritizes reproducibility. For the full design rationale, read [Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/) and the [Testing Philosophy](philosophy.md) page.
+
 ## Execution Flow
 
 ```
@@ -231,6 +233,8 @@ This prevents orphaned containers from accumulating.
 
 ## Next Steps
 
+- [About mcpbr](about.md) - The project story and vision
+- [Testing Philosophy](philosophy.md) - Why MCP servers should be tested like APIs
 - [MCP Integration](mcp-integration.md) - How to test your MCP server
 - [API Reference](api/index.md) - Detailed module documentation
 - [Contributing](contributing.md) - How to extend mcpbr

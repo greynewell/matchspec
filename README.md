@@ -54,6 +54,8 @@ mcpbr runs controlled experiments: same model, same tasks, same environment - th
 - **Real GitHub issues** from SWE-bench (not toy examples)
 - **Reproducible results** via Docker containers with pinned dependencies
 
+> Read the full origin story: **[Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/)** — the problem, the approach, and where the project is headed.
+
 ## Supported Benchmarks
 
 mcpbr supports 30+ benchmarks across 10 categories through a flexible abstraction layer:
@@ -1489,4 +1491,4 @@ MIT - see [LICENSE](LICENSE) for details.
 
 ---
 
-Built by [Grey Newell](https://greynewell.com)
+Built by [Grey Newell](https://greynewell.com) | [Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/) | [About](https://mcpbr.org/about/)

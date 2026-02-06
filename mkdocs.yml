@@ -72,6 +72,9 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - About:
+      - About mcpbr: about.md
+      - Testing Philosophy: philosophy.md
   - Getting Started:
       - Installation: installation.md
       - Quick Start: index.md

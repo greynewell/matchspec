@@ -65,6 +65,9 @@ mcpbr runs controlled experiments: same model, same tasks, same environment - th
 - **Real GitHub issues** from SWE-bench (not toy examples)
 - **Reproducible results** via Docker containers with pinned dependencies
 
+!!! info "Origin Story"
+    Learn why mcpbr was built and the key insight that "MCP servers should be tested like APIs, not like plugins" in the blog post: **[Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/)**
+
 ## Quick Start
 
 ### Option 1: Use Example Configurations (Fastest)
@@ -163,6 +166,8 @@ Host Machine
 
 ## Next Steps
 
+- [About mcpbr](about.md) - The project story, philosophy, and vision
+- [Testing Philosophy](philosophy.md) - Why MCP servers should be tested like APIs, not plugins
 - [Examples](https://github.com/greynewell/mcpbr/tree/main/examples) - Browse 25+ example configurations
 - [FAQ](FAQ.md) - Frequently asked questions
 - [Best Practices](best-practices.md) - Guide to effective mcpbr usage
@@ -177,4 +182,4 @@ Host Machine
 
 ---
 
-Built by [Grey Newell](https://greynewell.com)
+Built by [Grey Newell](https://greynewell.com) | [Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/)

@@ -19,6 +19,8 @@ This guide explains how to benchmark your MCP (Model Context Protocol) server wi
 
 The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standard that allows AI models to access external tools and data sources. MCP servers expose tools that Claude can use during agent runs.
 
+mcpbr was built specifically to solve the problem of measuring whether MCP servers actually improve agent performance. Read [Why I Built mcpbr](https://greynewell.com/blog/why-i-built-mcpbr/) for the full context behind this approach.
+
 ## How mcpbr Uses MCP
 
 mcpbr runs two parallel evaluations for each task:
@@ -289,6 +291,7 @@ If Claude isn't using your MCP tools:
 
 ## Next Steps
 
+- [Testing Philosophy](philosophy.md) - Principles for meaningful MCP server evaluation
 - [Evaluation Results](evaluation-results.md) - Understanding output formats
 - [Architecture](architecture.md) - How mcpbr works internally
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions

@@ -25,6 +25,9 @@ faq:
 
 This guide helps you get the most value from mcpbr while avoiding common pitfalls. Whether you're testing a new MCP server, optimizing costs, or setting up CI/CD pipelines, these practices will help you work effectively.
 
+!!! tip "Why these practices matter"
+    mcpbr was built on the principle that [MCP servers should be tested like APIs, not like plugins](https://greynewell.com/blog/why-i-built-mcpbr/). These best practices put that philosophy into action. See the [Testing Philosophy](philosophy.md) page for the underlying principles.
+
 ## Quick Reference
 
 | Scenario | Recommended Approach |
@@ -2265,6 +2268,8 @@ for i, r in enumerate(results, 1):
 
 ## Additional Resources
 
+- [About mcpbr](about.md) - The project story and vision
+- [Testing Philosophy](philosophy.md) - Principles behind meaningful evaluation
 - [Configuration Guide](configuration.md) - Detailed configuration reference
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions
 - [CLI Reference](cli.md) - All command options
