@@ -58,6 +58,57 @@ def dict_to_namespace(data: Any) -> Any:
         return data
 
 
+# -- Cold-start mitigation helpers (#401) ------------------------------------
+
+# Seconds between each task launch in the first concurrent batch.
+_STAGGER_INTERVAL = 1.0
+
+
+def _stagger_delay(task_index: int, max_concurrent: int) -> float:
+    """Return the startup delay for a task to avoid cold-start contention.
+
+    Only the first batch (indices 0 .. max_concurrent-1) is staggered.
+    The very first task starts immediately; subsequent tasks in the batch
+    get an increasing delay so Docker image pulls and container creation
+    don't all hit at once.
+
+    Args:
+        task_index: Zero-based index of the task in launch order.
+        max_concurrent: Semaphore size / max parallelism.
+
+    Returns:
+        Delay in seconds (0.0 means start immediately).
+    """
+    if max_concurrent <= 1:
+        return 0.0
+    # Only stagger the first batch
+    if task_index >= max_concurrent:
+        return 0.0
+    return task_index * _STAGGER_INTERVAL
+
+
+def _should_retry_zero_iteration(result: dict[str, Any]) -> bool:
+    """Check whether a task result indicates a cold-start failure worth retrying.
+
+    A cold-start failure is characterised by zero iterations AND zero tokens
+    AND a timeout status — the agent never actually ran.
+
+    Args:
+        result: Single-run result dict from _run_mcp_evaluation or _run_baseline_evaluation.
+
+    Returns:
+        True if the result looks like a cold-start failure.
+    """
+    if result.get("status") != "timeout":
+        return False
+    if result.get("iterations", -1) != 0:
+        return False
+    tokens = result.get("tokens", {})
+    if tokens.get("input", -1) != 0 or tokens.get("output", -1) != 0:
+        return False
+    return True
+
+
 @dataclass
 class TaskResult:
     """Result for a single task."""
@@ -346,6 +397,20 @@ async def run_single_task(
                     cache,
                     mcp_logs_dir,
                 )
+                # Retry once on cold-start failure (#401)
+                if result.mcp and _should_retry_zero_iteration(result.mcp):
+                    logger.info("Retrying MCP task %s (zero-iteration cold-start)", instance_id)
+                    result.mcp = await _run_mcp_evaluation(
+                        task,
+                        config,
+                        docker_manager,
+                        benchmark,
+                        verbose,
+                        verbosity,
+                        mcp_log_writer if mcp_log_writer else log_file,
+                        cache,
+                        mcp_logs_dir,
+                    )
             finally:
                 if mcp_log_writer:
                     mcp_log_writer.close()
@@ -365,6 +430,19 @@ async def run_single_task(
                 baseline_log_writer if baseline_log_writer else log_file,
                 cache,
             )
+            # Retry once on cold-start failure (#401)
+            if result.baseline and _should_retry_zero_iteration(result.baseline):
+                logger.info("Retrying baseline task %s (zero-iteration cold-start)", instance_id)
+                result.baseline = await _run_baseline_evaluation(
+                    task,
+                    config,
+                    docker_manager,
+                    benchmark,
+                    verbose,
+                    verbosity,
+                    baseline_log_writer if baseline_log_writer else log_file,
+                    cache,
+                )
         finally:
             if baseline_log_writer:
                 baseline_log_writer.close()
@@ -1049,14 +1127,22 @@ async def run_evaluation(
     semaphore = asyncio.Semaphore(config.max_concurrent)
     budget_exceeded = False
     current_cost = 0.0
+    _task_launch_counter = 0
 
     async def run_with_semaphore(task: dict[str, Any]) -> TaskResult | None:
-        nonlocal current_cost, budget_exceeded
+        nonlocal current_cost, budget_exceeded, _task_launch_counter
 
         # Check budget before running task
         if config.budget and current_cost >= config.budget:
             budget_exceeded = True
             return None
+
+        # Stagger first-batch launches to avoid cold-start contention (#401)
+        my_index = _task_launch_counter
+        _task_launch_counter += 1
+        delay = _stagger_delay(my_index, config.max_concurrent)
+        if delay > 0:
+            await asyncio.sleep(delay)
 
         async with semaphore:
             result = await run_single_task(
