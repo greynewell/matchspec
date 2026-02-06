@@ -59,6 +59,12 @@ class CyberGymBenchmark:
 
         dataset = load_dataset(self.dataset, split="tasks")
 
+        # Optimization: use dataset.select() for early truncation when no
+        # filtering is needed — avoids materializing the entire dataset.
+        needs_full_scan = bool(task_ids) or bool(filter_difficulty) or bool(filter_category)
+        if not needs_full_scan and sample_size is not None and len(dataset) > sample_size:
+            dataset = dataset.select(range(sample_size))
+
         if task_ids:
             tasks = []
             for item in dataset:

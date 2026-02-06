@@ -51,6 +51,7 @@ docs = [
 ]
 openai = ["openai>=1.0.0"]
 gemini = ["google-generativeai>=0.3.0"]
+wandb = ["wandb>=0.16.0"]
 all-providers = ["openai>=1.0.0", "google-generativeai>=0.3.0"]
 # Note: terminal-bench package (pip install terminal-bench) can be installed
 # separately if HuggingFace dataset loading fails. It requires Python 3.12+.

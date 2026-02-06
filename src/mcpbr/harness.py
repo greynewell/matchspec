@@ -889,13 +889,31 @@ async def run_evaluation(
     console.print(f"[dim]Loading benchmark: {config.benchmark} (dataset: {dataset_name})[/dim]")
 
     # Load tasks from benchmark
+    load_sample_size = (
+        None
+        if (hasattr(config, "sampling_strategy") and config.sampling_strategy != "sequential")
+        else config.sample_size
+    )
     tasks = benchmark.load_tasks(
-        sample_size=config.sample_size,
+        sample_size=load_sample_size,
         task_ids=task_ids,
         filter_difficulty=config.filter_difficulty,
         filter_category=config.filter_category,
         filter_tags=config.filter_tags,
     )
+
+    # Apply sampling strategy (v0.10.0)
+    if hasattr(config, "sampling_strategy") and config.sampling_strategy != "sequential":
+        from .sampling import SamplingStrategy, sample_tasks
+
+        seed = config.random_seed  # None = non-deterministic
+        tasks = sample_tasks(
+            tasks,
+            sample_size=config.sample_size,
+            strategy=SamplingStrategy(config.sampling_strategy),
+            seed=seed,
+            stratify_field=getattr(config, "stratify_field", None),
+        )
 
     # Apply state tracker filtering and resume logic
     tasks_to_run = tasks
@@ -1413,6 +1431,34 @@ async def run_evaluation(
             "mcp_tool_stats": mcp_tool_stats,
             "comprehensive_stats": comprehensive_stats.to_dict(),
         }
+
+    # Fire completion notification (v0.10.0)
+    try:
+        from .notifications import NotificationEvent, dispatch_notification
+
+        notify_config = {}
+        if hasattr(config, "notify_slack_webhook") and config.notify_slack_webhook:
+            notify_config["slack_webhook"] = config.notify_slack_webhook
+        if hasattr(config, "notify_discord_webhook") and config.notify_discord_webhook:
+            notify_config["discord_webhook"] = config.notify_discord_webhook
+        if hasattr(config, "notify_email") and config.notify_email:
+            notify_config["email"] = config.notify_email
+        if notify_config:
+            total = len(results)
+            resolved = sum(1 for t in results if t.mcp and t.mcp.get("resolved"))
+            cost = sum((t.mcp.get("cost", 0) or 0) for t in results if t.mcp)
+            event = NotificationEvent(
+                event_type="completion",
+                benchmark=config.benchmark,
+                model=config.model,
+                total_tasks=total,
+                resolved_tasks=resolved,
+                resolution_rate=resolved / total if total > 0 else 0.0,
+                total_cost=cost,
+            )
+            dispatch_notification(notify_config, event)
+    except Exception:
+        pass  # Notifications must never block the evaluation flow
 
     return EvaluationResults(
         metadata=metadata,

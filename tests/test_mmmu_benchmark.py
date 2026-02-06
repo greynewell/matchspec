@@ -8,6 +8,20 @@ from mcpbr.benchmarks.base import Benchmark
 from mcpbr.benchmarks.mmmu import MMMUBenchmark
 
 
+def _mock_mmmu_dataset(items: list[dict]) -> MagicMock:
+    """Create a mock HuggingFace dataset from a list of dicts."""
+    mock_ds = MagicMock()
+    mock_ds.__iter__ = MagicMock(return_value=iter(items))
+    mock_ds.__len__ = MagicMock(return_value=len(items))
+
+    def _select(indices):
+        selected = [items[i] for i in indices]
+        return _mock_mmmu_dataset(selected)
+
+    mock_ds.select = MagicMock(side_effect=_select)
+    return mock_ds
+
+
 class TestMMMUBenchmarkInit:
     """Tests for MMMU benchmark initialization."""
 
@@ -543,11 +557,11 @@ class TestMMMULoadTasks:
     @patch("mcpbr.benchmarks.mmmu.load_dataset")
     def test_load_tasks_with_sample_size(self, mock_load_dataset: MagicMock) -> None:
         """Test loading tasks with sample size limit."""
-        mock_dataset = [
+        items = [
             {"id": f"q_{i}", "question": f"Question {i}", "options": [], "answer": "A"}
             for i in range(10)
         ]
-        mock_load_dataset.return_value = mock_dataset
+        mock_load_dataset.return_value = _mock_mmmu_dataset(items)
 
         benchmark = MMMUBenchmark()
         tasks = benchmark.load_tasks(sample_size=3)

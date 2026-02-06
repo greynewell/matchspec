@@ -511,6 +511,42 @@ class HarnessConfig(BaseModel):
         description="Path to a checkpoint file to resume evaluation from",
     )
 
+    # --- Sampling (v0.10.0) ---
+    sampling_strategy: str = Field(
+        default="sequential",
+        description="Sampling strategy: sequential, random, or stratified.",
+    )
+    random_seed: int | None = Field(
+        default=None,
+        description="Random seed for reproducible sampling (None = non-deterministic).",
+    )
+    stratify_field: str | None = Field(
+        default=None,
+        description="Field to stratify by when using stratified sampling.",
+    )
+
+    # --- Integrations (v0.10.0) ---
+    wandb_enabled: bool = Field(default=False, description="Enable W&B logging.")
+    wandb_project: str = Field(default="mcpbr", description="W&B project name.")
+
+    # --- Notifications (v0.10.0) ---
+    notify_slack_webhook: str | None = Field(
+        default=None, description="Slack webhook URL for completion notifications."
+    )
+    notify_discord_webhook: str | None = Field(
+        default=None, description="Discord webhook URL for completion notifications."
+    )
+    notify_email: dict[str, Any] | None = Field(
+        default=None, description="Email config dict (smtp_host, smtp_port, from_addr, to_addrs)."
+    )
+
+    @model_validator(mode="after")
+    def validate_stratified_sampling(self) -> "HarnessConfig":
+        """Ensure stratify_field is set when using stratified sampling."""
+        if self.sampling_strategy == "stratified" and not self.stratify_field:
+            raise ValueError("stratify_field is required when sampling_strategy is 'stratified'")
+        return self
+
     @field_validator("checkpoint_interval")
     @classmethod
     def validate_checkpoint_interval(cls, v: int) -> int:
@@ -561,6 +597,14 @@ class HarnessConfig(BaseModel):
         """Validate data_retention_days is positive if set."""
         if v is not None and v < 1:
             raise ValueError("data_retention_days must be at least 1")
+        return v
+
+    @field_validator("sampling_strategy")
+    @classmethod
+    def validate_sampling_strategy(cls, v: str) -> str:
+        allowed = {"sequential", "random", "stratified"}
+        if v not in allowed:
+            raise ValueError(f"sampling_strategy must be one of {allowed}, got '{v}'")
         return v
 
     @field_validator("provider")

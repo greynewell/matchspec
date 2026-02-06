@@ -80,6 +80,12 @@ def _create_mock_dataset(data: list[dict]) -> MagicMock:
     mock_ds = MagicMock()
     mock_ds.__iter__ = MagicMock(return_value=iter(data))
     mock_ds.__len__ = MagicMock(return_value=len(data))
+
+    def _select(indices):
+        selected = [data[i] for i in indices]
+        return _create_mock_dataset(selected)
+
+    mock_ds.select = MagicMock(side_effect=_select)
     return mock_ds
 
 

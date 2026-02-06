@@ -59,6 +59,13 @@ class TruthfulQABenchmark:
         _ = filter_tags
 
         dataset = load_dataset(self.dataset, self.subset, split="validation")
+
+        # Optimization: use dataset.select() for early truncation when no
+        # filtering is needed — avoids materializing the entire dataset.
+        needs_full_scan = bool(task_ids) or bool(filter_category)
+        if not needs_full_scan and sample_size is not None and len(dataset) > sample_size:
+            dataset = dataset.select(range(sample_size))
+
         tasks = list(dataset)
 
         if task_ids:

@@ -53,6 +53,12 @@ def _mock_dataset(tasks: list[dict[str, Any]]) -> MagicMock:
     dataset = MagicMock()
     dataset.__iter__ = MagicMock(return_value=iter(tasks))
     dataset.__len__ = MagicMock(return_value=len(tasks))
+
+    def _select(indices):
+        selected = [tasks[i] for i in indices]
+        return _mock_dataset(selected)
+
+    dataset.select = MagicMock(side_effect=_select)
     return dataset
 
 

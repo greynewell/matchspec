@@ -19,6 +19,7 @@ from rich.console import Console
 
 from .. import __version__
 from ..config import HarnessConfig
+from ..run_state import RunState
 from .base import InfrastructureProvider
 
 
@@ -448,6 +449,70 @@ class AzureProvider(InfrastructureProvider):
 
         console.print("[green]✓ Test task passed - setup validated[/green]")
 
+    @staticmethod
+    def get_run_status(state: "RunState") -> dict:
+        """Get the status of an Azure VM run.
+
+        Args:
+            state: RunState with vm_name and resource_group.
+
+        Returns:
+            Dict with status information from az vm show.
+        """
+        result = subprocess.run(
+            [
+                "az",
+                "vm",
+                "show",
+                "--name",
+                state.vm_name,
+                "--resource-group",
+                state.resource_group,
+                "--show-details",
+                "-o",
+                "json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return {"error": result.stderr.strip(), "status": "unknown"}
+        return json.loads(result.stdout)
+
+    @staticmethod
+    def get_ssh_command(state: "RunState") -> str:
+        """Get SSH command to connect to Azure VM.
+
+        Args:
+            state: RunState with vm_ip and ssh_key_path.
+
+        Returns:
+            SSH command string.
+        """
+        return f"ssh -i {state.ssh_key_path} azureuser@{state.vm_ip}"
+
+    @staticmethod
+    def stop_run(state: "RunState") -> None:
+        """Stop and deallocate an Azure VM.
+
+        Args:
+            state: RunState with vm_name and resource_group.
+        """
+        subprocess.run(
+            [
+                "az",
+                "vm",
+                "deallocate",
+                "--name",
+                state.vm_name,
+                "--resource-group",
+                state.resource_group,
+            ],
+            check=True,
+            timeout=300,
+        )
+
     async def setup(self) -> None:
         """Provision Azure VM and prepare for evaluation.
 
@@ -493,6 +558,23 @@ class AzureProvider(InfrastructureProvider):
 
             # Run test task
             await self._run_test_task()
+
+            # Save run state for monitoring
+            from datetime import datetime
+
+            run_state = RunState(
+                vm_name=self.vm_name,
+                vm_ip=self.vm_ip,
+                resource_group=self.azure_config.resource_group,
+                location=self.azure_config.location,
+                ssh_key_path=str(self.ssh_key_path),
+                config_path=str(self.config.config_path)
+                if hasattr(self.config, "config_path")
+                else "",
+                started_at=datetime.now().isoformat(),
+            )
+            state_dir = Path.home() / ".mcpbr"
+            run_state.save(state_dir / "run_state.json")
 
             console.print("[green]✓ Azure VM ready for evaluation[/green]")
 

@@ -113,6 +113,28 @@ def main() -> None:
     pass
 
 
+def _build_results_dict(results):
+    """Convert evaluation results to a plain dict for reports and integrations."""
+    if isinstance(results, dict):
+        return results
+    if hasattr(results, "to_dict"):
+        return results.to_dict()
+    if hasattr(results, "__dict__"):
+        return {
+            "metadata": results.metadata,
+            "summary": results.summary,
+            "tasks": [
+                {
+                    "instance_id": t.instance_id,
+                    "mcp": t.mcp,
+                    "baseline": t.baseline,
+                }
+                for t in results.tasks
+            ],
+        }
+    return json.loads(json.dumps(results, default=str))
+
+
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--config",
@@ -419,6 +441,33 @@ def main() -> None:
     is_flag=True,
     help="Enable comprehensive performance profiling (tool latency, memory, overhead)",
 )
+@click.option(
+    "--sampling-strategy",
+    type=click.Choice(["sequential", "random", "stratified"]),
+    default=None,
+    help="Sampling strategy for task selection.",
+)
+@click.option(
+    "--random-seed", type=int, default=None, help="Random seed for reproducible sampling."
+)
+@click.option(
+    "--stratify-field",
+    type=str,
+    default=None,
+    help="Field to stratify by (requires --sampling-strategy stratified).",
+)
+@click.option(
+    "--notify-slack", type=str, default=None, help="Slack webhook URL for completion notifications."
+)
+@click.option(
+    "--notify-discord",
+    type=str,
+    default=None,
+    help="Discord webhook URL for completion notifications.",
+)
+@click.option("--notify-email", type=str, default=None, help="Email config JSON string.")
+@click.option("--wandb/--no-wandb", default=None, help="Enable/disable W&B logging.")
+@click.option("--wandb-project", type=str, default=None, help="W&B project name.")
 def run(
     config_path: Path,
     model_override: str | None,
@@ -468,6 +517,14 @@ def run(
     filter_category: tuple[str, ...],
     filter_tags: tuple[str, ...],
     profile: bool,
+    sampling_strategy: str | None,
+    random_seed: int | None,
+    stratify_field: str | None,
+    notify_slack: str | None,
+    notify_discord: str | None,
+    notify_email: str | None,
+    wandb: bool | None,
+    wandb_project: str | None,
 ) -> None:
     """Run benchmark evaluation with the configured MCP server.
 
@@ -604,6 +661,27 @@ def run(
 
     if profile:
         config.enable_profiling = True
+
+    if sampling_strategy:
+        config.sampling_strategy = sampling_strategy
+    if random_seed is not None:
+        config.random_seed = random_seed
+    if stratify_field:
+        config.stratify_field = stratify_field
+    if notify_slack:
+        config.notify_slack_webhook = notify_slack
+    if notify_discord:
+        config.notify_discord_webhook = notify_discord
+    if notify_email:
+        try:
+            config.notify_email = json.loads(notify_email)
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error: --notify-email must be valid JSON: {e}[/red]")
+            sys.exit(1)
+    if wandb is not None:
+        config.wandb_enabled = wandb
+    if wandb_project:
+        config.wandb_project = wandb_project
 
     # Determine output directory AFTER all CLI overrides are applied
     import shutil
@@ -852,30 +930,13 @@ To archive:
         save_xml_results(results, xml_path)
         console.print(f"[green]XML results saved to {xml_path}[/green]")
 
+    # Build results_dict once for reports and W&B
+    results_dict = None
+
     # Enhanced report generation
     if html_path or pdf_path or enhanced_md_path:
         # Convert results to dict for report generators
-        results_dict = (
-            json.loads(json.dumps(results, default=str))
-            if not isinstance(results, dict)
-            else results
-        )
-        if hasattr(results, "to_dict"):
-            results_dict = results.to_dict()
-        elif hasattr(results, "__dict__"):
-            # Build results dict from EvaluationResults object
-            results_dict = {
-                "metadata": results.metadata,
-                "summary": results.summary,
-                "tasks": [
-                    {
-                        "instance_id": t.instance_id,
-                        "mcp": t.mcp,
-                        "baseline": t.baseline,
-                    }
-                    for t in results.tasks
-                ],
-            }
+        results_dict = _build_results_dict(results)
 
     if html_path:
         from .reports import HTMLReportGenerator
@@ -906,6 +967,17 @@ To archive:
                 f"[yellow]weasyprint not installed — saved print-ready HTML to {html_fallback}[/yellow]"
             )
             console.print("[dim]Install weasyprint for PDF: pip install weasyprint[/dim]")
+
+    # W&B logging (v0.10.0)
+    if getattr(config, "wandb_enabled", False):
+        try:
+            if results_dict is None:
+                results_dict = _build_results_dict(results)
+            from .wandb_integration import log_evaluation
+
+            log_evaluation(results_dict, project=getattr(config, "wandb_project", None))
+        except Exception as e:
+            click.echo(f"W&B logging failed: {e}", err=True)
 
     # Regression detection
     if baseline_results:
@@ -2774,6 +2846,110 @@ def tutorial_reset(tutorial_id):
     engine = TutorialEngine()
     engine.reset_tutorial(tutorial_id)
     console.print(f"[green]Reset progress for tutorial: {tutorial_id}[/green]")
+
+
+@main.command()
+@click.argument("results_file", type=click.Path(exists=True))
+def badge(results_file):
+    """Generate shields.io badge markdown from evaluation results."""
+    import json
+
+    from .badges import generate_badges_from_results
+
+    with open(results_file) as f:
+        results = json.load(f)
+    badges = generate_badges_from_results(results)
+    for b in badges:
+        click.echo(b)
+
+
+@main.command("export-metrics")
+@click.argument("results_file", type=click.Path(exists=True))
+@click.option("-o", "--output", type=click.Path(), default=None, help="Output file path.")
+def export_metrics_cmd(results_file, output):
+    """Export evaluation results as Prometheus metrics."""
+    import json
+    from pathlib import Path
+
+    from .prometheus import export_metrics
+
+    with open(results_file) as f:
+        results = json.load(f)
+    output_path = Path(output) if output else None
+    metrics = export_metrics(results, output_path=output_path)
+    if not output:
+        click.echo(metrics)
+    else:
+        click.echo(f"Metrics written to {output}")
+
+
+@main.command("run-status")
+def run_status_cmd():
+    """Show status of the current Azure VM run."""
+    import json
+    from pathlib import Path
+
+    from .infrastructure.azure import AzureProvider
+    from .run_state import RunState
+
+    state_path = Path.home() / ".mcpbr" / "run_state.json"
+    state = RunState.load(state_path)
+    if state is None:
+        click.echo("No active run found.")
+        return
+    status = AzureProvider.get_run_status(state)
+    click.echo(json.dumps(status, indent=2))
+
+
+@main.command("run-ssh")
+def run_ssh_cmd():
+    """Print SSH command for the current Azure VM run."""
+    from pathlib import Path
+
+    from .infrastructure.azure import AzureProvider
+    from .run_state import RunState
+
+    state_path = Path.home() / ".mcpbr" / "run_state.json"
+    state = RunState.load(state_path)
+    if state is None:
+        click.echo("No active run found.")
+        return
+    click.echo(AzureProvider.get_ssh_command(state))
+
+
+@main.command("run-stop")
+def run_stop_cmd():
+    """Stop and deallocate the current Azure VM run."""
+    from pathlib import Path
+
+    from .infrastructure.azure import AzureProvider
+    from .run_state import RunState
+
+    state_path = Path.home() / ".mcpbr" / "run_state.json"
+    state = RunState.load(state_path)
+    if state is None:
+        click.echo("No active run found.")
+        return
+    if not click.confirm(f"Deallocate VM {state.vm_name}?", default=False):
+        click.echo("Aborted.")
+        return
+    AzureProvider.stop_run(state)
+    click.echo(f"VM {state.vm_name} deallocated.")
+
+
+@main.command("run-logs")
+def run_logs_cmd():
+    """Show logs from the current run."""
+    from pathlib import Path
+
+    state_dir = Path.home() / ".mcpbr"
+    log_dir = state_dir / "logs"
+    if not log_dir.exists():
+        click.echo("No logs found.")
+        return
+    for log_file in sorted(log_dir.glob("*.log")):
+        click.echo(f"--- {log_file.name} ---")
+        click.echo(log_file.read_text())
 
 
 if __name__ == "__main__":

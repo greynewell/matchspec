@@ -66,6 +66,13 @@ class ARCBenchmark:
                 subset = "ARC-Challenge"
 
         dataset = load_dataset(self.dataset, subset, split="test")
+
+        # Optimization: use dataset.select() for early truncation when no
+        # filtering is needed — avoids materializing the entire dataset.
+        needs_full_scan = bool(task_ids)
+        if not needs_full_scan and sample_size is not None and len(dataset) > sample_size:
+            dataset = dataset.select(range(sample_size))
+
         tasks = list(dataset)
 
         if task_ids:

@@ -58,6 +58,12 @@ class HumanEvalBenchmark:
         _ = filter_tags
         dataset = load_dataset(self.dataset, split="test")
 
+        # Optimization: use dataset.select() for early truncation when no
+        # filtering is needed — avoids materializing the entire dataset.
+        needs_full_scan = bool(task_ids)
+        if not needs_full_scan and sample_size is not None and len(dataset) > sample_size:
+            dataset = dataset.select(range(sample_size))
+
         if task_ids:
             # Use set for O(1) lookup performance
             task_id_set = set(task_ids)

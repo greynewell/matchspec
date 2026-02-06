@@ -60,6 +60,12 @@ class MBPPBenchmark:
 
         dataset = load_dataset(self.dataset, self.subset, split="test")
 
+        # Optimization: use dataset.select() for early truncation when no
+        # filtering is needed — avoids materializing the entire dataset.
+        needs_full_scan = bool(task_ids)
+        if not needs_full_scan and sample_size is not None and len(dataset) > sample_size:
+            dataset = dataset.select(range(sample_size))
+
         if task_ids:
             task_id_set = set(task_ids)
             tasks = [item for item in dataset if str(item.get("task_id", "")) in task_id_set]
