@@ -2638,5 +2638,143 @@ def regression_cmd(
         sys.exit(1)
 
 
+@main.group()
+def tutorial():
+    """Interactive tutorials for learning mcpbr."""
+    pass
+
+
+@tutorial.command("list")
+def tutorial_list():
+    """List available tutorials."""
+    from .tutorial import TutorialEngine
+
+    engine = TutorialEngine()
+    tutorials = engine.list_tutorials()
+
+    table = Table(title="Available Tutorials")
+    table.add_column("ID", style="cyan")
+    table.add_column("Title", style="bold")
+    table.add_column("Difficulty")
+    table.add_column("Time", justify="right")
+    table.add_column("Status")
+
+    for t in tutorials:
+        progress = engine.get_progress(t.id)
+        if progress and progress.completed_at:
+            status = "[green]completed[/green]"
+        elif progress:
+            done = len(progress.completed_steps)
+            total = len(t.steps)
+            status = f"[yellow]{done}/{total}[/yellow]"
+        else:
+            status = "[dim]not started[/dim]"
+
+        diff_colors = {"beginner": "green", "intermediate": "yellow", "advanced": "red"}
+        color = diff_colors.get(t.difficulty, "white")
+        difficulty = f"[{color}]{t.difficulty}[/{color}]"
+
+        table.add_row(t.id, t.title, difficulty, f"{t.estimated_minutes} min", status)
+
+    console.print(table)
+
+
+@tutorial.command("start")
+@click.argument("tutorial_id")
+@click.option("--reset", is_flag=True, help="Reset progress and start over")
+def tutorial_start(tutorial_id, reset):
+    """Start or resume an interactive tutorial."""
+    from .tutorial import TutorialEngine
+
+    engine = TutorialEngine()
+    tut = engine.get_tutorial(tutorial_id)
+    if tut is None:
+        console.print(f"[red]Unknown tutorial: {tutorial_id}[/red]")
+        console.print("Run [cyan]mcpbr tutorial list[/cyan] to see available tutorials.")
+        sys.exit(1)
+
+    if reset:
+        engine.reset_tutorial(tutorial_id)
+
+    progress = engine.start_tutorial(tutorial_id)
+
+    console.print(f"\n[bold]{tut.title}[/bold]")
+    console.print(f"[dim]{tut.description}[/dim]\n")
+
+    for i, step in enumerate(tut.steps):
+        if step.id in progress.completed_steps:
+            continue
+
+        console.print(f"[bold cyan]Step {i + 1}/{len(tut.steps)}: {step.title}[/bold cyan]\n")
+        console.print(step.content)
+        console.print()
+
+        if step.action == "check" and step.validation:
+            ok, msg = engine.validate_step(step)
+            if ok:
+                console.print("[green]Check passed![/green]\n")
+            else:
+                console.print(f"[yellow]Check failed: {msg}[/yellow]")
+                if step.hint:
+                    console.print(f"[dim]Hint: {step.hint}[/dim]")
+                console.print("[dim]Press Enter to continue anyway, or Ctrl+C to quit.[/dim]")
+                try:
+                    input()
+                except (KeyboardInterrupt, EOFError):
+                    engine.save_progress(progress)
+                    console.print("\n[dim]Progress saved. Resume with:[/dim]")
+                    console.print(f"  [cyan]mcpbr tutorial start {tutorial_id}[/cyan]")
+                    return
+        else:
+            console.print("[dim]Press Enter to continue, or Ctrl+C to quit.[/dim]")
+            try:
+                input()
+            except (KeyboardInterrupt, EOFError):
+                engine.save_progress(progress)
+                console.print("\n[dim]Progress saved. Resume with:[/dim]")
+                console.print(f"  [cyan]mcpbr tutorial start {tutorial_id}[/cyan]")
+                return
+
+        progress = engine.complete_step(progress, step.id)
+
+    console.print("[bold green]Tutorial complete![/bold green]\n")
+
+
+@tutorial.command("progress")
+def tutorial_progress():
+    """Show tutorial completion progress."""
+    from .tutorial import TutorialEngine
+
+    engine = TutorialEngine()
+    tutorials = engine.list_tutorials()
+
+    for t in tutorials:
+        progress = engine.get_progress(t.id)
+        done = len(progress.completed_steps) if progress else 0
+        total = len(t.steps)
+        pct = (done / total * 100) if total > 0 else 0
+
+        if progress and progress.completed_at:
+            bar = "[green]" + "#" * 20 + "[/green]"
+            label = "completed"
+        else:
+            filled = int(pct / 5)
+            bar = "[cyan]" + "#" * filled + "[/cyan]" + "[dim]" + "-" * (20 - filled) + "[/dim]"
+            label = f"{done}/{total}"
+
+        console.print(f"  {t.title:<35} {bar} {pct:5.0f}% ({label})")
+
+
+@tutorial.command("reset")
+@click.argument("tutorial_id")
+def tutorial_reset(tutorial_id):
+    """Reset tutorial progress."""
+    from .tutorial import TutorialEngine
+
+    engine = TutorialEngine()
+    engine.reset_tutorial(tutorial_id)
+    console.print(f"[green]Reset progress for tutorial: {tutorial_id}[/green]")
+
+
 if __name__ == "__main__":
     main()

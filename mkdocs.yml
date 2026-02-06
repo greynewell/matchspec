@@ -1,6 +1,6 @@
 site_name: mcpbr Documentation
 site_description: Benchmark runner for evaluating AI agents and MCP servers across 25+ benchmarks including SWE-bench, HumanEval, GSM8K, CyberGym, and more
-site_url: https://greynewell.github.io/mcpbr/
+site_url: https://mcpbr.org/
 repo_url: https://github.com/greynewell/mcpbr
 repo_name: greynewell/mcpbr
 edit_uri: edit/main/docs/
@@ -75,6 +75,7 @@ nav:
   - Getting Started:
       - Installation: installation.md
       - Quick Start: index.md
+      - Tutorials: tutorials.md
       - FAQ: FAQ.md
   - User Guide:
       - Best Practices: best-practices.md
@@ -120,7 +121,14 @@ nav:
       - Claude Code Plugin: claude-code-plugin.md
   - Reference:
       - Architecture: architecture.md
-      - API Reference: api/index.md
+      - API Reference:
+          - Overview: api/index.md
+          - SDK: api/sdk.md
+          - Configuration: api/configuration.md
+          - Benchmarks: api/benchmarks.md
+          - Analytics: api/analytics.md
+          - Reports: api/reports.md
+      - Plugin Development: plugin-development.md
   - Community:
       - Contributing: contributing.md
       - Troubleshooting: troubleshooting.md

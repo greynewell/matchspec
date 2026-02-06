@@ -9,6 +9,16 @@ faq:
     a: "1) Test server standalone, 2) Run quick-test template with n=1, 3) Scale to n=5-10, 4) Analyze tool usage in results, 5) Optimize based on findings, 6) Run full evaluation with n=25-50+."
   - q: "How do I avoid common mcpbr pitfalls?"
     a: "Test Docker setup first, verify API keys are set, use pre-built images when available, set appropriate timeouts for your tasks, start with small samples, and always save results to enable comparisons and regression detection."
+  - q: "How should I secure API keys when running mcpbr?"
+    a: "Never hardcode API keys in config files. Use environment variables, .env files (gitignored), or secret managers like 1Password CLI, AWS Secrets Manager, or HashiCorp Vault. In CI/CD, store keys as repository secrets."
+  - q: "How do I optimize mcpbr performance for large benchmarks?"
+    a: "Tune max_concurrent based on available RAM (roughly 1-3 GB per container), use pre-built Docker images, enable result caching with cache_enabled, and use setup_command for MCP server pre-computation. Monitor with docker stats."
+  - q: "How do I set up mcpbr in a CI/CD pipeline?"
+    a: "Install mcpbr in your CI runner, set ANTHROPIC_API_KEY from secrets, use small sample sizes (n=10) for PRs, enable regression detection with --baseline-results and --regression-threshold, and output JUnit XML for test reporting."
+  - q: "How do I set a budget limit for mcpbr evaluations?"
+    a: "Set budget: 50.00 in your config YAML to cap spending at $50. Combine with sample_size, max_iterations, and timeout_seconds for layered cost control. Monitor actual costs via token usage in JSON output."
+  - q: "How do I make statistically valid comparisons between MCP servers?"
+    a: "Use the same task set (--task flags), same model, same benchmark, and same parameters. Sample sizes below 25 have high variance. Check if confidence intervals overlap before concluding one config is better."
 ---
 
 # Best Practices Guide
@@ -1220,6 +1230,1039 @@ mcpbr run -c config-b.yaml -n 10  # Different random 10
 - [ ] Budget confirmed
 - [ ] Results will be saved
 
+## Security Best Practices
+
+Securing your mcpbr deployment is critical, especially when running evaluations in CI/CD pipelines, shared environments, or with third-party MCP servers.
+
+### API Key Management
+
+!!! danger "Never commit API keys to version control"
+    API keys in configuration files or source code are one of the most common security incidents. Use environment variables or secret management tools exclusively.
+
+**Hierarchy of Key Management (from basic to advanced):**
+
+| Method | Security Level | Best For |
+|--------|---------------|----------|
+| Environment variable | Basic | Local development |
+| `.env` file (gitignored) | Better | Team development |
+| Shell profile (`~/.zshrc`) | Better | Personal machines |
+| Secret manager (1Password, AWS SM) | Best | Production / CI/CD |
+| Hardware security module (HSM) | Maximum | Enterprise deployments |
+
+**Using `.env` files with mcpbr:**
+
+mcpbr automatically loads `.env` files from the current directory. Create one but ensure it is never committed:
+
+```bash
+# Create .env file
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+echo 'SUPERMODEL_API_KEY=your-key-here' >> .env
+
+# Ensure .env is gitignored
+echo '.env' >> .gitignore
+```
+
+Then reference variables in your config:
+
+```yaml
+mcp_server:
+  env:
+    SUPERMODEL_API_KEY: "${SUPERMODEL_API_KEY}"
+```
+
+**Using secret managers in CI/CD:**
+
+```bash
+# AWS Secrets Manager
+export ANTHROPIC_API_KEY=$(aws secretsmanager get-secret-value \
+  --secret-id mcpbr/anthropic-key --query SecretString --output text)
+
+# 1Password CLI
+export ANTHROPIC_API_KEY=$(op read "op://vault/mcpbr/api_key")
+
+# HashiCorp Vault
+export ANTHROPIC_API_KEY=$(vault kv get -field=api_key secret/mcpbr)
+```
+
+!!! tip "Rotate keys regularly"
+    Set a reminder to rotate your API keys on a regular schedule (e.g., every 90 days). If you suspect a key has been exposed, rotate it immediately in the [Anthropic Console](https://console.anthropic.com/).
+
+### Docker Security
+
+mcpbr runs evaluation tasks inside Docker containers, which provides a baseline of isolation. You can harden this further.
+
+**Resource limits to prevent runaway containers:**
+
+```yaml
+# In your config, control concurrency to bound resource usage
+max_concurrent: 4          # Limit parallel containers
+timeout_seconds: 600       # Hard timeout per task
+max_iterations: 30         # Cap agent turns
+```
+
+**Monitor container activity:**
+
+```bash
+# Watch container resource usage in real time
+docker stats --filter "name=mcpbr"
+
+# List all mcpbr containers (including stopped)
+docker ps -a --filter "name=mcpbr"
+```
+
+**Network isolation for non-API workloads:**
+
+```yaml
+# If your MCP server does not need network access, isolate it
+docker_network_mode: "none"
+```
+
+!!! warning "Containers run as root by default"
+    Docker containers in mcpbr run as root within the container to ensure dependency installation and test execution work correctly. This is isolated from the host via Docker's namespacing, but avoid mounting sensitive host directories as volumes.
+
+**Volume mount security:**
+
+```yaml
+# Only mount what is necessary
+volumes:
+  "/path/to/cache": "/cache"  # Read-write mount for caching
+
+# NEVER mount these:
+# volumes:
+#   "/etc": "/host-etc"        # Host system configuration
+#   "/var/run/docker.sock": "/var/run/docker.sock"  # Docker socket
+#   "~/.ssh": "/root/.ssh"     # SSH keys
+```
+
+### MCP Server Sandboxing
+
+!!! warning "Third-party MCP servers execute arbitrary code"
+    MCP servers run commands and access files within the Docker container. Only use MCP servers you trust, and review their source code before deploying in production.
+
+**Sandboxing recommendations:**
+
+1. **Review server source code** before first use
+2. **Pin server versions** to prevent supply-chain attacks:
+   ```yaml
+   mcp_server:
+     command: "npx"
+     args: ["-y", "@modelcontextprotocol/server-filesystem@1.2.3", "{workdir}"]
+   ```
+3. **Limit environment variables** exposed to the server -- only pass what is required
+4. **Use `setup_command`** cautiously -- it runs with full container privileges
+
+### Output Sanitization
+
+**Logs and results may contain sensitive data:**
+
+- Task logs can include code snippets from repositories
+- API conversations are recorded in per-instance logs
+- Results JSON contains tool call traces
+
+**Secure your outputs:**
+
+```bash
+# Restrict log directory permissions
+mcpbr run -c config.yaml --log-dir logs/
+chmod 700 logs/
+
+# Redact sensitive fields before sharing results
+cat results.json | jq 'del(.tasks[].mcp.conversation)' > results-safe.json
+```
+
+!!! tip "Audit before sharing"
+    Before sharing results files, reports, or logs externally, review them for any API keys, internal paths, or proprietary code that may have been captured during evaluation.
+
+### Secure CI/CD Pipeline Configuration
+
+```yaml
+# .github/workflows/benchmark.yml
+name: MCP Benchmark (Secure)
+
+on:
+  pull_request:
+    paths: ['mcp-server/**']
+
+permissions:
+  contents: read  # Minimal permissions
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    environment: benchmarks  # Use a protected environment
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcpbr
+        run: pip install mcpbr
+
+      - name: Run benchmark
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          mcpbr run -c config.yaml -n 10 -o results.json
+
+      - name: Upload results (restricted retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: results.json
+          retention-days: 30  # Don't keep results forever
+```
+
+**CI/CD security checklist:**
+
+- [ ] API keys stored as repository or environment secrets (never in workflow files)
+- [ ] Workflow permissions set to minimum required (`contents: read`)
+- [ ] Protected environments for production benchmarks
+- [ ] Artifact retention policies configured
+- [ ] Branch protection rules on main branch
+- [ ] Audit logs enabled for secret access
+
+---
+
+## Performance Optimization
+
+Beyond the basic performance tips covered earlier, this section provides advanced optimization strategies for large-scale evaluations.
+
+### Concurrent Task Execution
+
+The `max_concurrent` setting controls how many Docker containers run simultaneously. Tuning this requires balancing CPU, memory, network bandwidth, and API rate limits.
+
+**Recommended settings by machine profile:**
+
+| Machine Profile | RAM | CPU Cores | `max_concurrent` | Notes |
+|----------------|-----|-----------|-------------------|-------|
+| Laptop (8 GB) | 8 GB | 4 | 1-2 | Memory constrained |
+| Workstation (16 GB) | 16 GB | 8 | 3-4 | Good balance |
+| Power workstation (32 GB) | 32 GB | 12+ | 4-8 | Check API rate limits |
+| Cloud VM (64+ GB) | 64+ GB | 16+ | 8-12 | Monitor network I/O |
+| Apple Silicon (16 GB) | 16 GB | 8-10 | 2-3 | Emulation overhead |
+
+```yaml
+# Conservative (safe default)
+max_concurrent: 4
+
+# Aggressive (high-end hardware with sufficient API quota)
+max_concurrent: 8
+```
+
+!!! tip "Monitor and adjust"
+    Start with `max_concurrent: 4` and monitor with `docker stats`. If you see containers being OOM-killed or Docker becoming unresponsive, reduce concurrency. If CPU and memory utilization are low, increase it.
+
+### Docker Image Caching and Pre-built Images
+
+Docker image pulls and builds are often the largest time cost for first-time runs. Optimize this with caching strategies.
+
+**Always use pre-built images:**
+
+```yaml
+use_prebuilt_images: true  # Default and recommended
+```
+
+**Pre-pull images before evaluation:**
+
+```bash
+# Pre-pull common base images to avoid per-task download delays
+docker pull ghcr.io/epoch-research/swe-bench.eval.x86_64.django__django-11099
+docker pull ghcr.io/epoch-research/swe-bench.eval.x86_64.astropy__astropy-12907
+```
+
+**Docker build cache optimization:**
+
+```bash
+# Ensure Docker build cache is not pruned aggressively
+docker system df  # Check disk usage
+
+# Prune only dangling images, keep build cache
+docker image prune -f  # Remove dangling only
+```
+
+!!! warning "Disk space management"
+    SWE-bench pre-built images are large (1-3 GB each). A full evaluation may require 50+ GB of Docker image storage. Monitor disk usage with `docker system df` and clean up between runs with `mcpbr cleanup`.
+
+### Dataset Caching
+
+mcpbr supports result caching to avoid re-running identical evaluations. This is especially valuable during iterative development.
+
+```yaml
+# Enable caching
+cache_enabled: true
+cache_dir: "/path/to/cache"  # Default: ~/.cache/mcpbr
+```
+
+**When caching helps most:**
+
+- Re-running after a configuration change that only affects one side (MCP or baseline)
+- Iterating on MCP server changes with the same task set
+- Resuming after a partial failure
+
+**Persistent volume caching for MCP servers:**
+
+If your MCP server performs expensive pre-computation (like codebase indexing), use the `setup_command` and `volumes` features:
+
+```yaml
+mcp_server:
+  command: "npx"
+  args: ["-y", "@supermodeltools/mcp-server", "{workdir}"]
+  setup_command: "npx -y @supermodeltools/mcp-server --index {workdir}"
+  setup_timeout_ms: 900000  # 15 minutes for indexing
+
+# Mount a persistent volume for caching across tasks
+volumes:
+  "/tmp/mcpbr-cache": "/cache"
+```
+
+### Memory Management for Large Benchmarks
+
+Full dataset evaluations (300+ tasks) can strain system memory. Use these strategies to stay within bounds.
+
+```yaml
+# Reduce concurrency to lower peak memory
+max_concurrent: 2
+
+# Use the graceful degradation system to handle failures
+continue_on_error: true
+max_failures: 10  # Stop if too many tasks fail (likely a systemic issue)
+
+# Enable checkpointing for crash recovery
+checkpoint_interval: 1  # Save state after every task
+```
+
+**System-level memory monitoring:**
+
+```bash
+# Monitor Docker memory usage
+docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}"
+
+# Set Docker Desktop memory limit (macOS/Windows)
+# Docker Desktop > Settings > Resources > Memory: 8-12 GB
+```
+
+!!! example "Memory budget rule of thumb"
+    Each concurrent container uses approximately 1-3 GB of RAM. For a machine with 16 GB total, allocate 8-12 GB to Docker and set `max_concurrent` to 3-4.
+
+### Network Optimization for Remote Evaluations
+
+**Reduce network latency:**
+
+- Use a cloud VM in the same region as the Anthropic API endpoint
+- Pre-pull Docker images before starting evaluations
+- Use `setup_command` to front-load network-intensive operations
+
+**Azure infrastructure mode for large runs:**
+
+```yaml
+infrastructure:
+  mode: azure
+  azure:
+    resource_group: "mcpbr-eval"
+    location: "eastus"  # Close to Anthropic API
+    cpu_cores: 8
+    memory_gb: 32
+    disk_gb: 250
+    auto_shutdown: true
+```
+
+---
+
+## CI/CD Integration
+
+This section provides production-ready CI/CD configurations for automated benchmarking.
+
+### GitHub Actions Example Workflow
+
+**Complete workflow with caching, regression detection, and notifications:**
+
+```yaml
+name: MCP Server Benchmark
+
+on:
+  pull_request:
+    paths: ['mcp-server/**', 'config.yaml']
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 6 AM UTC
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install mcpbr
+        run: pip install mcpbr
+
+      - name: Cache Docker images
+        uses: actions/cache@v4
+        with:
+          path: /tmp/docker-cache
+          key: docker-${{ runner.os }}-${{ hashFiles('config.yaml') }}
+          restore-keys: docker-${{ runner.os }}-
+
+      - name: Load cached Docker images
+        run: |
+          if [ -d /tmp/docker-cache ]; then
+            for img in /tmp/docker-cache/*.tar; do
+              docker load -i "$img" 2>/dev/null || true
+            done
+          fi
+
+      - name: Download baseline results
+        uses: actions/download-artifact@v4
+        with:
+          name: baseline-results
+          path: .
+        continue-on-error: true  # OK if no baseline exists yet
+
+      - name: Run benchmark
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          ARGS="-c config.yaml -n 10 -o results.json --output-junit junit.xml"
+          if [ -f baseline.json ]; then
+            ARGS="$ARGS --baseline-results baseline.json --regression-threshold 0.1"
+          fi
+          mcpbr run $ARGS
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: junit.xml
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: |
+            results.json
+            junit.xml
+          retention-days: 90
+
+      - name: Update baseline (main branch only)
+        if: github.ref == 'refs/heads/main' && success()
+        run: cp results.json baseline.json
+
+      - name: Upload baseline
+        if: github.ref == 'refs/heads/main' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-results
+          path: baseline.json
+          retention-days: 365
+```
+
+### GitLab CI Example
+
+```yaml
+stages:
+  - benchmark
+  - report
+
+mcpbr-benchmark:
+  stage: benchmark
+  image: python:3.11
+  services:
+    - docker:24.0-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - pip install mcpbr
+  script:
+    - mcpbr run -c config.yaml -n 10 -o results.json --output-junit junit.xml
+  artifacts:
+    reports:
+      junit: junit.xml
+    paths:
+      - results.json
+    expire_in: 90 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - mcp-server/**
+        - config.yaml
+
+benchmark-report:
+  stage: report
+  image: python:3.11
+  needs: ["mcpbr-benchmark"]
+  script:
+    - pip install mcpbr
+    - |
+      python3 -c "
+      import json
+      with open('results.json') as f:
+          r = json.load(f)
+      summary = r.get('summary', {})
+      mcp = summary.get('mcp', {})
+      print(f'MCP Resolution Rate: {mcp.get(\"rate\", 0):.1%}')
+      print(f'Tasks Resolved: {mcp.get(\"resolved\", 0)}/{mcp.get(\"total\", 0)}')
+      "
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+```
+
+### Running in CI with Cost Budgets
+
+!!! warning "CI benchmarks incur API costs on every run"
+    Without cost controls, a misconfigured CI pipeline can quickly accumulate significant API charges. Always set explicit limits.
+
+**Cost control configuration for CI:**
+
+```yaml
+# ci-config.yaml -- optimized for CI cost control
+model: "sonnet"
+sample_size: 10              # Small sample for PRs
+max_concurrent: 2            # Don't overload CI runners
+timeout_seconds: 300         # 5-minute hard limit per task
+max_iterations: 15           # Cap agent turns
+budget: 25.00                # Hard budget cap in USD
+use_prebuilt_images: true
+continue_on_error: true
+max_failures: 3              # Stop early on systemic issues
+```
+
+**Conditional execution to avoid unnecessary runs:**
+
+```yaml
+# Only run benchmarks when MCP server code changes
+on:
+  pull_request:
+    paths:
+      - 'mcp-server/**'
+      - 'config.yaml'
+      - 'benchmarks/**'
+```
+
+**Environment-based sample sizing:**
+
+```yaml
+# In your workflow
+- name: Set sample size
+  run: |
+    if [ "${{ github.event_name }}" = "schedule" ]; then
+      echo "SAMPLE_SIZE=50" >> $GITHUB_ENV   # Weekly: larger sample
+    elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+      echo "SAMPLE_SIZE=25" >> $GITHUB_ENV   # Main: medium sample
+    else
+      echo "SAMPLE_SIZE=10" >> $GITHUB_ENV   # PRs: small sample
+    fi
+
+- name: Run benchmark
+  run: mcpbr run -c config.yaml -n $SAMPLE_SIZE -o results.json
+```
+
+### Regression Detection in CI Pipelines
+
+Use regression detection to automatically fail builds when MCP server performance degrades.
+
+```bash
+# Run with regression detection
+mcpbr run -c config.yaml -n 25 \
+  --baseline-results baseline.json \
+  --regression-threshold 0.1 \
+  -o current.json
+```
+
+The `--regression-threshold 0.1` flag means the pipeline will fail (exit code 1) if the MCP resolution rate drops by more than 10 percentage points compared to the baseline.
+
+**Recommended thresholds:**
+
+| Context | Threshold | Rationale |
+|---------|-----------|-----------|
+| PR checks | 0.15 | Tolerant -- small samples have high variance |
+| Main branch | 0.10 | Moderate -- catch meaningful regressions |
+| Release gate | 0.05 | Strict -- protect production quality |
+
+### Caching Strategies in CI
+
+**Cache Docker images between runs:**
+
+```yaml
+- name: Cache Docker images
+  uses: actions/cache@v4
+  with:
+    path: /tmp/docker-cache
+    key: docker-${{ hashFiles('config.yaml') }}-${{ github.sha }}
+    restore-keys: |
+      docker-${{ hashFiles('config.yaml') }}-
+      docker-
+```
+
+**Cache mcpbr results:**
+
+```yaml
+- name: Cache evaluation results
+  uses: actions/cache@v4
+  with:
+    path: ~/.cache/mcpbr
+    key: mcpbr-cache-${{ hashFiles('config.yaml') }}
+```
+
+**Cache pip dependencies:**
+
+```yaml
+- name: Cache pip
+  uses: actions/cache@v4
+  with:
+    path: ~/.cache/pip
+    key: pip-${{ hashFiles('**/requirements*.txt') }}
+```
+
+---
+
+## Troubleshooting Guide
+
+This section provides a quick-reference table for common errors and detailed debugging techniques.
+
+### Common Errors and Solutions
+
+| Error | Likely Cause | Solution |
+|-------|-------------|----------|
+| `Cannot connect to Docker daemon` | Docker not running | Start Docker Desktop or run `sudo systemctl start docker` |
+| `ANTHROPIC_API_KEY not set` | Missing environment variable | `export ANTHROPIC_API_KEY="sk-ant-..."` |
+| `Timeout after 300 seconds` | Task too complex or slow hardware | Increase `timeout_seconds: 600` and reduce `max_concurrent` |
+| `OOM killed` / container exits 137 | Insufficient memory | Reduce `max_concurrent`, increase Docker memory allocation |
+| `Connection refused` / `ECONNREFUSED` | Network issue or MCP server crash | Check server logs, verify `docker network ls`, restart Docker |
+| `MCP server add failed (exit 1)` | Server command not found or misconfigured | Test server standalone: `npx -y @your/server /tmp/test` |
+| `Patch does not apply` | Agent changes conflict with test patches | Agent behavior issue -- increase `max_iterations` or adjust prompt |
+| `Rate limit exceeded` | Too many concurrent API calls | Reduce `max_concurrent: 2` and check Anthropic Console quota |
+| `No space left on device` | Docker images filling disk | Run `mcpbr cleanup -f` and `docker system prune` |
+| `Pre-built image not found` | Image not available for this task | Normal -- mcpbr falls back to building from scratch |
+| `Config file not found` | Wrong path to YAML | Verify path: `ls -la config.yaml` |
+| `Invalid model` | Unsupported model name | Run `mcpbr models` for valid options |
+| `MCP server registration timed out` | Server startup taking too long | Increase `startup_timeout_ms` in MCP server config |
+| `Tool execution timed out` | MCP tool call exceeding limit | Increase `tool_timeout_ms` in MCP server config |
+
+### Debugging Techniques
+
+**Verbose mode levels:**
+
+```bash
+# Standard output (progress bars, summary)
+mcpbr run -c config.yaml
+
+# Verbose: task progress and summary details
+mcpbr run -c config.yaml -v
+
+# Very verbose: detailed tool calls and agent interactions
+mcpbr run -c config.yaml -vv
+```
+
+**Structured JSON logging:**
+
+```bash
+# Enable structured logs for machine parsing
+MCPBR_LOG_LEVEL=DEBUG mcpbr run -c config.yaml -n 1 --log-dir debug/
+```
+
+!!! example "Log analysis workflow"
+    ```bash
+    # 1. Run a single task with maximum debugging
+    mcpbr run -c config.yaml -n 1 -vv --log-dir debug/
+
+    # 2. List generated log files
+    ls debug/
+
+    # 3. Extract system events (errors, warnings)
+    cat debug/*.json | jq '.events[] | select(.type == "system")'
+
+    # 4. Extract tool usage sequence
+    cat debug/*.json | jq '.events[] | select(.type == "assistant") |
+      .message.content[] | select(.type == "tool_use") | .name'
+
+    # 5. Check for MCP-specific tool calls
+    cat debug/*.json | jq '.events[] | select(.type == "assistant") |
+      .message.content[] | select(.type == "tool_use") |
+      select(.name | startswith("mcp__"))'
+    ```
+
+**Profiling evaluations:**
+
+```yaml
+# Enable comprehensive performance profiling
+enable_profiling: true
+```
+
+This records tool latency, memory usage, and overhead metrics for each task, helping identify bottlenecks.
+
+**Checking MCP server health:**
+
+```bash
+# View MCP server logs for a specific instance
+cat ~/.mcpbr_state/logs/*_mcp.log
+
+# Follow logs in real time during evaluation
+tail -f ~/.mcpbr_state/logs/*.log
+
+# Test server independently
+npx -y @modelcontextprotocol/server-filesystem /tmp/test
+```
+
+**Checkpoint recovery after crashes:**
+
+If mcpbr crashes mid-evaluation, use checkpoint files to understand what completed:
+
+```bash
+# Check for checkpoint files
+ls .mcpbr_run_*/checkpoint.json
+
+# View checkpoint state
+cat .mcpbr_run_*/checkpoint.json | jq '{
+  completed: (.completed | length),
+  failed: (.failed | length),
+  skipped: (.skipped | length)
+}'
+
+# Resume from checkpoint
+mcpbr run -c config.yaml --resume-from-checkpoint .mcpbr_run_20260201/checkpoint.json
+```
+
+### Getting Help (Troubleshooting)
+
+!!! tip "Before opening an issue"
+    Run through this checklist to gather the information needed for a quick resolution:
+
+    1. **Verify prerequisites**: `docker info`, `which claude`, `echo $ANTHROPIC_API_KEY | head -c 10`
+    2. **Reproduce with minimal config**: Single task, verbose output
+    3. **Collect version info**: `mcpbr --version`, `python --version`, `docker --version`
+    4. **Gather logs**: Run with `--log-dir debug/` and include relevant excerpts
+    5. **Redact secrets**: Remove API keys, internal paths, proprietary code from logs before sharing
+
+**Where to go:**
+
+- [GitHub Issues](https://github.com/greynewell/mcpbr/issues) -- Bug reports and feature requests
+- [GitHub Discussions](https://github.com/greynewell/mcpbr/discussions) -- Questions and community help
+- [Documentation](https://mcpbr.org/) -- Full reference guides
+
+---
+
+## Cost Management
+
+This section provides detailed strategies for understanding, estimating, and controlling evaluation costs.
+
+### Budget Configuration and Monitoring
+
+mcpbr supports a hard budget cap that halts evaluation when the estimated spend reaches the limit:
+
+```yaml
+# Set a hard budget cap (in USD)
+budget: 50.00
+```
+
+When the budget is reached, mcpbr will:
+
+1. Complete the currently running tasks
+2. Skip remaining tasks
+3. Save partial results to the output file
+4. Report the budget limit in the summary
+
+!!! tip "Combine budget with sample size for double protection"
+    ```yaml
+    budget: 25.00        # Hard cost cap
+    sample_size: 25      # Task count cap
+    max_iterations: 15   # Per-task turn cap
+    timeout_seconds: 300 # Per-task time cap
+    ```
+
+### Model Cost Comparison Table
+
+Use this table to estimate costs and select the right model for your evaluation stage. Prices are per million tokens (MTok) as of January 2026.
+
+| Model | Provider | Input $/MTok | Output $/MTok | Best For |
+|-------|----------|-------------|--------------|----------|
+| Claude Haiku 4.5 | Anthropic | $1.00 | $5.00 | Development, iteration, smoke tests |
+| Claude Sonnet 4.5 | Anthropic | $3.00 | $15.00 | Production evaluation (recommended) |
+| Claude Opus 4.5 | Anthropic | $5.00 | $25.00 | Maximum performance benchmarks |
+| GPT-4o | OpenAI | $2.50 | $10.00 | Cross-provider comparison |
+| GPT-4o Mini | OpenAI | $0.15 | $0.60 | Ultra-low-cost exploration |
+| Gemini 2.0 Flash | Google | $0.10 | $0.40 | Cheapest option for prototyping |
+| Gemini 1.5 Pro | Google | $1.25 | $5.00 | Long-context evaluations |
+| Qwen Plus | Alibaba | $0.40 | $1.20 | Budget evaluations |
+| Qwen Max | Alibaba | $1.20 | $6.00 | Best Qwen performance |
+
+!!! tip "Cost estimation formula"
+    ```
+    Estimated cost = sample_size x avg_tokens_per_task x (input_rate + output_rate)
+    ```
+    For Sonnet with typical SWE-bench tasks (~15K input + ~10K output tokens per task):
+    ```
+    25 tasks x (15K x $3/MTok + 10K x $15/MTok) = 25 x ($0.045 + $0.15) = ~$4.88
+    ```
+    Actual costs vary based on task complexity and iteration count.
+
+### Cost-Effective Evaluation Strategies
+
+**The incremental evaluation ladder:**
+
+| Phase | Model | Sample | MCP Only? | Est. Cost | Purpose |
+|-------|-------|--------|-----------|-----------|---------|
+| 1. Smoke test | haiku | 1 | Yes (`-M`) | < $0.10 | Verify setup |
+| 2. Quick validation | haiku | 5 | Yes (`-M`) | < $1.00 | Check tool usage |
+| 3. Small comparison | sonnet | 10 | No | $5-10 | Compare MCP vs baseline |
+| 4. Medium evaluation | sonnet | 25 | No | $10-30 | Statistical significance |
+| 5. Full benchmark | sonnet | 50+ | No | $50-150 | Production results |
+
+**Skip baseline during development:**
+
+```bash
+# Only run MCP agent while iterating on server config
+mcpbr run -c config.yaml -n 5 -M  # Saves ~50% cost
+```
+
+**Use Haiku for iteration, Sonnet for final results:**
+
+```yaml
+# dev-config.yaml
+model: "haiku"
+sample_size: 5
+max_iterations: 5
+```
+
+```yaml
+# prod-config.yaml
+model: "sonnet"
+sample_size: 50
+max_iterations: 30
+```
+
+### Estimating Costs Before Running
+
+**Quick cost estimate script:**
+
+```python
+from mcpbr.pricing import calculate_cost, format_cost
+
+# Estimate for a typical SWE-bench task with Sonnet
+# Average: ~15K input tokens, ~10K output tokens per task
+tasks = 25
+avg_input = 15_000
+avg_output = 10_000
+
+# Both MCP and baseline run, so double the task count
+total_runs = tasks * 2
+
+per_task_cost = calculate_cost("sonnet", avg_input, avg_output)
+total_est = per_task_cost * total_runs if per_task_cost else 0
+
+print(f"Estimated cost per task: {format_cost(per_task_cost)}")
+print(f"Estimated total ({tasks} tasks, MCP + baseline): {format_cost(total_est)}")
+```
+
+**After a run, calculate actual costs:**
+
+```python
+import json
+from mcpbr.pricing import calculate_cost, format_cost
+
+with open("results.json") as f:
+    results = json.load(f)
+
+total_cost = 0
+model = results.get("config", {}).get("model", "sonnet")
+
+for task in results.get("tasks", []):
+    for run_type in ["mcp", "baseline"]:
+        run = task.get(run_type, {})
+        tokens = run.get("tokens", {})
+        cost = calculate_cost(
+            model,
+            tokens.get("input", 0),
+            tokens.get("output", 0),
+        )
+        if cost:
+            total_cost += cost
+
+print(f"Total actual cost: {format_cost(total_cost)}")
+print(f"Cost per task: {format_cost(total_cost / len(results.get('tasks', [1])))}")
+```
+
+---
+
+## Analytics Best Practices
+
+Getting meaningful insights from mcpbr evaluations requires careful experimental design and statistical awareness.
+
+### When to Use the Analytics Database
+
+mcpbr saves results in structured JSON and YAML formats. For teams running frequent evaluations, consider importing results into a database for trend analysis:
+
+- **Single evaluation**: JSON output is sufficient (`-o results.json`)
+- **Comparing 2-3 configs**: Side-by-side JSON comparison works well
+- **Ongoing regression tracking**: Import results into a database (SQLite, PostgreSQL) for trend queries
+- **Team dashboards**: Use YAML/JSON outputs with visualization tools (Grafana, Jupyter)
+
+```bash
+# Export multiple formats for different consumers
+mcpbr run -c config.yaml -n 25 \
+  -o results.json \
+  -y results.yaml \
+  -r report.md \
+  --output-junit junit.xml
+```
+
+### Meaningful Comparisons
+
+!!! danger "Comparing results from different task samples is invalid"
+    mcpbr randomly samples tasks unless you specify them explicitly. Two runs with `-n 25` may evaluate completely different tasks, making comparison meaningless.
+
+**How to ensure valid comparisons:**
+
+1. **Same tasks**: Use `--task` flags to specify identical task sets:
+   ```bash
+   mcpbr run -c config-a.yaml -t django__django-11099 -t astropy__astropy-12907 -o a.json
+   mcpbr run -c config-b.yaml -t django__django-11099 -t astropy__astropy-12907 -o b.json
+   ```
+
+2. **Same benchmark**: Never compare SWE-bench results with CyberGym results
+
+3. **Same model**: Model capability differences will dominate MCP server differences
+
+4. **Same parameters**: Use identical `timeout_seconds`, `max_iterations`, and other settings
+
+**Comparison script:**
+
+```python
+import json
+
+def compare(file_a: str, file_b: str) -> None:
+    with open(file_a) as f:
+        a = json.load(f)
+    with open(file_b) as f:
+        b = json.load(f)
+
+    a_rate = a["summary"]["mcp"]["rate"]
+    b_rate = b["summary"]["mcp"]["rate"]
+    a_resolved = set(
+        t["instance_id"] for t in a["tasks"]
+        if t.get("mcp", {}).get("resolved", False)
+    )
+    b_resolved = set(
+        t["instance_id"] for t in b["tasks"]
+        if t.get("mcp", {}).get("resolved", False)
+    )
+
+    print(f"Config A: {a_rate:.1%} ({len(a_resolved)} resolved)")
+    print(f"Config B: {b_rate:.1%} ({len(b_resolved)} resolved)")
+    print(f"Only A solved: {a_resolved - b_resolved}")
+    print(f"Only B solved: {b_resolved - a_resolved}")
+    print(f"Both solved: {a_resolved & b_resolved}")
+
+compare("results-a.json", "results-b.json")
+```
+
+### Interpreting Statistical Significance
+
+Small sample sizes produce noisy results. Before drawing conclusions, consider the variance in your measurements.
+
+**Sample size guidelines:**
+
+| Sample Size | Confidence | Use Case |
+|------------|------------|----------|
+| 1-5 | Very low | Smoke testing only |
+| 10-25 | Low-moderate | Directional signal |
+| 25-50 | Moderate | Reasonable confidence for large effects |
+| 50-100 | Good | Detect moderate improvements (10%+) |
+| 100+ | High | Detect small improvements (5%+) |
+
+!!! warning "A single run with n=10 is not statistically meaningful"
+    If Config A resolves 3/10 (30%) and Config B resolves 4/10 (40%), the difference could easily be due to chance. You need larger samples or repeated runs to draw reliable conclusions.
+
+**Practical significance check:**
+
+```python
+# Simple binomial confidence interval
+import math
+
+def confidence_interval(resolved: int, total: int, z: float = 1.96) -> tuple[float, float]:
+    """95% confidence interval for resolution rate."""
+    if total == 0:
+        return (0.0, 0.0)
+    p = resolved / total
+    margin = z * math.sqrt(p * (1 - p) / total)
+    return (max(0, p - margin), min(1, p + margin))
+
+# Example: 8 out of 25 resolved
+low, high = confidence_interval(8, 25)
+print(f"Rate: {8/25:.1%}, 95% CI: [{low:.1%}, {high:.1%}]")
+# Rate: 32.0%, 95% CI: [14.7%, 49.3%]
+```
+
+If the confidence intervals of two configurations overlap substantially, the difference is likely not statistically significant.
+
+### Regression Detection Thresholds
+
+Choose regression thresholds based on your sample size and tolerance for false alarms:
+
+| Scenario | Threshold | False Alarm Rate | Miss Rate |
+|----------|-----------|------------------|-----------|
+| PR checks (n=10) | 0.20 | Low | High (misses small regressions) |
+| Main branch (n=25) | 0.10 | Moderate | Moderate |
+| Release gate (n=50) | 0.05 | Higher | Low (catches most regressions) |
+
+```yaml
+# Conservative: only alert on large regressions
+--regression-threshold 0.15
+
+# Strict: alert on any meaningful drop
+--regression-threshold 0.05
+```
+
+!!! tip "Use rolling baselines"
+    Update your baseline results periodically (e.g., weekly on the main branch) so that regression detection compares against recent performance rather than a stale snapshot.
+
+### Building Leaderboards
+
+For teams evaluating multiple MCP servers, build a leaderboard from saved results:
+
+```python
+import json
+import glob
+
+results = []
+for path in glob.glob("results-*.json"):
+    with open(path) as f:
+        data = json.load(f)
+    config_name = path.replace("results-", "").replace(".json", "")
+    mcp_summary = data.get("summary", {}).get("mcp", {})
+    results.append({
+        "config": config_name,
+        "rate": mcp_summary.get("rate", 0),
+        "resolved": mcp_summary.get("resolved", 0),
+        "total": mcp_summary.get("total", 0),
+    })
+
+# Sort by resolution rate
+results.sort(key=lambda x: x["rate"], reverse=True)
+
+print(f"{'Rank':<6}{'Config':<25}{'Rate':<10}{'Resolved':<10}")
+print("-" * 51)
+for i, r in enumerate(results, 1):
+    print(f"{i:<6}{r['config']:<25}{r['rate']:.1%}{'':<4}{r['resolved']}/{r['total']}")
+```
+
+**Leaderboard best practices:**
+
+- Always report sample size alongside resolution rate
+- Use the same task set across all configurations
+- Record the model, parameters, and date for reproducibility
+- Track cost-per-resolved-task alongside raw performance
+- Re-run periodically as MCP servers and models are updated
+
+---
+
 ## Additional Resources
 
 - [Configuration Guide](configuration.md) - Detailed configuration reference
@@ -1249,4 +2292,4 @@ mcpbr run -c config-b.yaml -n 10  # Different random 10
 **Community:**
 - [GitHub Issues](https://github.com/greynewell/mcpbr/issues) - Bug reports
 - [GitHub Discussions](https://github.com/greynewell/mcpbr/discussions) - Questions
-- [Documentation](https://greynewell.github.io/mcpbr/) - Comprehensive guides
+- [Documentation](https://mcpbr.org/) - Comprehensive guides

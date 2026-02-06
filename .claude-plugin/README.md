@@ -103,12 +103,12 @@ pytest tests/test_claude_plugin.py -v
 
 ## Documentation
 
-For full documentation, visit: <https://greynewell.github.io/mcpbr/>
+For full documentation, visit: <https://mcpbr.org/>
 
-- [Claude Code Plugin Guide](https://greynewell.github.io/mcpbr/claude-code-plugin/)
-- [Installation Guide](https://greynewell.github.io/mcpbr/installation/)
-- [Configuration Reference](https://greynewell.github.io/mcpbr/configuration/)
-- [CLI Reference](https://greynewell.github.io/mcpbr/cli/)
+- [Claude Code Plugin Guide](https://mcpbr.org/claude-code-plugin/)
+- [Installation Guide](https://mcpbr.org/installation/)
+- [Configuration Reference](https://mcpbr.org/configuration/)
+- [CLI Reference](https://mcpbr.org/cli/)
 
 ## License
 
@@ -120,7 +120,7 @@ Contributions welcome! See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 
 ## Support
 
-- **Documentation**: <https://greynewell.github.io/mcpbr/>
+- **Documentation**: <https://mcpbr.org/>
 - **Issues**: <https://github.com/greynewell/mcpbr/issues>
 - **Discussions**: <https://github.com/greynewell/mcpbr/discussions>
 

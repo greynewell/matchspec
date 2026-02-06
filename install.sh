@@ -73,7 +73,7 @@ echo ""
 echo -e "  3. Run a larger evaluation:"
 echo -e "     ${YELLOW}mcpbr run -n 10${NC}"
 echo ""
-echo -e "${CYAN}Documentation:${NC} https://greynewell.github.io/mcpbr/"
+echo -e "${CYAN}Documentation:${NC} https://mcpbr.org/"
 echo -e "${CYAN}Need help?${NC} https://github.com/greynewell/mcpbr/issues"
 echo ""
 

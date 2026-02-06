@@ -78,8 +78,7 @@ class TestGenerateJsonSchema:
         """Test that schema $id points to correct URL."""
         schema = generate_json_schema()
 
-        assert "greynewell.github.io" in schema["$id"]
-        assert "mcpbr" in schema["$id"]
+        assert "mcpbr.org" in schema["$id"]
         assert schema["$id"].endswith(".json")
 
 
@@ -141,7 +140,7 @@ class TestGetSchemaUrl:
         url = get_schema_url()
 
         assert url.startswith("https://")
-        assert "greynewell.github.io" in url
+        assert "mcpbr.org" in url
         assert url.endswith(".json")
 
     def test_url_is_consistent(self) -> None:

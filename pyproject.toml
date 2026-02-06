@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcpbr"
-version = "0.7.2"
+version = "0.8.0"
 description = "Model Context Protocol Benchmark Runner - evaluate MCP servers against software engineering benchmarks"
 readme = "README.md"
 license = "MIT"
@@ -61,7 +61,7 @@ mcpbr = "mcpbr.cli:main"
 [project.urls]
 Homepage = "https://github.com/greynewell/mcpbr"
 Repository = "https://github.com/greynewell/mcpbr"
-Documentation = "https://greynewell.github.io/mcpbr/"
+Documentation = "https://mcpbr.org/"
 Changelog = "https://github.com/greynewell/mcpbr/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/greynewell/mcpbr/issues"
 

@@ -1015,7 +1015,7 @@ Key areas:
 
 ### Where can I get help?
 
-- **Documentation**: [greynewell.github.io/mcpbr](https://greynewell.github.io/mcpbr/)
+- **Documentation**: [mcpbr.org](https://mcpbr.org/)
 - **GitHub Issues**: [github.com/greynewell/mcpbr/issues](https://github.com/greynewell/mcpbr/issues)
 - **GitHub Discussions**: [github.com/greynewell/mcpbr/discussions](https://github.com/greynewell/mcpbr/discussions)
 

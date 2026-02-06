@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Interactive tutorial system** (#198, #157): CLI-based tutorials for learning mcpbr
+  - `mcpbr tutorial list` — browse available tutorials with difficulty levels
+  - `mcpbr tutorial start <id>` — step-by-step walkthrough with validation
+  - `mcpbr tutorial progress` — track completion across all tutorials
+  - `mcpbr tutorial reset <id>` — restart a tutorial from scratch
+  - 4 built-in tutorials: Getting Started, Configuration, Benchmarks, Analytics
+  - Progress persistence in `~/.mcpbr_state/tutorials/`
+- **Comprehensive API reference documentation** (#202, #156): Auto-generated docs from source
+  - SDK, Configuration, Benchmarks, Analytics, and Reports API pages
+  - mkdocstrings integration for live source rendering
+- **Enhanced benchmark guides** (#203): 6 benchmark docs expanded to comprehensive guides
+  - HumanEval, GSM8K, GAIA, CyberGym, TerminalBench, MCPToolBench++ — each with evaluation methodology, configuration examples, best practices, and troubleshooting
+- **Plugin development guide** (#160): Complete guide for extending mcpbr
+  - Custom benchmark creation with Benchmark protocol walkthrough
+  - Custom provider and custom metrics implementation
+  - Testing guidelines and publishing instructions
+- **Best practices guide enhancements** (#159): 6 new sections added
+  - Security, Performance Optimization, CI/CD Integration, Troubleshooting, Cost Management, Analytics Best Practices
+  - 6 new FAQ entries covering common workflows
+- **Custom domain** (#379): Documentation site now served at https://mcpbr.org/
+  - GitHub Pages CNAME configuration
+  - All documentation URLs updated to mcpbr.org
+
 ## [0.7.0] - 2026-02-06
 
 ### Added
@@ -733,7 +758,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `dataset`: Now optional, benchmark provides default
 - **Benchmark-Specific Agent Prompts**: Different prompts for bug fixing vs exploit generation
 - **Comprehensive Documentation**:
-  - New [Benchmarks Guide](https://greynewell.github.io/mcpbr/benchmarks/) page
+  - New [Benchmarks Guide](https://mcpbr.org/benchmarks/) page
   - Updated README with CyberGym information
   - Updated configuration and CLI documentation
   - Architecture documentation updated for benchmark abstraction

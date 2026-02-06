@@ -23,7 +23,7 @@ Benchmark your MCP server against real GitHub issues. One command, hard numbers.
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/greynewell/mcpbr/actions/workflows/ci.yml/badge.svg)](https://github.com/greynewell/mcpbr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Documentation](https://img.shields.io/badge/docs-greynewell.github.io%2Fmcpbr-blue)](https://greynewell.github.io/mcpbr/)
+[![Documentation](https://img.shields.io/badge/docs-mcpbr.org-blue)](https://mcpbr.org/)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/greynewell/mcpbr?utm_source=oss&utm_medium=github&utm_campaign=greynewell%2Fmcpbr&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 [![good first issues](https://img.shields.io/github/issues/greynewell/mcpbr/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/greynewell/mcpbr/labels/good%20first%20issue)
@@ -60,17 +60,17 @@ mcpbr supports 30+ benchmarks across 10 categories through a flexible abstractio
 
 | Category | Benchmarks |
 |----------|-----------|
-| **Software Engineering** | [SWE-bench](https://greynewell.github.io/mcpbr/benchmarks/swe-bench/) (Verified/Lite/Full), [APPS](https://greynewell.github.io/mcpbr/benchmarks/apps/), [CodeContests](https://greynewell.github.io/mcpbr/benchmarks/codecontests/), [BigCodeBench](https://greynewell.github.io/mcpbr/benchmarks/bigcodebench/), [LeetCode](https://greynewell.github.io/mcpbr/benchmarks/leetcode/), [CoderEval](https://greynewell.github.io/mcpbr/benchmarks/codereval/), [Aider Polyglot](https://greynewell.github.io/mcpbr/benchmarks/aider-polyglot/) |
-| **Code Generation** | [HumanEval](https://greynewell.github.io/mcpbr/benchmarks/humaneval/), [MBPP](https://greynewell.github.io/mcpbr/benchmarks/mbpp/) |
-| **Math & Reasoning** | [GSM8K](https://greynewell.github.io/mcpbr/benchmarks/gsm8k/), [MATH](https://greynewell.github.io/mcpbr/benchmarks/math/), [BigBench-Hard](https://greynewell.github.io/mcpbr/benchmarks/bigbench-hard/) |
-| **Knowledge & QA** | [TruthfulQA](https://greynewell.github.io/mcpbr/benchmarks/truthfulqa/), [HellaSwag](https://greynewell.github.io/mcpbr/benchmarks/hellaswag/), [ARC](https://greynewell.github.io/mcpbr/benchmarks/arc/), [GAIA](https://greynewell.github.io/mcpbr/benchmarks/gaia/) |
-| **Tool Use & Agents** | [MCPToolBench++](https://greynewell.github.io/mcpbr/benchmarks/mcptoolbench/), [ToolBench](https://greynewell.github.io/mcpbr/benchmarks/toolbench/), [AgentBench](https://greynewell.github.io/mcpbr/benchmarks/agentbench/), [WebArena](https://greynewell.github.io/mcpbr/benchmarks/webarena/), [TerminalBench](https://greynewell.github.io/mcpbr/benchmarks/terminalbench/), [InterCode](https://greynewell.github.io/mcpbr/benchmarks/intercode/) |
-| **ML Research** | [MLAgentBench](https://greynewell.github.io/mcpbr/benchmarks/mlagentbench/) |
-| **Code Understanding** | [RepoQA](https://greynewell.github.io/mcpbr/benchmarks/repoqa/) |
+| **Software Engineering** | [SWE-bench](https://mcpbr.org/benchmarks/swe-bench/) (Verified/Lite/Full), [APPS](https://mcpbr.org/benchmarks/apps/), [CodeContests](https://mcpbr.org/benchmarks/codecontests/), [BigCodeBench](https://mcpbr.org/benchmarks/bigcodebench/), [LeetCode](https://mcpbr.org/benchmarks/leetcode/), [CoderEval](https://mcpbr.org/benchmarks/codereval/), [Aider Polyglot](https://mcpbr.org/benchmarks/aider-polyglot/) |
+| **Code Generation** | [HumanEval](https://mcpbr.org/benchmarks/humaneval/), [MBPP](https://mcpbr.org/benchmarks/mbpp/) |
+| **Math & Reasoning** | [GSM8K](https://mcpbr.org/benchmarks/gsm8k/), [MATH](https://mcpbr.org/benchmarks/math/), [BigBench-Hard](https://mcpbr.org/benchmarks/bigbench-hard/) |
+| **Knowledge & QA** | [TruthfulQA](https://mcpbr.org/benchmarks/truthfulqa/), [HellaSwag](https://mcpbr.org/benchmarks/hellaswag/), [ARC](https://mcpbr.org/benchmarks/arc/), [GAIA](https://mcpbr.org/benchmarks/gaia/) |
+| **Tool Use & Agents** | [MCPToolBench++](https://mcpbr.org/benchmarks/mcptoolbench/), [ToolBench](https://mcpbr.org/benchmarks/toolbench/), [AgentBench](https://mcpbr.org/benchmarks/agentbench/), [WebArena](https://mcpbr.org/benchmarks/webarena/), [TerminalBench](https://mcpbr.org/benchmarks/terminalbench/), [InterCode](https://mcpbr.org/benchmarks/intercode/) |
+| **ML Research** | [MLAgentBench](https://mcpbr.org/benchmarks/mlagentbench/) |
+| **Code Understanding** | [RepoQA](https://mcpbr.org/benchmarks/repoqa/) |
 | **Multimodal** | MMMU |
 | **Long Context** | LongBench |
 | **Safety & Adversarial** | Adversarial (HarmBench) |
-| **Security** | [CyberGym](https://greynewell.github.io/mcpbr/benchmarks/cybergym/) |
+| **Security** | [CyberGym](https://mcpbr.org/benchmarks/cybergym/) |
 | **Custom** | User-defined benchmarks via YAML |
 
 ### Featured Benchmarks
@@ -96,7 +96,7 @@ mcpbr run -c config.yaml --benchmark cybergym --level 2
 mcpbr benchmarks
 ```
 
-See the **[benchmarks guide](https://greynewell.github.io/mcpbr/benchmarks/)** for details on each benchmark and how to configure them.
+See the **[benchmarks guide](https://mcpbr.org/benchmarks/)** for details on each benchmark and how to configure them.
 
 ## Overview
 
@@ -105,7 +105,7 @@ This harness runs two parallel evaluations for each task:
 1. **MCP Agent**: LLM with access to tools from your MCP server
 2. **Baseline Agent**: LLM without tools (single-shot generation)
 
-By comparing these, you can measure the effectiveness of your MCP server for different software engineering tasks. See the **[MCP integration guide](https://greynewell.github.io/mcpbr/mcp-integration/)** for tips on testing your server.
+By comparing these, you can measure the effectiveness of your MCP server for different software engineering tasks. See the **[MCP integration guide](https://mcpbr.org/mcp-integration/)** for tips on testing your server.
 
 ## Regression Detection
 
@@ -188,7 +188,7 @@ This will exit with code 1 if the regression rate exceeds 10%, failing the CI jo
 
 ## Installation
 
-> **[Full installation guide](https://greynewell.github.io/mcpbr/installation/)** with detailed setup instructions.
+> **[Full installation guide](https://mcpbr.org/installation/)** with detailed setup instructions.
 
 <details>
 <summary>Prerequisites</summary>
@@ -550,11 +550,11 @@ When using Claude Code with the mcpbr plugin active, Claude will automatically:
 - Verify Docker is running: `docker info`
 - Check API key is set: `echo $ANTHROPIC_API_KEY`
 
-For more help, see the [troubleshooting guide](https://greynewell.github.io/mcpbr/troubleshooting/) or [open an issue](https://github.com/greynewell/mcpbr/issues).
+For more help, see the [troubleshooting guide](https://mcpbr.org/troubleshooting/) or [open an issue](https://github.com/greynewell/mcpbr/issues).
 
 ## Configuration
 
-> **[Full configuration reference](https://greynewell.github.io/mcpbr/configuration/)** with all options and examples.
+> **[Full configuration reference](https://mcpbr.org/configuration/)** with all options and examples.
 
 ### MCP Server Configuration
 
@@ -669,7 +669,7 @@ Use `{problem_statement}` as a placeholder for the SWE-bench issue text. You can
 
 ## CLI Reference
 
-> **[Full CLI documentation](https://greynewell.github.io/mcpbr/cli/)** with all commands and options.
+> **[Full CLI documentation](https://mcpbr.org/cli/)** with all commands and options.
 
 Get help for any command with `--help` or `-h`:
 
@@ -930,7 +930,7 @@ Provider: anthropic, Harness: claude-code
 
 ## Output
 
-> **[Understanding evaluation results](https://greynewell.github.io/mcpbr/evaluation-results/)** - detailed guide to interpreting output.
+> **[Understanding evaluation results](https://mcpbr.org/evaluation-results/)** - detailed guide to interpreting output.
 
 ### Console Output
 
@@ -1213,7 +1213,7 @@ The JUnit XML format enables native test result visualization in your CI/CD dash
 
 ## How It Works
 
-> **[Architecture deep dive](https://greynewell.github.io/mcpbr/architecture/)** - learn how mcpbr works internally.
+> **[Architecture deep dive](https://mcpbr.org/architecture/)** - learn how mcpbr works internally.
 
 1. **Load Tasks**: Fetches tasks from the selected benchmark (SWE-bench, CyberGym, or MCPToolBench++) via HuggingFace
 2. **Create Environment**: For each task, creates an isolated Docker environment with the repository and dependencies
@@ -1274,7 +1274,7 @@ mcpbr/
     └── example.yaml     # Example configuration
 ```
 
-The architecture uses Protocol-based abstractions for providers, harnesses, and **benchmarks**, making it easy to add support for additional LLM providers, agent backends, or software engineering benchmarks in the future. See the **[API reference](https://greynewell.github.io/mcpbr/api/)** and **[benchmarks guide](https://greynewell.github.io/mcpbr/benchmarks/)** for more details.
+The architecture uses Protocol-based abstractions for providers, harnesses, and **benchmarks**, making it easy to add support for additional LLM providers, agent backends, or software engineering benchmarks in the future. See the **[API reference](https://mcpbr.org/api/)** and **[benchmarks guide](https://mcpbr.org/benchmarks/)** for more details.
 
 ### Execution Flow
 
@@ -1313,9 +1313,9 @@ The architecture uses Protocol-based abstractions for providers, harnesses, and 
 
 ## Troubleshooting
 
-> **[FAQ](https://greynewell.github.io/mcpbr/FAQ/)** - Quick answers to common questions
+> **[FAQ](https://mcpbr.org/FAQ/)** - Quick answers to common questions
 >
-> **[Full troubleshooting guide](https://greynewell.github.io/mcpbr/troubleshooting/)** - Detailed solutions to common issues
+> **[Full troubleshooting guide](https://mcpbr.org/troubleshooting/)** - Detailed solutions to common issues
 
 ### Docker Issues
 
@@ -1462,11 +1462,11 @@ We welcome contributions! Check out our **30+ good first issues** perfect for ne
 - **Platform**: Homebrew formula, Conda package
 - **Documentation**: Best practices, examples, guides
 
-See the [contributing guide](https://greynewell.github.io/mcpbr/contributing/) to get started!
+See the [contributing guide](https://mcpbr.org/contributing/) to get started!
 
 ## Best Practices
 
-New to mcpbr or want to optimize your workflow? Check out the **[Best Practices Guide](https://greynewell.github.io/mcpbr/best-practices/)** for:
+New to mcpbr or want to optimize your workflow? Check out the **[Best Practices Guide](https://mcpbr.org/best-practices/)** for:
 
 - Benchmark selection guidelines
 - MCP server configuration tips
@@ -1478,7 +1478,7 @@ New to mcpbr or want to optimize your workflow? Check out the **[Best Practices 
 
 ## Contributing
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) or the **[contributing guide](https://greynewell.github.io/mcpbr/contributing/)** for guidelines on how to contribute.
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) or the **[contributing guide](https://mcpbr.org/contributing/)** for guidelines on how to contribute.
 
 All contributors are expected to follow our [Community Guidelines](CODE_OF_CONDUCT.md).
 

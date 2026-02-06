@@ -28,7 +28,7 @@ def generate_json_schema() -> dict[str, Any]:
 
     # Add metadata for better IDE integration
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-    schema["$id"] = "https://greynewell.github.io/mcpbr/schema/config.json"
+    schema["$id"] = "https://mcpbr.org/schema/config.json"
     schema["title"] = "mcpbr Configuration"
     schema["description"] = (
         "Configuration schema for mcpbr (Model Context Protocol Benchmark Runner). "
@@ -79,7 +79,7 @@ def get_schema_url() -> str:
     Returns:
         URL to the published JSON Schema.
     """
-    return "https://greynewell.github.io/mcpbr/schema/config.json"
+    return "https://mcpbr.org/schema/config.json"
 
 
 def add_schema_comment(yaml_content: str) -> str:

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://greynewell.github.io/mcpbr/sitemap.xml
+Sitemap: https://mcpbr.org/sitemap.xml
