@@ -199,29 +199,32 @@ class TestSlackBotNotification:
 
 
 class TestSlackThreadReply:
-    """Post results JSON as a code block in a Slack thread."""
+    """Upload results JSON as a file snippet in a Slack thread."""
 
-    @patch("mcpbr.notifications.requests.post")
-    def test_posts_code_block_in_thread(self, mock_post):
-        mock_post.return_value = MagicMock(status_code=200)
-        mock_post.return_value.raise_for_status = MagicMock()
-        mock_post.return_value.json.return_value = {"ok": True}
+    @patch("slack_sdk.WebClient")
+    def test_uploads_snippet_in_thread(self, mock_webclient_cls):
+        mock_client = MagicMock()
+        mock_webclient_cls.return_value = mock_client
 
         post_slack_thread_reply("xoxb-test", "C12345", "1234.5678", '{"test": true}')
 
-        mock_post.assert_called_once()
-        call_data = mock_post.call_args[1]["data"]
-        assert call_data["thread_ts"] == "1234.5678"
-        assert "```" in call_data["text"]
-        assert '{"test": true}' in call_data["text"]
+        mock_webclient_cls.assert_called_once_with(token="xoxb-test")
+        mock_client.files_upload_v2.assert_called_once_with(
+            channel="C12345",
+            thread_ts="1234.5678",
+            content='{"test": true}',
+            filename="results.json",
+            title="Evaluation Results",
+            snippet_type="json",
+        )
 
-    @patch("mcpbr.notifications.requests.post")
-    def test_raises_on_error(self, mock_post):
-        mock_post.return_value = MagicMock(status_code=200)
-        mock_post.return_value.raise_for_status = MagicMock()
-        mock_post.return_value.json.return_value = {"ok": False, "error": "not_authed"}
+    @patch("slack_sdk.WebClient")
+    def test_raises_on_error(self, mock_webclient_cls):
+        mock_client = MagicMock()
+        mock_webclient_cls.return_value = mock_client
+        mock_client.files_upload_v2.side_effect = Exception("not_authed")
 
-        with pytest.raises(RuntimeError, match="not_authed"):
+        with pytest.raises(Exception, match="not_authed"):
             post_slack_thread_reply("xoxb-bad", "C12345", "1234.5678", "{}")
 
 

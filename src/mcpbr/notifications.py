@@ -184,28 +184,29 @@ def post_slack_thread_reply(
     thread_ts: str,
     content: str,
 ) -> None:
-    """Post a code-block reply in a Slack thread.
+    """Upload a results file as a snippet in a Slack thread.
+
+    Uses the Slack SDK ``files_upload_v2`` which handles the three-step
+    external upload flow (getUploadURL → PUT → completeUpload) and shares
+    the file to the channel as a threaded reply.
 
     Args:
         bot_token: Slack bot token (xoxb-...).
         channel: Slack channel ID.
         thread_ts: Parent message timestamp to reply to.
-        content: Text content to wrap in a code block.
+        content: Text content to upload as a JSON snippet.
     """
-    resp = requests.post(
-        "https://slack.com/api/chat.postMessage",
-        data={
-            "token": bot_token,
-            "channel": channel,
-            "thread_ts": thread_ts,
-            "text": f"```\n{content}\n```",
-        },
-        timeout=30,
+    from slack_sdk import WebClient
+
+    client = WebClient(token=bot_token)
+    client.files_upload_v2(
+        channel=channel,
+        thread_ts=thread_ts,
+        content=content,
+        filename="results.json",
+        title="Evaluation Results",
+        snippet_type="json",
     )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data.get("ok"):
-        raise RuntimeError(f"Slack thread reply failed: {data.get('error', 'unknown')}")
 
 
 def create_gist_report(
