@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcpbr"
-version = "0.5.0"
+version = "0.5.1"
 description = "Model Context Protocol Benchmark Runner - evaluate MCP servers against software engineering benchmarks"
 readme = "README.md"
 license = "MIT"

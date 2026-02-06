@@ -1,6 +1,6 @@
 {
   "name": "@greynewell/mcpbr-claude-plugin",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Claude Code plugin for mcpbr - Expert benchmark runner for MCP servers with specialized skills",
   "keywords": [
     "claude-code",
