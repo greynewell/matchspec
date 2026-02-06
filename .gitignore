@@ -77,7 +77,7 @@ results/
 !.claude-plugin/*.json
 !.claude/*.json
 config.yaml
-reports/
+/reports/
 .swebench-mcp/
 .logs/
 logs/

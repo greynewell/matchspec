@@ -65,6 +65,8 @@ def main() -> None:
     \b
     Commands:
       run        Run benchmark evaluation (default command)
+      compare    Compare results from multiple runs
+      analytics  Historical tracking and analysis
       init       Generate a configuration file from a template
       templates  List available configuration templates
       config     Configuration management commands
@@ -83,6 +85,20 @@ def main() -> None:
       mcpbr run -c config.yaml     # Run evaluation
       mcpbr run -c config.yaml -M  # MCP only
       mcpbr run -c config.yaml -B  # Baseline only
+
+    \b
+    Reports:
+      mcpbr run -c config.yaml --output-html report.html
+      mcpbr run -c config.yaml --output-markdown report.md
+      mcpbr run -c config.yaml --output-pdf report.pdf
+      mcpbr compare run1.json run2.json --output-html comparison.html
+
+    \b
+    Analytics:
+      mcpbr analytics store results.json           # Store in database
+      mcpbr analytics trends --metric resolution_rate
+      mcpbr analytics leaderboard
+      mcpbr analytics regression --baseline v1.json --current v2.json
 
     \b
     Incremental Evaluation:
@@ -241,6 +257,27 @@ def main() -> None:
     help="Disable pre-built SWE-bench images (build from scratch)",
 )
 @click.option(
+    "--output-html",
+    "html_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to save interactive HTML report with charts",
+)
+@click.option(
+    "--output-pdf",
+    "pdf_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to save PDF report (requires weasyprint)",
+)
+@click.option(
+    "--output-markdown",
+    "enhanced_md_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to save enhanced Markdown report with mermaid diagrams and badges",
+)
+@click.option(
     "--yaml",
     "-y",
     "yaml_output",
@@ -394,6 +431,9 @@ def run(
     baseline_only: bool,
     output_path: Path | None,
     report_path: Path | None,
+    html_path: Path | None,
+    pdf_path: Path | None,
+    enhanced_md_path: Path | None,
     junit_path: Path | None,
     xml_path: Path | None,
     verbosity: int,
@@ -811,6 +851,61 @@ To archive:
     if xml_path:
         save_xml_results(results, xml_path)
         console.print(f"[green]XML results saved to {xml_path}[/green]")
+
+    # Enhanced report generation
+    if html_path or pdf_path or enhanced_md_path:
+        # Convert results to dict for report generators
+        results_dict = (
+            json.loads(json.dumps(results, default=str))
+            if not isinstance(results, dict)
+            else results
+        )
+        if hasattr(results, "to_dict"):
+            results_dict = results.to_dict()
+        elif hasattr(results, "__dict__"):
+            # Build results dict from EvaluationResults object
+            results_dict = {
+                "metadata": results.metadata,
+                "summary": results.summary,
+                "tasks": [
+                    {
+                        "instance_id": t.instance_id,
+                        "mcp": t.mcp,
+                        "baseline": t.baseline,
+                    }
+                    for t in results.tasks
+                ],
+            }
+
+    if html_path:
+        from .reports import HTMLReportGenerator
+
+        generator = HTMLReportGenerator(results_dict)
+        generator.save(html_path)
+        console.print(f"[green]HTML report saved to {html_path}[/green]")
+
+    if enhanced_md_path:
+        from .reports import EnhancedMarkdownGenerator
+
+        generator = EnhancedMarkdownGenerator(results_dict)
+        generator.save(enhanced_md_path)
+        console.print(f"[green]Enhanced Markdown report saved to {enhanced_md_path}[/green]")
+
+    if pdf_path:
+        from .reports import PDFReportGenerator
+
+        generator = PDFReportGenerator(results_dict)
+        try:
+            generator.save_pdf(pdf_path)
+            console.print(f"[green]PDF report saved to {pdf_path}[/green]")
+        except ImportError:
+            # Fall back to HTML if weasyprint not available
+            html_fallback = pdf_path.with_suffix(".html")
+            generator.save_html(html_fallback)
+            console.print(
+                f"[yellow]weasyprint not installed — saved print-ready HTML to {html_fallback}[/yellow]"
+            )
+            console.print("[dim]Install weasyprint for PDF: pip install weasyprint[/dim]")
 
     # Regression detection
     if baseline_results:
@@ -2032,6 +2127,515 @@ def export(input_path: Path, output_format: str, output_path: Path) -> None:
         writer.writerows(rows)
 
     console.print(f"[green]Exported {len(rows)} rows to {output_path}[/green]")
+
+
+@main.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument(
+    "result_files",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "--output-html",
+    "html_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Save comparison as interactive HTML report",
+)
+@click.option(
+    "--output-markdown",
+    "md_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Save comparison as enhanced Markdown report",
+)
+@click.option(
+    "--output",
+    "-o",
+    "json_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Save comparison data as JSON",
+)
+def compare(
+    result_files: tuple[Path, ...],
+    html_path: Path | None,
+    md_path: Path | None,
+    json_path: Path | None,
+) -> None:
+    """Compare results from multiple evaluation runs.
+
+    Provide two or more JSON result files to generate a side-by-side comparison
+    with statistical significance testing and Pareto frontier analysis.
+
+    \b
+    Examples:
+      mcpbr compare run1.json run2.json
+      mcpbr compare run1.json run2.json run3.json --output-html comparison.html
+      mcpbr compare *.json --output-markdown comparison.md
+    """
+    if len(result_files) < 2:
+        console.print("[red]Error: At least 2 result files are required for comparison[/red]")
+        sys.exit(1)
+
+    from .analytics.comparison import ComparisonEngine, format_comparison_table
+
+    engine = ComparisonEngine()
+
+    for path in result_files:
+        try:
+            data = json.loads(path.read_text())
+            label = path.stem
+            engine.add_results(label, data)
+        except Exception as e:
+            console.print(f"[red]Error loading {path}: {e}[/red]")
+            sys.exit(1)
+
+    comparison = engine.compare()
+
+    # Print comparison table to console
+    table_output = format_comparison_table(comparison)
+    console.print(table_output)
+
+    # Statistical significance
+    summary_table = comparison.get("summary_table", [])
+    if len(summary_table) >= 2:
+        from .analytics.statistical import compare_resolution_rates
+
+        console.print("\n[bold]Statistical Significance[/bold]")
+        for i in range(len(summary_table)):
+            for j in range(i + 1, len(summary_table)):
+                a_data = summary_table[i]
+                b_data = summary_table[j]
+
+                result = compare_resolution_rates(a_data, b_data)
+                chi2 = result["chi2_test"]
+                sig = (
+                    "[green]significant[/green]"
+                    if chi2["significant"]
+                    else "[dim]not significant[/dim]"
+                )
+                a_label = a_data.get("label", f"model-{i}")
+                b_label = b_data.get("label", f"model-{j}")
+                console.print(f"  {a_label} vs {b_label}: p={chi2['p_value']:.4f} ({sig})")
+
+    # Winner analysis
+    winners = engine.get_winner_analysis()
+    if winners:
+        console.print("\n[bold]Winner Analysis[/bold]")
+        for metric, winner in winners.items():
+            console.print(f"  {metric}: [cyan]{winner}[/cyan]")
+
+    # Pareto frontier
+    frontier = engine.get_cost_performance_frontier()
+    if frontier:
+        console.print("\n[bold]Cost-Performance Frontier[/bold]")
+        for entry in frontier:
+            console.print(
+                f"  [cyan]{entry['label']}[/cyan]: {entry['rate']:.1%} @ ${entry['cost']:.2f}"
+            )
+
+    # Save outputs
+    if json_path:
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(comparison, indent=2, default=str))
+        console.print(f"\n[green]Comparison JSON saved to {json_path}[/green]")
+
+    if html_path:
+        from .reports import HTMLReportGenerator
+
+        # Build a combined results dict for the HTML report
+        html_data = {
+            "metadata": {"comparison": True, "files": [str(f) for f in result_files]},
+            "summary": comparison.get("summary", {}),
+            "tasks": [],
+        }
+        generator = HTMLReportGenerator(html_data, title="mcpbr Comparison Report")
+        generator.save(html_path)
+        console.print(f"[green]HTML comparison report saved to {html_path}[/green]")
+
+    if md_path:
+        from .reports import EnhancedMarkdownGenerator
+
+        md_data = {
+            "metadata": {"comparison": True, "files": [str(f) for f in result_files]},
+            "summary": comparison.get("summary", {}),
+            "tasks": [],
+        }
+        generator = EnhancedMarkdownGenerator(md_data)
+        generator.save(md_path)
+        console.print(f"[green]Markdown comparison report saved to {md_path}[/green]")
+
+
+@main.group(context_settings={"help_option_names": ["-h", "--help"]})
+def analytics() -> None:
+    """Analytics commands for historical tracking and analysis.
+
+    \b
+    Commands:
+      store        Store evaluation results in the analytics database
+      trends       Show performance trends over time
+      leaderboard  Generate model/server leaderboard from stored results
+      regression   Detect performance regressions between runs
+
+    \b
+    Examples:
+      mcpbr analytics store results.json
+      mcpbr analytics trends --metric resolution_rate
+      mcpbr analytics leaderboard
+      mcpbr analytics regression --baseline run1.json --current run2.json
+    """
+    pass
+
+
+@analytics.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.argument(
+    "result_file",
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "--db",
+    "db_path",
+    type=click.Path(path_type=Path),
+    default=Path(".mcpbr_analytics.db"),
+    help="Path to analytics database (default: .mcpbr_analytics.db)",
+)
+@click.option(
+    "--label",
+    type=str,
+    default=None,
+    help="Optional label for this run",
+)
+def store(result_file: Path, db_path: Path, label: str | None) -> None:
+    """Store evaluation results in the analytics database.
+
+    Results are stored in a local SQLite database for trend analysis,
+    leaderboard generation, and regression detection.
+
+    \b
+    Examples:
+      mcpbr analytics store results.json
+      mcpbr analytics store results.json --label "v1.0 baseline"
+      mcpbr analytics store results.json --db custom.db
+    """
+    from .analytics.database import ResultsDatabase
+
+    try:
+        data = json.loads(result_file.read_text())
+    except Exception as e:
+        console.print(f"[red]Error loading {result_file}: {e}[/red]")
+        sys.exit(1)
+
+    metadata = data.get("metadata", {})
+    config = metadata.get("config", {})
+    summary = data.get("summary", {})
+    tasks = data.get("tasks", [])
+
+    mcp_summary = summary.get("mcp", {})
+    total_tasks = mcp_summary.get("total", 0)
+    resolved_tasks = mcp_summary.get("resolved", 0)
+    resolution_rate = mcp_summary.get("rate", 0)
+    total_cost = mcp_summary.get("total_cost", 0)
+
+    run_data = {
+        "benchmark": config.get("benchmark", "unknown"),
+        "model": config.get("model", "unknown"),
+        "provider": config.get("provider", "unknown"),
+        "agent_harness": config.get("agent_harness", "unknown"),
+        "sample_size": config.get("sample_size", 0),
+        "timeout_seconds": config.get("timeout_seconds", 0),
+        "max_iterations": config.get("max_iterations", 0),
+        "resolution_rate": resolution_rate,
+        "total_cost": total_cost or 0,
+        "total_tasks": total_tasks,
+        "resolved_tasks": resolved_tasks,
+        "metadata_json": json.dumps({"label": label, "source": str(result_file)}),
+    }
+
+    task_results = []
+    for task in tasks:
+        mcp = task.get("mcp", {}) or {}
+        task_results.append(
+            {
+                "instance_id": task.get("instance_id", ""),
+                "resolved": mcp.get("resolved", False),
+                "cost": mcp.get("cost", 0),
+                "tokens_input": mcp.get("tokens_input", 0),
+                "tokens_output": mcp.get("tokens_output", 0),
+                "iterations": mcp.get("iterations", 0),
+                "tool_calls": mcp.get("tool_calls", 0),
+                "runtime_seconds": mcp.get("runtime_seconds", 0),
+                "error": mcp.get("error", ""),
+            }
+        )
+
+    with ResultsDatabase(db_path) as db:
+        run_id = db.store_run(run_data, task_results)
+        console.print(f"[green]Stored run #{run_id} in {db_path}[/green]")
+        console.print(f"  {resolved_tasks}/{total_tasks} resolved ({resolution_rate:.1%})")
+        if label:
+            console.print(f"  Label: {label}")
+
+
+@analytics.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--db",
+    "db_path",
+    type=click.Path(exists=True, path_type=Path),
+    default=Path(".mcpbr_analytics.db"),
+    help="Path to analytics database",
+)
+@click.option(
+    "--metric",
+    type=click.Choice(["resolution_rate", "total_cost", "resolved_tasks"]),
+    default="resolution_rate",
+    help="Metric to analyze trends for",
+)
+@click.option(
+    "--benchmark",
+    "-b",
+    type=str,
+    default=None,
+    help="Filter by benchmark name",
+)
+@click.option(
+    "--model",
+    "-m",
+    type=str,
+    default=None,
+    help="Filter by model name",
+)
+@click.option(
+    "--last",
+    "-n",
+    "last_n",
+    type=int,
+    default=20,
+    help="Number of recent runs to analyze (default: 20)",
+)
+def trends(
+    db_path: Path,
+    metric: str,
+    benchmark: str | None,
+    model: str | None,
+    last_n: int,
+) -> None:
+    """Show performance trends over time.
+
+    Analyzes historical results to show how metrics change over time,
+    including trend direction, moving averages, and slope.
+
+    \b
+    Examples:
+      mcpbr analytics trends
+      mcpbr analytics trends --metric total_cost
+      mcpbr analytics trends --benchmark swe-bench-verified --last 50
+      mcpbr analytics trends --model claude-sonnet-4-5-20250929
+    """
+    from .analytics.database import ResultsDatabase
+    from .analytics.trends import calculate_trends, detect_trend_direction
+
+    with ResultsDatabase(db_path) as db:
+        runs = db.list_runs()
+
+    if not runs:
+        console.print("[yellow]No runs found in database[/yellow]")
+        return
+
+    # Filter runs
+    filtered = runs
+    if benchmark:
+        filtered = [r for r in filtered if r.get("benchmark") == benchmark]
+    if model:
+        filtered = [r for r in filtered if r.get("model") == model]
+
+    # Take last N
+    filtered = filtered[-last_n:]
+
+    if not filtered:
+        console.print("[yellow]No matching runs found[/yellow]")
+        return
+
+    values = [r.get(metric, 0) for r in filtered]
+
+    trend_result = calculate_trends(filtered)
+    direction = detect_trend_direction(values)
+
+    direction_style = {
+        "improving": "[green]Improving[/green]",
+        "declining": "[red]Declining[/red]",
+        "stable": "[dim]Stable[/dim]",
+        "insufficient_data": "[yellow]Insufficient data[/yellow]",
+    }
+
+    console.print(f"[bold]Trend Analysis: {metric}[/bold]")
+    console.print(f"  Runs analyzed: {len(filtered)}")
+    console.print(f"  Direction: {direction_style.get(direction, direction)}")
+    console.print(f"  Slope: {trend_result.get('slope', 0):.4f}")
+    console.print(f"  Current: {values[-1]:.4f}")
+    if len(values) >= 2:
+        console.print(f"  Previous: {values[-2]:.4f}")
+        delta = values[-1] - values[-2]
+        delta_str = f"+{delta:.4f}" if delta >= 0 else f"{delta:.4f}"
+        console.print(f"  Change: {delta_str}")
+
+    # Show recent values
+    console.print(f"\n[bold]Recent {min(10, len(values))} values:[/bold]")
+    for i, v in enumerate(values[-10:]):
+        run = filtered[-(10 - i) if len(values) >= 10 else i]
+        ts = run.get("timestamp", "")[:19]
+        console.print(f"  {ts}  {v:.4f}")
+
+
+@analytics.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--db",
+    "db_path",
+    type=click.Path(exists=True, path_type=Path),
+    default=Path(".mcpbr_analytics.db"),
+    help="Path to analytics database",
+)
+@click.option(
+    "--benchmark",
+    "-b",
+    type=str,
+    default=None,
+    help="Filter by benchmark name",
+)
+@click.option(
+    "--sort-by",
+    type=click.Choice(["resolution_rate", "total_cost", "resolved_tasks"]),
+    default="resolution_rate",
+    help="Metric to sort by (default: resolution_rate)",
+)
+@click.option(
+    "--output-markdown",
+    "md_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Save leaderboard as Markdown file",
+)
+def leaderboard(
+    db_path: Path,
+    benchmark: str | None,
+    sort_by: str,
+    md_path: Path | None,
+) -> None:
+    """Generate a leaderboard from stored results.
+
+    Ranks models and configurations by performance across stored runs.
+
+    \b
+    Examples:
+      mcpbr analytics leaderboard
+      mcpbr analytics leaderboard --benchmark swe-bench-verified
+      mcpbr analytics leaderboard --sort-by total_cost
+      mcpbr analytics leaderboard --output-markdown leaderboard.md
+    """
+    from .analytics.database import ResultsDatabase
+    from .analytics.leaderboard import Leaderboard
+
+    with ResultsDatabase(db_path) as db:
+        runs = db.list_runs()
+
+    if not runs:
+        console.print("[yellow]No runs found in database[/yellow]")
+        return
+
+    # Filter
+    if benchmark:
+        runs = [r for r in runs if r.get("benchmark") == benchmark]
+
+    if not runs:
+        console.print("[yellow]No matching runs found[/yellow]")
+        return
+
+    lb = Leaderboard()
+    for run in runs:
+        label = f"{run.get('model', 'unknown')} ({run.get('provider', '')})"
+        # Convert database run dict to results_data format expected by Leaderboard
+        results_data = {
+            "summary": {
+                "mcp": {
+                    "resolved": run.get("resolved_tasks", 0),
+                    "total": run.get("total_tasks", 0),
+                    "rate": run.get("resolution_rate", 0),
+                    "total_cost": run.get("total_cost", 0),
+                }
+            },
+            "metadata": {
+                "config": {
+                    "model": run.get("model", "unknown"),
+                    "provider": run.get("provider", "unknown"),
+                }
+            },
+            "tasks": [],
+        }
+        lb.add_entry(label, results_data)
+
+    console.print(lb.format_table(sort_by=sort_by))
+
+    if md_path:
+        md_path.parent.mkdir(parents=True, exist_ok=True)
+        md_path.write_text(lb.format_markdown(sort_by=sort_by))
+        console.print(f"\n[green]Leaderboard saved to {md_path}[/green]")
+
+
+@analytics.command(name="regression", context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--baseline",
+    "baseline_file",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to baseline results JSON",
+)
+@click.option(
+    "--current",
+    "current_file",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="Path to current results JSON",
+)
+@click.option(
+    "--threshold",
+    type=float,
+    default=0.05,
+    help="Significance threshold for detecting regressions (default: 0.05)",
+)
+def regression_cmd(
+    baseline_file: Path,
+    current_file: Path,
+    threshold: float,
+) -> None:
+    """Detect performance regressions between two runs.
+
+    Compares baseline and current results using statistical tests to
+    identify significant regressions in resolution rate, cost, and latency.
+
+    \b
+    Examples:
+      mcpbr analytics regression --baseline v1.json --current v2.json
+      mcpbr analytics regression --baseline v1.json --current v2.json --threshold 0.1
+    """
+    from .analytics.regression_detector import RegressionDetector
+
+    try:
+        baseline_data = json.loads(baseline_file.read_text())
+        current_data = json.loads(current_file.read_text())
+    except Exception as e:
+        console.print(f"[red]Error loading files: {e}[/red]")
+        sys.exit(1)
+
+    detector = RegressionDetector(threshold=threshold)
+    result = detector.detect(current_data, baseline_data)
+    report = detector.format_report()
+
+    console.print(report)
+
+    # Exit with non-zero if regressions detected
+    if result.get("overall_status") == "fail":
+        sys.exit(1)
 
 
 if __name__ == "__main__":
