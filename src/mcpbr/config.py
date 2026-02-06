@@ -431,6 +431,60 @@ class HarnessConfig(BaseModel):
         description="Infrastructure configuration (local or azure)",
     )
 
+    # --- Rate Limiting (v0.9.0) ---
+    rate_limit_rpm: int | None = Field(
+        default=None,
+        description="Maximum API requests per minute (None for unlimited)",
+    )
+
+    rate_limit_strategy: str = Field(
+        default="adaptive",
+        description="Rate limit backoff strategy: fixed, exponential, or adaptive",
+    )
+
+    # --- Reproducibility (v0.9.0) ---
+    global_seed: int | None = Field(
+        default=None,
+        description="Global random seed for reproducible evaluations",
+    )
+
+    deterministic_mode: bool = Field(
+        default=False,
+        description="Enable deterministic mode (sets PYTHONHASHSEED, seeds all RNG)",
+    )
+
+    record_environment: bool = Field(
+        default=False,
+        description="Record environment snapshot for reproducibility verification",
+    )
+
+    # --- Privacy Controls (v0.9.0) ---
+    redaction_level: str = Field(
+        default="none",
+        description="PII redaction level for results: none, basic, or strict",
+    )
+
+    data_retention_days: int | None = Field(
+        default=None,
+        description="Days to retain evaluation data (None for forever)",
+    )
+
+    exclude_result_fields: list[str] = Field(
+        default_factory=list,
+        description="Result fields to strip before saving (e.g., ['agent_trace'])",
+    )
+
+    # --- Audit Logging (v0.9.0) ---
+    audit_enabled: bool = Field(
+        default=False,
+        description="Enable tamper-proof audit logging of all benchmark operations",
+    )
+
+    audit_log_file: str | None = Field(
+        default=None,
+        description="Path to the audit log file (default: output_dir/audit.jsonl)",
+    )
+
     continue_on_error: bool = Field(
         default=True,
         description="Continue evaluation when individual tasks fail instead of stopping",
@@ -465,6 +519,42 @@ class HarnessConfig(BaseModel):
         """Validate max_failures is positive if set."""
         if v is not None and v < 1:
             raise ValueError("max_failures must be at least 1")
+        return v
+
+    @field_validator("rate_limit_rpm")
+    @classmethod
+    def validate_rate_limit_rpm(cls, v: int | None) -> int | None:
+        """Validate rate_limit_rpm is positive if set."""
+        if v is not None and v < 1:
+            raise ValueError("rate_limit_rpm must be at least 1")
+        return v
+
+    @field_validator("rate_limit_strategy")
+    @classmethod
+    def validate_rate_limit_strategy(cls, v: str) -> str:
+        """Validate rate limit strategy."""
+        valid = ("fixed", "exponential", "adaptive")
+        if v not in valid:
+            raise ValueError(
+                f"Invalid rate_limit_strategy: {v}. Must be one of: {', '.join(valid)}"
+            )
+        return v
+
+    @field_validator("redaction_level")
+    @classmethod
+    def validate_redaction_level(cls, v: str) -> str:
+        """Validate redaction level."""
+        valid = ("none", "basic", "strict")
+        if v not in valid:
+            raise ValueError(f"Invalid redaction_level: {v}. Must be one of: {', '.join(valid)}")
+        return v
+
+    @field_validator("data_retention_days")
+    @classmethod
+    def validate_data_retention_days(cls, v: int | None) -> int | None:
+        """Validate data_retention_days is positive if set."""
+        if v is not None and v < 1:
+            raise ValueError("data_retention_days must be at least 1")
         return v
 
     @field_validator("provider")

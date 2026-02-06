@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Rate limiting for API calls** (#196): Intelligent rate limiting to prevent API quota exhaustion
+  - Token bucket algorithm with configurable requests-per-minute (`rate_limit_rpm`)
+  - Three backoff strategies: fixed, exponential, and adaptive (with jitter)
+  - Retry-After header parsing for automatic 429 recovery
+  - Real-time metrics tracking (throttled requests, total wait time, error counts)
+  - Configurable safety margin to stay within provider limits
+- **Benchmark reproducibility** (#136): Ensure evaluations are reproducible across runs
+  - Global random seed control (`global_seed`) for deterministic evaluation ordering
+  - Environment snapshot capture (Python version, platform, installed packages)
+  - Deterministic mode with `PYTHONHASHSEED` control
+  - SHA256 checksums for reproducibility report verification
+  - JSON-serializable reproducibility reports for sharing and auditing
+- **Privacy controls** (#120): PII detection, redaction, and data governance
+  - Three redaction levels: none, basic (emails/keys/IPs), strict (all PII patterns)
+  - 7 built-in PII patterns (email, API key, IPv4/IPv6, credit card, SSN, phone)
+  - Custom regex pattern support for organization-specific redaction
+  - Recursive dict redaction for nested result structures
+  - Task ID anonymization via SHA256 hashing
+  - Data retention policies with configurable expiry
+  - Field exclusion to strip sensitive result fields before saving
+- **Audit logging** (#118): Tamper-proof audit trail for compliance and security
+  - 13 auditable event types covering config, benchmark, task, result, and data lifecycle
+  - HMAC-SHA256 hash chain for tamper detection and integrity verification
+  - JSON and CSV export formats for compliance reporting
+  - Configurable event filtering (log all or specific event types)
+  - Append-only JSONL file logging with automatic directory creation
+  - Standalone `verify_integrity()` to detect log tampering
 - **Interactive tutorial system** (#198, #157): CLI-based tutorials for learning mcpbr
   - `mcpbr tutorial list` — browse available tutorials with difficulty levels
   - `mcpbr tutorial start <id>` — step-by-step walkthrough with validation
