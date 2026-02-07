@@ -591,3 +591,67 @@ class TestSerializeResults:
         serialized = CloudflareProvider._serialize_results(result)
 
         assert serialized["data"] == "test"
+
+
+# ============================================================================
+# Auth Token Security Tests (issue #426)
+# ============================================================================
+
+
+class TestAuthTokenSecurity:
+    """Test that Worker deployments require authentication."""
+
+    def test_worker_script_denies_unauthenticated_when_no_token(
+        self, cf_provider: CloudflareProvider, tmp_path: Path
+    ) -> None:
+        """Test worker script denies requests when no MCPBR_AUTH_TOKEN is set.
+
+        Previously, checkAuth returned true when no token was configured,
+        exposing evaluation endpoints without authentication.
+        """
+        script_path = cf_provider._generate_worker_script(tmp_path)
+        content = script_path.read_text()
+
+        # The checkAuth function must NOT return true when token is absent.
+        # It should deny by default when no token is configured.
+        assert "if (!token) return true;" not in content
+
+    def test_worker_script_requires_auth_for_evaluate(
+        self, cf_provider: CloudflareProvider, tmp_path: Path
+    ) -> None:
+        """Test that /evaluate endpoint requires auth."""
+        script_path = cf_provider._generate_worker_script(tmp_path)
+        content = script_path.read_text()
+
+        # Auth check must exist before endpoint handlers
+        assert "checkAuth" in content
+        assert "Unauthorized" in content
+
+    def test_setup_generates_auth_token_when_none_configured(self, mock_config: MagicMock) -> None:
+        """Test that setup auto-generates an auth token if none provided."""
+        mock_config.infrastructure.cloudflare.auth_token = None
+        provider = CloudflareProvider(mock_config)
+
+        token = provider._ensure_auth_token()
+
+        assert token is not None
+        assert len(token) >= 32  # Sufficient entropy
+
+    def test_setup_preserves_configured_auth_token(self, mock_config: MagicMock) -> None:
+        """Test that setup keeps an explicitly configured auth token."""
+        mock_config.infrastructure.cloudflare.auth_token = "my-secret-token-123"
+        provider = CloudflareProvider(mock_config)
+
+        token = provider._ensure_auth_token()
+
+        assert token == "my-secret-token-123"
+
+    def test_health_endpoint_exempt_from_auth(
+        self, cf_provider: CloudflareProvider, tmp_path: Path
+    ) -> None:
+        """Test that /health endpoint is exempt from auth checks."""
+        script_path = cf_provider._generate_worker_script(tmp_path)
+        content = script_path.read_text()
+
+        # Health check should be handled before auth check
+        assert content.index("/health") < content.index("checkAuth(request, env)")

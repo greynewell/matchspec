@@ -17,6 +17,7 @@ import asyncio
 import json
 import os
 import platform
+import secrets
 import subprocess
 import tempfile
 import time
@@ -94,6 +95,29 @@ class CloudflareProvider(InfrastructureProvider):
         self._console = Console()
 
     # ------------------------------------------------------------------
+
+    def _ensure_auth_token(self) -> str:
+        """Ensure an auth token is available for Worker authentication.
+
+        If no auth_token is configured, generates a secure random token.
+        This prevents Worker endpoints from being exposed without authentication.
+
+        Returns:
+            The auth token string (existing or newly generated).
+        """
+        existing_token = getattr(self.cf_config, "auth_token", None)
+        if existing_token:
+            return existing_token
+
+        # Generate a secure random token (48 bytes = 64 chars in URL-safe base64)
+        token = secrets.token_urlsafe(48)
+        self.cf_config.auth_token = token
+        self._console.print(
+            "[yellow]Warning: No auth_token configured. "
+            "Auto-generated a secure token for Worker authentication.[/yellow]"
+        )
+        return token
+
     # Benchmark compatibility
     # ------------------------------------------------------------------
 
@@ -266,7 +290,7 @@ function errorResponse(message: string, status = 400): Response {
 
 function checkAuth(request: Request, env: Env): boolean {
   const token = env.MCPBR_AUTH_TOKEN;
-  if (!token) return true; // No auth configured
+  if (!token) return false; // Deny access when no auth token is configured
   const header = request.headers.get("Authorization");
   return header === `Bearer ${token}`;
 }
@@ -876,6 +900,9 @@ export default {
 
             # 1. Validate benchmark compatibility
             self._check_benchmark_compatibility()
+
+            # 1b. Ensure auth token is available for Worker security
+            self._ensure_auth_token()
 
             # 2. Create temporary deployment directory
             deploy_dir = Path(tempfile.mkdtemp(prefix="mcpbr-cf-"))
