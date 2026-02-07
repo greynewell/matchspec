@@ -198,7 +198,12 @@ class AuditLogger:
 
         env_key = os.environ.get("MCPBR_AUDIT_HMAC_KEY")
         if env_key:
-            return base64.b64decode(env_key)
+            try:
+                return base64.b64decode(env_key)
+            except Exception as exc:
+                raise ValueError(
+                    "MCPBR_AUDIT_HMAC_KEY environment variable contains invalid base64"
+                ) from exc
 
         return os.urandom(32)
 

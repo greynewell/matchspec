@@ -193,7 +193,7 @@ class S3Storage:
         except subprocess.TimeoutExpired as e:
             raise CloudStorageError(f"S3 upload timed out after {e.timeout}s for {s3_uri}") from e
         except FileNotFoundError:
-            raise CloudStorageError("AWS CLI not found. Install it: pip install awscli")
+            raise CloudStorageError("AWS CLI not found. Install it: pip install awscli") from None
 
     def download(self, key: str, local_path: Path) -> Path:
         """Download a file from S3.
@@ -225,7 +225,7 @@ class S3Storage:
             Path(local_path).unlink(missing_ok=True)
             raise CloudStorageError(f"S3 download timed out after {e.timeout}s for {s3_uri}") from e
         except FileNotFoundError:
-            raise CloudStorageError("AWS CLI not found. Install it: pip install awscli")
+            raise CloudStorageError("AWS CLI not found. Install it: pip install awscli") from None
 
     def list_objects(self, prefix: str = "") -> list[str]:
         """List objects in the bucket under the given prefix.
@@ -387,7 +387,9 @@ class GCSStorage:
         except subprocess.TimeoutExpired as e:
             raise CloudStorageError(f"GCS upload timed out after {e.timeout}s for {gcs_uri}") from e
         except FileNotFoundError:
-            raise CloudStorageError("gcloud CLI not found. Install: https://cloud.google.com/sdk")
+            raise CloudStorageError(
+                "gcloud CLI not found. Install: https://cloud.google.com/sdk"
+            ) from None
 
     def download(self, key: str, local_path: Path) -> Path:
         """Download a file from GCS.
@@ -419,7 +421,9 @@ class GCSStorage:
                 f"GCS download timed out after {e.timeout}s for {gcs_uri}"
             ) from e
         except FileNotFoundError:
-            raise CloudStorageError("gcloud CLI not found. Install: https://cloud.google.com/sdk")
+            raise CloudStorageError(
+                "gcloud CLI not found. Install: https://cloud.google.com/sdk"
+            ) from None
 
     def upload_results(self, run_id: str, results: dict[str, Any]) -> str:
         """Upload evaluation results as JSON.
@@ -514,7 +518,7 @@ class AzureBlobStorage:
         except FileNotFoundError:
             raise CloudStorageError(
                 "Azure CLI not found. Install: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
-            )
+            ) from None
 
     def download(self, key: str, local_path: Path) -> Path:
         """Download a file from Azure Blob Storage.
@@ -561,7 +565,7 @@ class AzureBlobStorage:
         except FileNotFoundError:
             raise CloudStorageError(
                 "Azure CLI not found. Install: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
-            )
+            ) from None
 
     def upload_results(self, run_id: str, results: dict[str, Any]) -> str:
         """Upload evaluation results as JSON.

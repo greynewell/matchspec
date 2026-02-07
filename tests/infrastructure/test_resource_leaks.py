@@ -60,7 +60,7 @@ class TestAWSDownloadResultsSFTPLeak:
         # SFTP must have been closed despite the error
         mock_sftp.close.assert_called()
 
-    async def test_temp_file_cleaned_on_sftp_error(self, aws_provider, tmp_path) -> None:
+    async def test_temp_file_cleaned_on_sftp_error(self, aws_provider) -> None:
         """Temp file must be cleaned up even when SFTP operations fail."""
         mock_ssh = MagicMock()
         mock_sftp = MagicMock()

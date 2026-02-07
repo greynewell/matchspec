@@ -586,7 +586,7 @@ class TestPythonVersionValidation:
             provider = AWSProvider(mock_config)
             assert provider.aws_config.python_version == ver
 
-    def test_shell_injection_in_python_version_rejected(self, mock_config: MagicMock) -> None:
+    def test_shell_injection_in_python_version_rejected(self) -> None:
         """Malicious python_version values should raise ValueError."""
         from mcpbr.infrastructure.aws import _validate_python_version
 
@@ -639,7 +639,9 @@ class TestSSHCIDRSafety:
     def test_get_ssh_cidr_never_returns_open(self) -> None:
         """_get_ssh_cidr must never return 0.0.0.0/0."""
         # Simulate ifconfig.me failure
-        with patch("subprocess.run", side_effect=Exception("network error")):
+        with patch(
+            "mcpbr.infrastructure.aws.subprocess.run", side_effect=Exception("network error")
+        ):
             with pytest.raises(RuntimeError, match="Could not determine"):
                 AWSProvider._get_ssh_cidr()
 
@@ -648,7 +650,7 @@ class TestSSHCIDRSafety:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "not-an-ip-address\n"
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("mcpbr.infrastructure.aws.subprocess.run", return_value=mock_result):
             with pytest.raises(RuntimeError, match="Could not determine"):
                 AWSProvider._get_ssh_cidr()
 
@@ -657,6 +659,6 @@ class TestSSHCIDRSafety:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "203.0.113.42\n"
-        with patch("subprocess.run", return_value=mock_result):
+        with patch("mcpbr.infrastructure.aws.subprocess.run", return_value=mock_result):
             cidr = AWSProvider._get_ssh_cidr()
             assert cidr == "203.0.113.42/32"

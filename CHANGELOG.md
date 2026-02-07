@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docker:27-dind-rootless`) instead of `--privileged` by default. Privileged mode can be
   explicitly enabled via `dind_privileged: true`.
 - **Sandbox strict mode validation** (#427): `validate_sandbox()` now raises `ValueError` in
-  strict mode when container settings don't match the security profile, instead of only logging
+  strict mode when container settings don't match the security profile, instead of only logging warnings
 
 ### Changed
 

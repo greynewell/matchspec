@@ -377,7 +377,6 @@ STRICT_ALLOWED_SYSCALLS = [
     "prlimit64",
     "getrusage",
     "rseq",
-    "mprotect",
 ]
 
 

@@ -177,6 +177,7 @@ class CloudflareProvider(InfrastructureProvider):
             "[vars]",
             f'MCPBR_BENCHMARK = "{self.config.benchmark}"',
             f'MCPBR_WORKER_NAME = "{worker_name}"',
+            f'MCPBR_AUTH_TOKEN = "{getattr(self.cf_config, "auth_token", "")}"',
             "",
         ]
 

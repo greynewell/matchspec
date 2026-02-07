@@ -68,8 +68,8 @@ _PII_PATTERNS: list[str] = [
     r"\b\d{4}[-\s]?\d{6}[-\s]?\d{5}\b",
     # Social Security Numbers (with dashes)
     r"\b\d{3}-\d{2}-\d{4}\b",
-    # Social Security Numbers (without dashes, exactly 9 digits)
-    r"\b\d{9}\b",
+    # Social Security Numbers (without dashes, excluding invalid prefixes)
+    r"\b(?!000|666|9\d\d)\d{3}(?!00)\d{2}(?!0000)\d{4}\b",
     # Phone numbers (US format, with optional country code and various separators)
     r"\b\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
     # Phone numbers (international format: +CC followed by subscriber number groups)

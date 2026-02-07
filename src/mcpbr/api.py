@@ -23,6 +23,7 @@ Endpoints::
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import re
@@ -79,7 +80,8 @@ class BenchmarkAPIHandler(BaseHTTPRequestHandler):
         if not self.api_token:
             return True
         auth_header = self.headers.get("Authorization", "")
-        return auth_header == f"Bearer {self.api_token}"
+        expected = f"Bearer {self.api_token}"
+        return hmac.compare_digest(auth_header, expected)
 
     # ------------------------------------------------------------------
     # Response helpers
