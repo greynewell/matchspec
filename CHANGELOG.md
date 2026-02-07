@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **PII pattern coverage and anonymization** (#431): Improved PII detection patterns in privacy module
+  - Added abbreviated/compressed IPv6 address detection (e.g., `::1`, `fe80::1`, `2001:db8::1`)
+  - Added SSN detection without dashes (standalone 9-digit numbers)
+  - Added American Express credit card detection (15-digit format with optional separators)
+  - Added international phone number detection (e.g., `+44 20 7946 0958`)
+
 ## [0.12.0] - 2026-02-07
 
 ### Added

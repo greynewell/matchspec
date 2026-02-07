@@ -52,20 +52,28 @@ class PrivacyConfig:
 # Built-in PII detection patterns, ordered from most common to most specific.
 # BASIC mode uses the first 4 patterns; STRICT mode uses all of them.
 _PII_PATTERNS: list[str] = [
+    # --- BASIC patterns (indices 0-3) ---
     # Email addresses
     r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
     # API keys (generic prefixed secrets)
     r"(?:sk|pk|api|key|token|secret|password)[-_]?[a-zA-Z0-9]{20,}",
     # IPv4 addresses
     r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b",
-    # IPv6 addresses
-    r"(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}",
-    # Credit card numbers (with optional separators)
+    # IPv6 addresses (full and abbreviated forms like ::1, fe80::1, 2001:db8::1)
+    r"(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}",
+    # --- STRICT patterns (indices 4+) ---
+    # Credit card numbers: 16 digits with optional separators (Visa, Mastercard, Discover)
     r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b",
-    # Social Security Numbers
+    # Credit card numbers: 15 digits with optional separators (American Express)
+    r"\b\d{4}[-\s]?\d{6}[-\s]?\d{5}\b",
+    # Social Security Numbers (with dashes)
     r"\b\d{3}-\d{2}-\d{4}\b",
-    # Phone numbers (US format)
+    # Social Security Numbers (without dashes, exactly 9 digits)
+    r"\b\d{9}\b",
+    # Phone numbers (US format, with optional country code and various separators)
     r"\b\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
+    # Phone numbers (international format: +CC followed by subscriber number groups)
+    r"\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b",
 ]
 
 # Number of patterns used in BASIC redaction mode

@@ -380,3 +380,158 @@ class TestApplyPrivacyControls:
         original_data = dict(data)
         apply_privacy_controls(data, config)
         assert data == original_data
+
+
+class TestPiiPatternCoverageGaps:
+    """Tests for PII pattern coverage gaps identified in issue #431."""
+
+    def test_ssn_without_dashes_strict(self) -> None:
+        """Test that SSNs without dashes (e.g., 123456789) are redacted in STRICT mode."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("SSN is 123456789 on file")
+        assert "123456789" not in result
+        assert "[REDACTED]" in result
+
+    def test_abbreviated_ipv6_loopback_strict(self) -> None:
+        """Test that abbreviated IPv6 loopback ::1 is redacted in STRICT mode."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Listening on ::1 port 8080")
+        assert "::1" not in result
+
+    def test_abbreviated_ipv6_link_local_strict(self) -> None:
+        """Test that abbreviated IPv6 like fe80::1 is redacted in STRICT mode."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Interface at fe80::1")
+        assert "fe80::1" not in result
+
+    def test_abbreviated_ipv6_prefix_strict(self) -> None:
+        """Test that abbreviated IPv6 like 2001:db8::1 is redacted in STRICT mode."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Route via 2001:db8::1")
+        assert "2001:db8::1" not in result
+
+    def test_amex_credit_card_strict(self) -> None:
+        """Test that American Express card numbers (15 digits) are redacted in STRICT."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Amex card 378282246310005")
+        assert "378282246310005" not in result
+        assert "[REDACTED]" in result
+
+    def test_amex_credit_card_with_separators_strict(self) -> None:
+        """Test that Amex cards with spaces (3782 822463 10005) are redacted in STRICT."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Amex card 3782 822463 10005")
+        assert "3782 822463 10005" not in result
+        assert "[REDACTED]" in result
+
+    def test_international_phone_number_strict(self) -> None:
+        """Test that international phone numbers (e.g., +44 20 7946 0958) are redacted."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Call +44 20 7946 0958")
+        assert "+44 20 7946 0958" not in result
+        assert "[REDACTED]" in result
+
+    def test_phone_number_with_country_code_strict(self) -> None:
+        """Test that phone numbers with + country code prefix are redacted."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Reach me at +61 2 9876 5432")
+        assert "+61 2 9876 5432" not in result
+
+    def test_multiple_pii_types_in_one_string(self) -> None:
+        """Test that multiple different PII types in one string are all redacted."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        text = "Email: user@test.com, SSN: 123-45-6789, Phone: (555) 123-4567"
+        result = redactor.redact(text)
+        assert "user@test.com" not in result
+        assert "123-45-6789" not in result
+        assert "(555) 123-4567" not in result
+
+    def test_pii_in_json_like_string(self) -> None:
+        """Test that PII embedded in JSON-like strings is redacted."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        text = '{"email": "admin@corp.com", "ip": "10.0.0.1"}'
+        result = redactor.redact(text)
+        assert "admin@corp.com" not in result
+        assert "10.0.0.1" not in result
+
+    def test_redacted_output_no_pii_leak(self) -> None:
+        """Verify that the redacted output contains zero original PII tokens."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        pii_values = [
+            "leaked@email.org",
+            "192.168.100.200",
+            "4111-1111-1111-1111",
+            "123-45-6789",
+            "(555) 987-6543",
+        ]
+        text = " | ".join(pii_values)
+        result = redactor.redact(text)
+        for pii in pii_values:
+            assert pii not in result, f"PII '{pii}' leaked through redaction"
+
+    def test_nested_list_of_dicts_with_pii(self) -> None:
+        """Test that lists of dicts containing PII are fully redacted."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.BASIC)
+        redactor = PiiRedactor(config)
+        data = {
+            "records": [
+                {"email": "a@b.com", "id": 1},
+                {"email": "c@d.com", "id": 2},
+            ]
+        }
+        result = redactor.redact_dict(data)
+        assert result["records"][0]["email"] == "[REDACTED]"
+        assert result["records"][1]["email"] == "[REDACTED]"
+        assert result["records"][0]["id"] == 1
+        assert result["records"][1]["id"] == 2
+
+    def test_deeply_nested_list_and_dict_mix(self) -> None:
+        """Test redaction in deeply nested structures mixing lists and dicts."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.BASIC)
+        redactor = PiiRedactor(config)
+        data = {"outer": [{"inner": [{"contact": "deep@nested.com"}]}]}
+        result = redactor.redact_dict(data)
+        assert result["outer"][0]["inner"][0]["contact"] == "[REDACTED]"
+
+    def test_credit_card_no_separators_strict(self) -> None:
+        """Test that credit card numbers with no separators are redacted."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Card: 4111111111111111")
+        assert "4111111111111111" not in result
+        assert "[REDACTED]" in result
+
+    def test_phone_no_separators_strict(self) -> None:
+        """Test that phone numbers with no separators (5551234567) are redacted."""
+        config = PrivacyConfig(redaction_level=RedactionLevel.STRICT)
+        redactor = PiiRedactor(config)
+        result = redactor.redact("Phone: 5551234567")
+        assert "5551234567" not in result
+
+    def test_exclude_fields_in_nested_dict(self) -> None:
+        """Test that exclude_fields works at nested levels."""
+        config = PrivacyConfig(
+            redaction_level=RedactionLevel.BASIC,
+            exclude_fields=["secret"],
+        )
+        redactor = PiiRedactor(config)
+        data = {
+            "level1": {
+                "public": "visible",
+                "secret": "hidden",
+            }
+        }
+        result = redactor.redact_dict(data)
+        assert "secret" not in result["level1"]
+        assert result["level1"]["public"] == "visible"
