@@ -551,3 +551,147 @@ class TestStrictSeccompAllowlist:
         assert fmt["defaultAction"] == "SCMP_ACT_ALLOW"
         assert fmt["syscalls"][0]["action"] == "SCMP_ACT_ERRNO"
         assert "mount" in fmt["syscalls"][0]["names"]
+
+
+class TestValidateSandboxStrictMode:
+    """Tests for #427: validate_sandbox raises errors in strict mode."""
+
+    def test_strict_mode_raises_on_cap_drop_mismatch(self) -> None:
+        """In strict mode, cap_drop mismatch should raise ValueError."""
+        profile = SandboxProfile(
+            cap_drop=["ALL"],
+            cap_add=[],
+            no_new_privileges=False,
+            security_level=SecurityLevel.STRICT,
+        )
+        container_attrs = {"CapDrop": ["SYS_ADMIN"]}
+        with pytest.raises(ValueError, match="cap_drop"):
+            validate_sandbox(container_attrs, profile)
+
+    def test_strict_mode_raises_on_network_mismatch(self) -> None:
+        """In strict mode, network_mode mismatch should raise ValueError."""
+        profile = SandboxProfile(
+            network_disabled=True,
+            no_new_privileges=False,
+            security_level=SecurityLevel.STRICT,
+        )
+        container_attrs = {"NetworkMode": "bridge"}
+        with pytest.raises(ValueError, match="network_mode"):
+            validate_sandbox(container_attrs, profile)
+
+    def test_strict_mode_raises_on_read_only_mismatch(self) -> None:
+        """In strict mode, read_only_rootfs mismatch should raise ValueError."""
+        profile = SandboxProfile(
+            read_only_rootfs=True,
+            no_new_privileges=False,
+            security_level=SecurityLevel.STRICT,
+        )
+        container_attrs = {"ReadonlyRootfs": False}
+        with pytest.raises(ValueError, match="read_only_rootfs"):
+            validate_sandbox(container_attrs, profile)
+
+    def test_strict_mode_raises_on_no_new_privileges_mismatch(self) -> None:
+        """In strict mode, no_new_privileges mismatch should raise ValueError."""
+        profile = SandboxProfile(
+            no_new_privileges=True,
+            security_level=SecurityLevel.STRICT,
+        )
+        container_attrs = {"SecurityOpt": []}
+        with pytest.raises(ValueError, match="no_new_privileges"):
+            validate_sandbox(container_attrs, profile)
+
+    def test_strict_mode_raises_on_cap_add_mismatch(self) -> None:
+        """In strict mode, cap_add mismatch should raise ValueError."""
+        profile = SandboxProfile(
+            cap_add=["CHOWN", "SETUID"],
+            no_new_privileges=False,
+            security_level=SecurityLevel.STRICT,
+        )
+        container_attrs = {"CapAdd": ["CHOWN"]}
+        with pytest.raises(ValueError, match="cap_add"):
+            validate_sandbox(container_attrs, profile)
+
+    def test_strict_mode_raises_on_userns_mismatch(self) -> None:
+        """In strict mode, userns_mode mismatch should raise ValueError."""
+        profile = SandboxProfile(
+            userns_mode="host",
+            no_new_privileges=False,
+            security_level=SecurityLevel.STRICT,
+        )
+        container_attrs = {"UsernsMode": ""}
+        with pytest.raises(ValueError, match="userns_mode"):
+            validate_sandbox(container_attrs, profile)
+
+    def test_strict_mode_valid_profile_passes(self) -> None:
+        """In strict mode, a valid container should still pass without error."""
+        profile = SandboxProfile(
+            cap_drop=["ALL"],
+            cap_add=["CHOWN"],
+            no_new_privileges=True,
+            read_only_rootfs=True,
+            network_disabled=True,
+            userns_mode="host",
+            security_level=SecurityLevel.STRICT,
+        )
+        container_attrs = {
+            "CapDrop": ["ALL"],
+            "CapAdd": ["CHOWN"],
+            "ReadonlyRootfs": True,
+            "NetworkMode": "none",
+            "SecurityOpt": ["no-new-privileges:true"],
+            "UsernsMode": "host",
+        }
+        valid, mismatches = validate_sandbox(container_attrs, profile)
+        assert valid is True
+        assert mismatches == []
+
+    def test_strict_mode_raises_with_multiple_mismatches(self) -> None:
+        """In strict mode with multiple mismatches, ValueError should list all of them."""
+        profile = SandboxProfile(
+            cap_drop=["ALL"],
+            read_only_rootfs=True,
+            network_disabled=True,
+            no_new_privileges=False,
+            security_level=SecurityLevel.STRICT,
+        )
+        container_attrs = {
+            "CapDrop": [],
+            "ReadonlyRootfs": False,
+            "NetworkMode": "bridge",
+        }
+        with pytest.raises(ValueError, match="Sandbox validation failed"):
+            validate_sandbox(container_attrs, profile)
+
+    def test_standard_mode_warns_but_does_not_raise(self, caplog: pytest.LogCaptureFixture) -> None:
+        """In standard mode, mismatches should warn but NOT raise (backward compat)."""
+        import logging
+
+        profile = SandboxProfile(
+            cap_drop=["SYS_ADMIN", "NET_ADMIN"],
+            no_new_privileges=False,
+            security_level=SecurityLevel.STANDARD,
+        )
+        container_attrs = {"CapDrop": ["SYS_ADMIN"]}
+        with caplog.at_level(logging.WARNING):
+            valid, mismatches = validate_sandbox(container_attrs, profile)
+        assert valid is False
+        assert len(mismatches) > 0
+        assert any("cap_drop" in m for m in caplog.messages)
+
+    def test_permissive_mode_warns_but_does_not_raise(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """In permissive mode, mismatches should warn but NOT raise (backward compat)."""
+        import logging
+
+        profile = SandboxProfile(
+            cap_drop=["SYS_ADMIN"],
+            no_new_privileges=False,
+            security_level=SecurityLevel.PERMISSIVE,
+        )
+        container_attrs = {"CapDrop": []}
+        with caplog.at_level(logging.WARNING):
+            valid, mismatches = validate_sandbox(container_attrs, profile)
+        assert valid is False
+        assert len(mismatches) > 0
+        # Should NOT have raised

@@ -681,6 +681,9 @@ def validate_sandbox(
 
     valid = len(mismatches) == 0
     if not valid:
+        if profile.security_level == SecurityLevel.STRICT:
+            detail = "; ".join(mismatches)
+            raise ValueError(f"Sandbox validation failed in strict mode: {detail}")
         for mismatch in mismatches:
             logger.warning("Sandbox validation: %s", mismatch)
 
