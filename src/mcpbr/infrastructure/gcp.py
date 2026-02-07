@@ -1,7 +1,9 @@
 """GCP Compute Engine infrastructure provider."""
 
 import asyncio
+import ipaddress
 import json
+import logging
 import os
 import shlex
 import subprocess
@@ -20,7 +22,10 @@ from rich.console import Console
 from .. import __version__
 from ..config import HarnessConfig
 from ..run_state import RunState
+from .aws import _validate_env_key, _validate_python_version
 from .base import InfrastructureProvider
+
+logger = logging.getLogger(__name__)
 
 
 class GCPProvider(InfrastructureProvider):
@@ -231,9 +236,8 @@ class GCPProvider(InfrastructureProvider):
             # Rule already exists
             return
 
-        # Create firewall rule — restrict to caller's public IP when possible
+        # Create firewall rule — restrict to caller's public IP (required)
         console.print("[cyan]Creating SSH firewall rule...[/cyan]")
-        source_range = "0.0.0.0/0"
         try:
             ip_result = subprocess.run(
                 ["curl", "-s", "--max-time", "5", "https://ifconfig.me"],
@@ -243,10 +247,17 @@ class GCPProvider(InfrastructureProvider):
                 check=False,
             )
             if ip_result.returncode == 0 and ip_result.stdout.strip():
-                source_range = f"{ip_result.stdout.strip()}/32"
+                ip_str = ip_result.stdout.strip()
+                ipaddress.ip_address(ip_str)  # Validate it's an IP
+                source_range = f"{ip_str}/32"
                 console.print(f"[dim]  Restricting SSH to caller IP: {source_range}[/dim]")
-        except Exception:
-            console.print("[dim]  Could not detect caller IP; allowing SSH from all sources[/dim]")
+            else:
+                raise RuntimeError("curl returned no output")
+        except Exception as exc:
+            raise RuntimeError(
+                "Could not determine your public IP address for SSH firewall rule. "
+                "Set the source range manually or check your network connection."
+            ) from exc
 
         create_cmd = [
             "gcloud",
@@ -393,6 +404,9 @@ class GCPProvider(InfrastructureProvider):
         console = Console()
         py_ver = self.gcp_config.python_version
 
+        # Validate python version before interpolating into shell commands
+        _validate_python_version(py_ver)
+
         # Step 1: System packages + Docker
         console.print("[cyan]Installing system packages and Docker...[/cyan]")
         step1_cmd = (
@@ -488,6 +502,7 @@ class GCPProvider(InfrastructureProvider):
 
         env_vars = {}
         for key in self.gcp_config.env_keys_to_export:
+            _validate_env_key(key)
             value = os.environ.get(key)
             if value:
                 env_vars[key] = value

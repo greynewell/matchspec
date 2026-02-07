@@ -569,3 +569,94 @@ class TestMcpbrCmd:
         """Test _mcpbr_cmd with custom Python version."""
         aws_provider.aws_config.python_version = "3.12"
         assert aws_provider._mcpbr_cmd() == "python3.12 -m mcpbr"
+
+
+# ============================================================================
+# Security Validation Tests (#421, #422)
+# ============================================================================
+
+
+class TestPythonVersionValidation:
+    """Tests for #421: python_version shell injection prevention."""
+
+    def test_valid_python_versions_accepted(self, mock_config: MagicMock) -> None:
+        """Standard Python versions should be accepted."""
+        for ver in ["3.11", "3.12", "3.13", "3.9"]:
+            mock_config.infrastructure.aws.python_version = ver
+            provider = AWSProvider(mock_config)
+            assert provider.aws_config.python_version == ver
+
+    def test_shell_injection_in_python_version_rejected(self, mock_config: MagicMock) -> None:
+        """Malicious python_version values should raise ValueError."""
+        from mcpbr.infrastructure.aws import _validate_python_version
+
+        for bad_ver in [
+            "3.11; rm -rf /",
+            "3.11 && curl evil.com",
+            "$(whoami)",
+            "3.11`id`",
+            "../3.11",
+        ]:
+            with pytest.raises(ValueError, match="Invalid python_version"):
+                _validate_python_version(bad_ver)
+
+    def test_valid_python_version_passes_validation(self) -> None:
+        from mcpbr.infrastructure.aws import _validate_python_version
+
+        # Should not raise
+        _validate_python_version("3.11")
+        _validate_python_version("3.12")
+        _validate_python_version("3.9")
+
+
+class TestEnvKeyValidation:
+    """Tests for #421: env key name injection prevention."""
+
+    def test_valid_env_keys_accepted(self) -> None:
+        from mcpbr.infrastructure.aws import _validate_env_key
+
+        for key in ["ANTHROPIC_API_KEY", "HOME", "PATH", "_VAR", "MY_VAR_123"]:
+            _validate_env_key(key)  # Should not raise
+
+    def test_shell_injection_in_env_key_rejected(self) -> None:
+        from mcpbr.infrastructure.aws import _validate_env_key
+
+        for bad_key in [
+            "FOO;rm -rf /",
+            "BAR && evil",
+            "$(whoami)",
+            "KEY`id`",
+            "KEY=value",
+            "KEY NAME",
+        ]:
+            with pytest.raises(ValueError, match="Invalid environment variable name"):
+                _validate_env_key(bad_key)
+
+
+class TestSSHCIDRSafety:
+    """Tests for #422: SSH CIDR should never fall back to 0.0.0.0/0."""
+
+    def test_get_ssh_cidr_never_returns_open(self) -> None:
+        """_get_ssh_cidr must never return 0.0.0.0/0."""
+        # Simulate ifconfig.me failure
+        with patch("subprocess.run", side_effect=Exception("network error")):
+            with pytest.raises(RuntimeError, match="Could not determine"):
+                AWSProvider._get_ssh_cidr()
+
+    def test_get_ssh_cidr_validates_ip_format(self) -> None:
+        """_get_ssh_cidr must validate that the response is an IP address."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "not-an-ip-address\n"
+        with patch("subprocess.run", return_value=mock_result):
+            with pytest.raises(RuntimeError, match="Could not determine"):
+                AWSProvider._get_ssh_cidr()
+
+    def test_get_ssh_cidr_with_valid_ip(self) -> None:
+        """_get_ssh_cidr should work with a valid IP response."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "203.0.113.42\n"
+        with patch("subprocess.run", return_value=mock_result):
+            cidr = AWSProvider._get_ssh_cidr()
+            assert cidr == "203.0.113.42/32"

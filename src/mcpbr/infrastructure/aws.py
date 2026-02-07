@@ -1,8 +1,11 @@
 """AWS EC2 infrastructure provider."""
 
 import asyncio
+import ipaddress
 import json
+import logging
 import os
+import re
 import shlex
 import subprocess
 import time
@@ -20,6 +23,38 @@ from rich.console import Console
 from .. import __version__
 from ..config import HarnessConfig
 from .base import InfrastructureProvider
+
+logger = logging.getLogger(__name__)
+
+# Regex for valid Python version strings (e.g., "3.11", "3.12")
+_PYTHON_VERSION_RE = re.compile(r"^\d+\.\d+$")
+
+# Regex for valid environment variable names (POSIX)
+_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_python_version(version: str) -> None:
+    """Validate python_version is a safe version string (e.g. '3.11').
+
+    Raises:
+        ValueError: If the version string contains unsafe characters.
+    """
+    if not _PYTHON_VERSION_RE.match(version):
+        raise ValueError(
+            f"Invalid python_version: {version!r}. Must be a version like '3.11' or '3.12'."
+        )
+
+
+def _validate_env_key(key: str) -> None:
+    """Validate an environment variable name is safe for shell interpolation.
+
+    Raises:
+        ValueError: If the key contains unsafe characters.
+    """
+    if not _ENV_KEY_RE.match(key):
+        raise ValueError(
+            f"Invalid environment variable name: {key!r}. Must match [A-Za-z_][A-Za-z0-9_]*."
+        )
 
 
 class AWSProvider(InfrastructureProvider):
@@ -47,7 +82,12 @@ class AWSProvider(InfrastructureProvider):
 
     @staticmethod
     def _get_ssh_cidr() -> str:
-        """Get CIDR for SSH security group rule, restricted to caller's IP when possible."""
+        """Get CIDR for SSH security group rule, restricted to caller's IP.
+
+        Raises:
+            RuntimeError: If the caller's public IP cannot be determined. Never
+                falls back to 0.0.0.0/0.
+        """
         try:
             result = subprocess.run(
                 ["curl", "-s", "--max-time", "5", "https://ifconfig.me"],
@@ -57,10 +97,17 @@ class AWSProvider(InfrastructureProvider):
                 check=False,
             )
             if result.returncode == 0 and result.stdout.strip():
-                return f"{result.stdout.strip()}/32"
-        except Exception:
-            pass
-        return "0.0.0.0/0"
+                ip_str = result.stdout.strip()
+                # Validate it's actually an IP address
+                ipaddress.ip_address(ip_str)
+                return f"{ip_str}/32"
+        except (ValueError, Exception) as exc:
+            logger.debug("IP detection failed: %s", exc)
+
+        raise RuntimeError(
+            "Could not determine your public IP address for SSH security group. "
+            "Set the SSH CIDR manually or check your network connection."
+        )
 
     def _determine_instance_type(self) -> str:
         """Map cpu_cores/memory_gb to AWS EC2 instance type.
@@ -473,6 +520,9 @@ class AWSProvider(InfrastructureProvider):
         console = Console()
         py_ver = self.aws_config.python_version
 
+        # Validate python version before interpolating into shell commands
+        _validate_python_version(py_ver)
+
         # Step 1: System packages + Docker
         console.print("[cyan]Installing system packages and Docker...[/cyan]")
         step1_cmd = (
@@ -564,6 +614,7 @@ class AWSProvider(InfrastructureProvider):
 
         env_vars = {}
         for key in self.aws_config.env_keys_to_export:
+            _validate_env_key(key)
             value = os.environ.get(key)
             if value:
                 env_vars[key] = value
