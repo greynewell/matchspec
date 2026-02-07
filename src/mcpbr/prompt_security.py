@@ -209,6 +209,15 @@ class PromptSecurityScanner:
         self._compiled_patterns: list[tuple[_DetectionPattern, re.Pattern[str]]] = []
         self._compiled_allowlist: list[re.Pattern[str]] = []
 
+        # Validate scan_level
+        valid_scan_levels = ("full", "minimal")
+        if config.scan_level not in valid_scan_levels:
+            logger.warning(
+                "Unknown scan_level '%s', treating as 'full'. Valid values: %s",
+                config.scan_level,
+                ", ".join(valid_scan_levels),
+            )
+
         # Filter patterns by scan level
         for pat in INJECTION_PATTERNS:
             if config.scan_level == "minimal" and pat.severity not in (
@@ -296,10 +305,9 @@ class PromptSecurityScanner:
             result: ScanResult to append findings to.
         """
         for pattern_def, compiled in self._compiled_patterns:
-            match = compiled.search(text)
-            if match:
+            for match in compiled.finditer(text):
                 matched_text = match.group(0)
-                # Check allowlist
+                # Check allowlist for each match individually
                 if self._is_allowlisted(matched_text):
                     continue
                 result.findings.append(
