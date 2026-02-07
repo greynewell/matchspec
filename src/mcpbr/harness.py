@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -983,6 +984,28 @@ def _aggregate_comparison_results(results: list[TaskResult]) -> dict[str, Any]:
     }
 
 
+def _upload_to_cloud_async(
+    storage: Any,
+    run_id: str,
+    files_to_upload: list[tuple[Path, str]],
+) -> None:
+    """Upload files to cloud storage in a background thread.
+
+    Non-blocking: failures are logged but do not interrupt the evaluation.
+    """
+
+    def _do_upload() -> None:
+        for local_path, key in files_to_upload:
+            try:
+                if local_path.exists():
+                    storage.upload(local_path, f"{run_id}/{key}")
+            except Exception as e:
+                logger.warning(f"Cloud upload failed for {key}: {e}")
+
+    thread = threading.Thread(target=_do_upload, daemon=True)
+    thread.start()
+
+
 async def run_evaluation(
     config: HarnessConfig,
     run_mcp: bool = True,
@@ -1123,6 +1146,25 @@ async def run_evaluation(
     if config.cache_enabled:
         cache = ResultCache(cache_dir=config.cache_dir, enabled=True)
         console.print(f"[dim]Cache enabled: {cache.cache_dir}[/dim]")
+
+    # Initialize cloud storage for incremental uploads
+    cloud_storage = None
+    cloud_run_id: str | None = None
+    cloud_uploaded_logs: set[str] = set()
+    if getattr(config, "cloud_storage", None):
+        try:
+            from .storage.cloud import create_cloud_storage
+
+            cloud_storage = create_cloud_storage(config.cloud_storage)
+            cloud_run_id = (
+                incremental_save_path.stem
+                if incremental_save_path
+                else datetime.now().strftime("%Y%m%d_%H%M%S")
+            )
+            console.print(f"[dim]Cloud storage enabled: {type(cloud_storage).__name__}[/dim]")
+        except Exception as e:
+            logger.warning(f"Failed to initialize cloud storage: {e}")
+            cloud_storage = None
 
     # Prepare metadata for incremental saves
     metadata_for_save = None
@@ -1421,6 +1463,28 @@ async def run_evaluation(
                             # Only include metadata on first save
                             metadata_for_save = None
 
+                        # Upload incrementally to cloud storage
+                        if cloud_storage and cloud_run_id:
+                            files: list[tuple[Path, str]] = []
+                            # Upload the JSONL file (overwrite with latest)
+                            if incremental_save_path:
+                                jsonl_path = (
+                                    incremental_save_path.with_suffix(
+                                        incremental_save_path.suffix + ".jsonl"
+                                    )
+                                    if incremental_save_path.suffix != ".jsonl"
+                                    else incremental_save_path
+                                )
+                                files.append((jsonl_path, "incremental_results.jsonl"))
+                            # Upload any new log files for this instance
+                            if log_dir:
+                                for lf in log_dir.iterdir():
+                                    if lf.is_file() and lf.name not in cloud_uploaded_logs:
+                                        files.append((lf, f"logs/{lf.name}"))
+                                        cloud_uploaded_logs.add(lf.name)
+                            if files:
+                                _upload_to_cloud_async(cloud_storage, cloud_run_id, files)
+
                     if budget_exceeded:
                         progress.stop()
                         console.print(
@@ -1471,6 +1535,26 @@ async def run_evaluation(
                             )
                             # Only include metadata on first save
                             metadata_for_save = None
+
+                        # Upload incrementally to cloud storage
+                        if cloud_storage and cloud_run_id:
+                            files: list[tuple[Path, str]] = []
+                            if incremental_save_path:
+                                jsonl_path = (
+                                    incremental_save_path.with_suffix(
+                                        incremental_save_path.suffix + ".jsonl"
+                                    )
+                                    if incremental_save_path.suffix != ".jsonl"
+                                    else incremental_save_path
+                                )
+                                files.append((jsonl_path, "incremental_results.jsonl"))
+                            if log_dir:
+                                for lf in log_dir.iterdir():
+                                    if lf.is_file() and lf.name not in cloud_uploaded_logs:
+                                        files.append((lf, f"logs/{lf.name}"))
+                                        cloud_uploaded_logs.add(lf.name)
+                            if files:
+                                _upload_to_cloud_async(cloud_storage, cloud_run_id, files)
 
                     if budget_exceeded:
                         progress.stop()

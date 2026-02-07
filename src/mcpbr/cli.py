@@ -889,6 +889,8 @@ To archive:
             )
             results = infra_result["results"]
         else:
+            # Enable incremental save for crash recovery
+            incremental_path = final_output_dir / "incremental_results"
             results = asyncio.run(
                 run_evaluation(
                     config=config,
@@ -901,6 +903,7 @@ To archive:
                     task_ids=selected_task_ids,
                     state_tracker=state_tracker,
                     from_task=from_task,
+                    incremental_save_path=incremental_path,
                     mcp_logs_dir=final_output_dir,
                 )
             )
