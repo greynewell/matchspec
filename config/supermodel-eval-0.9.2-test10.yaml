@@ -1,0 +1,61 @@
+# Supermodel MCP v0.9.2 eval — 10-task test run on Azure
+#
+# Run:
+#   mcpbr run -c config/supermodel-eval-0.9.2-test10.yaml -v
+
+mcp_server:
+  name: "supermodel"
+  command: "npx"
+  args:
+    - "-y"
+    - "@supermodeltools/mcp-server@0.9.2"
+    - "{workdir}"
+    - "--precache"
+  env:
+    SUPERMODEL_API_KEY: "${SUPERMODEL_API_KEY}"
+    SUPERMODEL_BASE_URL: "https://api.supermodeltools.com"
+    SUPERMODEL_CACHE_DIR: "/tmp/supermodel-cache"
+  setup_command: "npx -y @supermodeltools/mcp-server@0.9.2 precache {workdir} --output-dir /tmp/supermodel-cache"
+  setup_timeout_ms: 900000
+
+provider: "anthropic"
+
+agent_harness: "claude-code"
+
+model: "claude-sonnet-4-20250514"
+
+benchmark: "swe-bench-verified"
+
+sample_size: 10
+
+timeout_seconds: 300
+
+max_concurrent: 4
+
+max_iterations: 30
+
+# Azure infrastructure
+infrastructure:
+  mode: azure
+  azure:
+    resource_group: "mcpbr-benchmarks"
+    location: "eastus"
+    cpu_cores: 16
+    memory_gb: 64
+    disk_gb: 200
+    auto_shutdown: true
+    preserve_on_error: true
+    env_keys_to_export:
+      - "ANTHROPIC_API_KEY"
+      - "SUPERMODEL_API_KEY"
+      - "AZURE_STORAGE_KEY"
+
+# Cloud storage for incremental result persistence
+cloud_storage:
+  provider: "azure_blob"
+  account: "mcpbrbenchmarks"
+  container: "eval-runs"
+
+# Slack notifications (bot API with file upload)
+slack_bot_token: "${SLACK_BOT_TOKEN}"
+slack_channel: "${SLACK_CHANNEL}"

@@ -101,6 +101,28 @@ def update_marketplace_json(marketplace_json_path: Path, version: str) -> None:
     print(f"Updated {marketplace_json_path}: {old_version} -> {version}")
 
 
+def update_init_py(init_py_path: Path, version: str) -> None:
+    """Update __version__ in src/mcpbr/__init__.py."""
+    if not init_py_path.exists():
+        print(f"Warning: {init_py_path} does not exist. Skipping.")
+        return
+
+    content = init_py_path.read_text(encoding="utf-8")
+    import re
+
+    new_content, count = re.subn(
+        r'__version__\s*=\s*"[^"]*"',
+        f'__version__ = "{version}"',
+        content,
+    )
+    if count == 0:
+        print(f"Warning: No __version__ found in {init_py_path}")
+        return
+
+    init_py_path.write_text(new_content, encoding="utf-8")
+    print(f"Updated {init_py_path}: __version__ -> {version}")
+
+
 def main() -> None:
     """Main entry point."""
     project_root = Path(__file__).parent.parent
@@ -109,6 +131,7 @@ def main() -> None:
     marketplace_json_path = project_root / ".claude-plugin" / "marketplace.json"
     plugin_package_json_path = project_root / ".claude-plugin" / "package.json"
     package_json_path = project_root / "package.json"
+    init_py_path = project_root / "src" / "mcpbr" / "__init__.py"
 
     if not pyproject_path.exists():
         print(f"Error: {pyproject_path} not found", file=sys.stderr)
@@ -129,6 +152,9 @@ def main() -> None:
 
     # Update root package.json (if it exists)
     update_package_json(package_json_path, version)
+
+    # Update __init__.py
+    update_init_py(init_py_path, version)
 
     print("\nVersion sync complete!")
 
