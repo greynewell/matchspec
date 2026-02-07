@@ -4,10 +4,12 @@ Provides tamper-evident audit logging with HMAC chain integrity verification,
 configurable event filtering, and export to JSON and CSV formats.
 """
 
+import base64
 import csv
 import hashlib
 import hmac
 import json
+import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -163,20 +165,42 @@ class AuditLogger:
         config: Audit configuration controlling behavior.
     """
 
-    def __init__(self, config: AuditConfig) -> None:
+    def __init__(self, config: AuditConfig, hmac_key: bytes | None = None) -> None:
         """Initialize the audit logger.
 
         Args:
             config: AuditConfig controlling which events are logged,
                 whether tamper-proof checksums are computed, and where
                 events are persisted.
+            hmac_key: Secret key for HMAC chain integrity. If not provided,
+                falls back to the MCPBR_AUDIT_HMAC_KEY environment variable
+                (base64-encoded). If neither is set, a random 32-byte key is
+                generated. Previous versions derived the key from the config,
+                which was deterministic and non-secret.
         """
         self._config = config
         self._events: list[AuditEvent] = []
-        self._hmac_key: bytes = hashlib.sha256(
-            json.dumps(asdict(config), sort_keys=True).encode()
-        ).digest()
+        self._hmac_key: bytes = self._resolve_hmac_key(hmac_key)
         self._last_checksum: str = ""
+
+    @staticmethod
+    def _resolve_hmac_key(explicit_key: bytes | None) -> bytes:
+        """Resolve the HMAC key from explicit parameter, env var, or random generation.
+
+        Args:
+            explicit_key: Explicitly provided key bytes, highest priority.
+
+        Returns:
+            The resolved HMAC key bytes.
+        """
+        if explicit_key is not None:
+            return explicit_key
+
+        env_key = os.environ.get("MCPBR_AUDIT_HMAC_KEY")
+        if env_key:
+            return base64.b64decode(env_key)
+
+        return os.urandom(32)
 
     def log(
         self,
@@ -350,7 +374,11 @@ class AuditLogger:
                     f"expected {expected}, got {event.checksum}"
                 )
 
-            previous_checksum = event.checksum
+            # Chain on the recomputed expected checksum, not the stored one.
+            # This ensures a tampered event invalidates ALL subsequent events
+            # in the chain, rather than allowing the attacker's checksum to
+            # be used as the basis for the next verification.
+            previous_checksum = expected
 
         return len(errors) == 0, errors
 

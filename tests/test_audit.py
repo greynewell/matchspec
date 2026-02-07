@@ -4,8 +4,10 @@
 
 import csv
 import json
+import os
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -184,6 +186,177 @@ class TestAuditConfig:
         config2 = AuditConfig()
         config1.events.append("EXTRA")
         assert "EXTRA" not in config2.events
+
+
+class TestHMACKeyHandling:
+    """Tests for HMAC key security fixes (#419)."""
+
+    def test_explicit_hmac_key_parameter(self) -> None:
+        """Test that AuditLogger accepts an explicit hmac_key parameter."""
+        config = AuditConfig(enabled=True, tamper_proof=True)
+        secret_key = os.urandom(32)
+        logger = AuditLogger(config, hmac_key=secret_key)
+
+        event = logger.log(action=AuditAction.CONFIG_LOADED, resource="r1")
+        assert event is not None
+        assert event.checksum != ""
+
+        # Verify integrity works with the explicit key
+        valid, errors = logger.verify_integrity()
+        assert valid is True
+        assert errors == []
+
+    def test_hmac_key_from_environment_variable(self) -> None:
+        """Test that MCPBR_AUDIT_HMAC_KEY env var is used when no explicit key given."""
+        import base64
+
+        secret = os.urandom(32)
+        encoded = base64.b64encode(secret).decode()
+
+        config = AuditConfig(enabled=True, tamper_proof=True)
+        with patch.dict(os.environ, {"MCPBR_AUDIT_HMAC_KEY": encoded}):
+            logger = AuditLogger(config)
+
+        event = logger.log(action=AuditAction.CONFIG_LOADED, resource="r1")
+        assert event is not None
+        assert event.checksum != ""
+
+        # Key should match what we provided via env var
+        assert logger._hmac_key == secret
+
+    def test_no_key_generates_random(self) -> None:
+        """Test that when no explicit key and no env var, a random key is generated."""
+        config = AuditConfig(enabled=True, tamper_proof=True)
+
+        with patch.dict(os.environ, {}, clear=False):
+            # Ensure env var is NOT set
+            os.environ.pop("MCPBR_AUDIT_HMAC_KEY", None)
+            logger1 = AuditLogger(config)
+            logger2 = AuditLogger(config)
+
+        # Two loggers with same config should get DIFFERENT random keys
+        assert logger1._hmac_key != logger2._hmac_key
+
+    def test_random_key_not_derived_from_config(self) -> None:
+        """Test that the default key is NOT deterministically derived from config."""
+        config = AuditConfig(enabled=True, tamper_proof=True)
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MCPBR_AUDIT_HMAC_KEY", None)
+            logger = AuditLogger(config)
+
+        # The old behavior derived the key from config via sha256.
+        # Verify we do NOT get that deterministic value.
+        import hashlib
+        from dataclasses import asdict
+
+        old_deterministic_key = hashlib.sha256(
+            json.dumps(asdict(config), sort_keys=True).encode()
+        ).digest()
+        assert logger._hmac_key != old_deterministic_key
+
+    def test_explicit_key_overrides_env_var(self) -> None:
+        """Test that explicit hmac_key parameter takes priority over env var."""
+        import base64
+
+        env_secret = os.urandom(32)
+        explicit_secret = os.urandom(32)
+        encoded = base64.b64encode(env_secret).decode()
+
+        config = AuditConfig(enabled=True, tamper_proof=True)
+        with patch.dict(os.environ, {"MCPBR_AUDIT_HMAC_KEY": encoded}):
+            logger = AuditLogger(config, hmac_key=explicit_secret)
+
+        assert logger._hmac_key == explicit_secret
+        assert logger._hmac_key != env_secret
+
+
+class TestVerifyIntegrityChaining:
+    """Tests for verify_integrity chaining on recomputed checksums (#419).
+
+    When verify_integrity chains on the recomputed expected checksum (not the
+    stored one), tampering with event DATA causes a cascade: the recomputed
+    checksum for the tampered event differs from the original, and since all
+    subsequent events were chained on the original checksum, they also fail.
+    """
+
+    def test_tampered_data_in_middle_invalidates_all_subsequent(self) -> None:
+        """Test that modifying event data at index 1 of 5 causes events 1-4 to fail."""
+        config = AuditConfig(enabled=True, tamper_proof=True)
+        logger = AuditLogger(config)
+
+        for i in range(5):
+            logger.log(action=AuditAction.CONFIG_LOADED, resource=f"r{i}")
+
+        # Tamper with the second event's DATA (not just checksum)
+        logger._events[1].resource = "TAMPERED"
+
+        valid, errors = logger.verify_integrity()
+        assert valid is False
+        # The tampered event AND all subsequent events should fail because
+        # chaining on recomputed expected checksums means the altered expected
+        # value for event 1 cascades through events 2, 3, 4
+        assert len(errors) == 4  # events 1, 2, 3, 4 all fail
+
+        # Verify error messages reference the correct event indices
+        error_indices = []
+        for error in errors:
+            idx = int(error.split("Event ")[1].split(" ")[0])
+            error_indices.append(idx)
+        assert error_indices == [1, 2, 3, 4]
+
+    def test_tampered_data_in_first_event_invalidates_all(self) -> None:
+        """Test that modifying event[0] data causes ALL events to fail verification."""
+        config = AuditConfig(enabled=True, tamper_proof=True)
+        logger = AuditLogger(config)
+
+        for i in range(3):
+            logger.log(action=AuditAction.CONFIG_LOADED, resource=f"r{i}")
+
+        # Tamper with the first event's data
+        logger._events[0].resource = "TAMPERED"
+
+        valid, errors = logger.verify_integrity()
+        assert valid is False
+        assert len(errors) == 3  # All events should fail
+
+    def test_tampered_checksum_only_affects_that_event(self) -> None:
+        """Test that replacing only a checksum (not data) flags just that event.
+
+        When chaining on recomputed expected checksums, changing a stored
+        checksum without touching data only causes a mismatch for that single
+        event. The recomputed expected checksum is still the correct one, so
+        subsequent events verify against the correct chain.
+        """
+        config = AuditConfig(enabled=True, tamper_proof=True)
+        logger = AuditLogger(config)
+
+        for i in range(3):
+            logger.log(action=AuditAction.CONFIG_LOADED, resource=f"r{i}")
+
+        # Tamper with only the checksum of event 1 (not its data)
+        logger._events[1].checksum = "tampered_value"
+
+        valid, errors = logger.verify_integrity()
+        assert valid is False
+        assert len(errors) == 1
+        assert "Event 1" in errors[0]
+
+    def test_tampered_last_event_data_only_affects_last(self) -> None:
+        """Test that tampering the last event's data only reports one error."""
+        config = AuditConfig(enabled=True, tamper_proof=True)
+        logger = AuditLogger(config)
+
+        for i in range(3):
+            logger.log(action=AuditAction.CONFIG_LOADED, resource=f"r{i}")
+
+        # Tamper with only the last event's data
+        logger._events[2].resource = "TAMPERED"
+
+        valid, errors = logger.verify_integrity()
+        assert valid is False
+        assert len(errors) == 1
+        assert "Event 2" in errors[0]
 
 
 class TestAuditLogger:
@@ -465,7 +638,7 @@ class TestAuditLogger:
         assert "checksum mismatch" in errors[0]
 
     def test_verify_integrity_tampered_cascades(self) -> None:
-        """Test that tampering with one event causes downstream verification failures."""
+        """Test that tampering with event data causes downstream verification failures."""
         config = AuditConfig(enabled=True, tamper_proof=True)
         logger = AuditLogger(config)
 
@@ -473,13 +646,14 @@ class TestAuditLogger:
         logger.log(action=AuditAction.BENCHMARK_STARTED, resource="r2")
         logger.log(action=AuditAction.TASK_COMPLETED, resource="r3")
 
-        # Tamper with the first event
-        logger._events[0].checksum = "tampered"
+        # Tamper with the first event's data (not just checksum)
+        logger._events[0].resource = "TAMPERED"
 
         valid, errors = logger.verify_integrity()
         assert valid is False
-        # Tampering the first event should cascade to affect later verifications
-        # because the chain uses previous checksums
+        # Tampering the first event's data should cascade to affect later
+        # verifications because chaining on recomputed expected checksums
+        # means the altered expected value propagates through the chain
         assert len(errors) >= 2
 
     def test_verify_integrity_no_tamper_proof(self) -> None:
