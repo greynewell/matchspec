@@ -191,10 +191,17 @@ def agent_result_to_dict(
         data["profiling"] = result.profiling_report
 
     if result.error:
-        data["error"] = result.error
-        # Add status field to distinguish timeouts from other errors
-        if "timed out" in result.error.lower() or "timeout" in result.error.lower():
-            data["status"] = "timeout"
+        # Suppress misleading "no changes" / "clean" errors when a patch was
+        # actually generated and evaluated (the agent wrote then reverted).
+        if data["patch_generated"] and (
+            "no changes detected" in result.error or "working tree is clean" in result.error
+        ):
+            pass
+        else:
+            data["error"] = result.error
+            # Add status field to distinguish timeouts from other errors
+            if "timed out" in result.error.lower() or "timeout" in result.error.lower():
+                data["status"] = "timeout"
 
     if result.messages:
         data["messages"] = result.messages

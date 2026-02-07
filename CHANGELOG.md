@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Misleading 'no changes detected' error** (#409): When an agent wrote changes that were
+  later reverted, the error field incorrectly reported "no changes detected." Now reports
+  "working tree is clean - changes were likely reverted" with tool call counts, and suppresses
+  the error entirely when a patch was generated and evaluated.
+
 ### Documentation
 
 - **About page**: New docs/about.md page with the mcpbr origin story, project vision, community

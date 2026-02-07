@@ -1,5 +1,6 @@
 """Tests for error message accuracy and helpfulness."""
 
+from mcpbr.harness import AgentResult, agent_result_to_dict
 from mcpbr.harnesses import _generate_no_patch_error_message
 
 
@@ -60,11 +61,11 @@ class TestErrorMessageAccuracy:
             tool_usage=tool_usage,
         )
 
-        # Should indicate Edit was used
-        assert "Edit" in error_msg or "Write" in error_msg
-        assert "no changes detected" in error_msg
-        # Can use the original message since it's now accurate
-        assert "file may be unchanged" in error_msg or "file unchanged" in error_msg
+        # Should indicate Edit was used with call counts
+        assert "Edit" in error_msg
+        assert "working tree is clean" in error_msg
+        assert "reverted" in error_msg
+        assert "Edit x2" in error_msg
 
     def test_write_tool_detected(self) -> None:
         """Test that Write tool is also detected as an edit attempt."""
@@ -79,9 +80,11 @@ class TestErrorMessageAccuracy:
             tool_usage=tool_usage,
         )
 
-        # Should recognize Write as an edit tool
-        assert "Write" in error_msg or "Edit" in error_msg
-        assert "no changes detected" in error_msg
+        # Should recognize Write as an edit tool with call counts
+        assert "Write" in error_msg
+        assert "working tree is clean" in error_msg
+        assert "reverted" in error_msg
+        assert "Write x3" in error_msg
 
     def test_git_status_shows_changes_but_no_patch(self) -> None:
         """Test when git status shows changes but patch generation fails."""
@@ -168,3 +171,69 @@ class TestErrorMessageAccuracy:
         assert "Edit applied" not in error_msg
         # Should indicate what actually happened
         assert "No patches applied" in error_msg or "Buggy line still present" in error_msg
+
+
+class TestErrorSuppression:
+    """Tests that misleading errors are suppressed when a patch was generated."""
+
+    def test_no_changes_error_suppressed_when_patch_generated(self) -> None:
+        """Error about 'working tree is clean' should be suppressed when patch exists (#409)."""
+        result = AgentResult(
+            patch="diff --git a/file.py b/file.py\n--- a/file.py\n+++ b/file.py\n",
+            success=True,
+            error="Write tool(s) used (Write x5) but final working tree is clean - "
+            "changes were likely reverted during later iterations",
+            tokens_input=1000,
+            tokens_output=500,
+            tool_calls=10,
+        )
+        data = agent_result_to_dict(result, eval_result=None, model_id="claude-sonnet-4-5-20250929")
+        assert data["patch_generated"] is True
+        assert "error" not in data
+
+    def test_no_changes_error_kept_when_no_patch(self) -> None:
+        """Error about 'working tree is clean' should remain when no patch was generated."""
+        result = AgentResult(
+            patch="",
+            success=False,
+            error="Write tool(s) used (Write x3) but final working tree is clean - "
+            "changes were likely reverted during later iterations",
+            tokens_input=1000,
+            tokens_output=500,
+            tool_calls=10,
+        )
+        data = agent_result_to_dict(result, eval_result=None, model_id="claude-sonnet-4-5-20250929")
+        assert data["patch_generated"] is False
+        assert "error" in data
+        assert "working tree is clean" in data["error"]
+
+    def test_timeout_error_not_suppressed(self) -> None:
+        """Timeout errors should never be suppressed, even with a patch."""
+        result = AgentResult(
+            patch="diff --git a/file.py b/file.py\n",
+            success=True,
+            error="Evaluation timed out after 300 seconds",
+            tokens_input=1000,
+            tokens_output=500,
+            tool_calls=5,
+        )
+        data = agent_result_to_dict(result, eval_result=None, model_id="claude-sonnet-4-5-20250929")
+        assert data["patch_generated"] is True
+        assert "error" in data
+        assert "timed out" in data["error"]
+        assert data["status"] == "timeout"
+
+    def test_old_no_changes_detected_message_suppressed(self) -> None:
+        """Legacy 'no changes detected' message should also be suppressed with a patch."""
+        result = AgentResult(
+            patch="diff --git a/file.py b/file.py\n",
+            success=True,
+            error="Write tool(s) used but no changes detected - "
+            "file may be unchanged or changes were reverted",
+            tokens_input=1000,
+            tokens_output=500,
+            tool_calls=5,
+        )
+        data = agent_result_to_dict(result, eval_result=None, model_id="claude-sonnet-4-5-20250929")
+        assert data["patch_generated"] is True
+        assert "error" not in data

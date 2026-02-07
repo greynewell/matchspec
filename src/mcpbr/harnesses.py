@@ -496,11 +496,13 @@ def _generate_no_patch_error_message(
     # If buggy line is not present (empty), it might have been fixed
     if not buggy_line:
         if edit_tools_used:
-            # Edit tools were used but no git changes detected
+            # Edit tools were used but no git changes detected at the end —
+            # the agent likely wrote changes that were reverted in later iterations
             tools_str = ", ".join(sorted(edit_tools_used))
+            edit_counts = ", ".join(f"{t} x{tool_usage[t]}" for t in sorted(edit_tools_used))
             return (
-                f"{tools_str} tool(s) used but no changes detected - "
-                "file may be unchanged or changes were reverted"
+                f"{tools_str} tool(s) used ({edit_counts}) but final working tree is clean - "
+                "changes were likely reverted during later iterations"
             )
         else:
             # No edit tools used and buggy line not found
