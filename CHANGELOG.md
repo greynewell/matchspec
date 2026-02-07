@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-02-07
+
 ### Added
 
 - **Docker sandbox enhancements** (#381): Extended sandbox security profiles with new isolation features
@@ -980,6 +982,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--no-prebuilt` CLI flag to disable pre-built images and build from scratch
 - Network access for containers to enable API calls from within Docker
 
+[0.12.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.0
 [0.5.5]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.5
 [0.4.4]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.4
 [0.4.3]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.3
