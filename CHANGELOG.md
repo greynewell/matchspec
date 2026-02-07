@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Infrastructure resource leak fixes** (#430): Ensure infrastructure resources are cleaned up on error
+  - SFTP connections in AWS/GCP `_download_results()` now close in `finally` blocks
+  - SFTP connections in AWS/GCP `collect_artifacts()` now close in `finally` blocks
+  - Kubernetes `setup()` cleans up partially-created ConfigMaps/Secrets on failure
 - **PII pattern coverage and anonymization** (#431): Improved PII detection patterns in privacy module
   - Added abbreviated/compressed IPv6 address detection (e.g., `::1`, `fe80::1`, `2001:db8::1`)
   - Added SSN detection without dashes (standalone 9-digit numbers)

@@ -821,13 +821,13 @@ class AWSProvider(InfrastructureProvider):
 
         try:
             sftp.get(results_path, temp_path)
-            sftp.close()
 
             with open(temp_path) as f:
                 results_dict = json.load(f)
 
             return EvaluationResults(**results_dict)
         finally:
+            sftp.close()
             Path(temp_path).unlink()
 
     async def collect_artifacts(self, output_dir: Path) -> Path | None:
@@ -859,10 +859,12 @@ class AWSProvider(InfrastructureProvider):
 
         # Recursively download
         sftp = self.ssh_client.open_sftp()
-        await asyncio.to_thread(
-            self._recursive_download, sftp, remote_output_dir, local_archive_dir
-        )
-        sftp.close()
+        try:
+            await asyncio.to_thread(
+                self._recursive_download, sftp, remote_output_dir, local_archive_dir
+            )
+        finally:
+            sftp.close()
 
         # Create ZIP archive
         import zipfile

@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import platform
 import shutil
@@ -17,6 +18,8 @@ from rich.console import Console
 
 from ..config import HarnessConfig
 from .base import InfrastructureProvider
+
+logger = logging.getLogger(__name__)
 
 # Default resource values
 DEFAULT_CPU_REQUEST = "1"
@@ -58,6 +61,7 @@ class KubernetesProvider(InfrastructureProvider):
         config_map_name: Override ConfigMap name (default: auto-generated).
         secret_name: Override Secret name (default: auto-generated).
         enable_dind: Attach Docker-in-Docker sidecar to pods.
+        dind_privileged: Run DinD in privileged mode (default: false, uses rootless).
         auto_cleanup: Delete resources on completion (default: True).
         preserve_on_error: Keep resources if evaluation fails (default: True).
         node_selector: Node selector labels for pod scheduling.
@@ -153,6 +157,37 @@ class KubernetesProvider(InfrastructureProvider):
                 f"stderr: {result.stderr.strip()}"
             )
         return result
+
+    # ------------------------------------------------------------------
+    # Resource cleanup helpers
+    # ------------------------------------------------------------------
+
+    def _cleanup_partial_resources(self) -> None:
+        """Clean up any partially-created resources after a setup failure.
+
+        Called from setup() when an error occurs mid-way through resource
+        creation. This prevents orphaned ConfigMaps or Secrets from leaking
+        in the cluster.
+        """
+        cm_name = getattr(self, "_config_map_name", None)
+        if cm_name and self.namespace:
+            try:
+                self._run_kubectl(
+                    ["delete", "configmap", cm_name, "--ignore-not-found"],
+                    check=False,
+                )
+            except Exception as e:
+                logger.warning("Failed to clean up ConfigMap '%s': %s", cm_name, e)
+
+        secret_name = getattr(self, "_secret_name", None)
+        if secret_name and self.namespace:
+            try:
+                self._run_kubectl(
+                    ["delete", "secret", secret_name, "--ignore-not-found"],
+                    check=False,
+                )
+            except Exception as e:
+                logger.warning("Failed to clean up Secret '%s': %s", secret_name, e)
 
     # ------------------------------------------------------------------
     # Setup helpers
@@ -395,10 +430,25 @@ class KubernetesProvider(InfrastructureProvider):
         # Docker-in-Docker sidecar
         enable_dind = self._cfg("enable_dind", False)
         if enable_dind:
+            dind_privileged = self._cfg("dind_privileged", False)
+            if dind_privileged:
+                # Privileged mode: full host access (use only when required)
+                self._console.print(
+                    "[yellow]Warning: DinD sidecar running in privileged mode. "
+                    "Consider using rootless mode (dind_privileged: false) "
+                    "for better security.[/yellow]"
+                )
+                dind_image = "docker:27-dind"
+                dind_security_ctx: dict[str, Any] = {"privileged": True}
+            else:
+                # Rootless mode (default): no privileged escalation needed
+                dind_image = "docker:27-dind-rootless"
+                dind_security_ctx = {"privileged": False, "runAsUser": 1000}
+
             dind_container: dict[str, Any] = {
                 "name": "dind",
-                "image": "docker:27-dind",
-                "securityContext": {"privileged": True},
+                "image": dind_image,
+                "securityContext": dind_security_ctx,
                 "env": [
                     {"name": "DOCKER_TLS_CERTDIR", "value": ""},
                 ],
@@ -793,6 +843,8 @@ class KubernetesProvider(InfrastructureProvider):
             self._console.print("[green]Kubernetes infrastructure ready[/green]")
         except Exception:
             self._error_occurred = True
+            # Clean up any partially-created resources to avoid leaks
+            self._cleanup_partial_resources()
             raise
 
     async def run_evaluation(self, config: Any, run_mcp: bool, run_baseline: bool) -> Any:
