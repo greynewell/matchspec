@@ -341,6 +341,19 @@ class TestNewSandboxFields:
         profile = parse_sandbox_config(config)
         assert profile.network_allowlist == ["api.example.com"]
 
+    def test_parse_network_allowlist_emits_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """network_allowlist should warn that it's not yet enforced (#418)."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            parse_sandbox_config(
+                {
+                    "level": "standard",
+                    "network_allowlist": ["api.example.com"],
+                }
+            )
+        assert any("network_allowlist" in m and "not yet enforced" in m for m in caplog.messages)
+
 
 class TestValidateSandbox:
     """Tests for validate_sandbox function."""

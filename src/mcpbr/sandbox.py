@@ -614,6 +614,12 @@ def parse_sandbox_config(config_dict: dict[str, Any]) -> SandboxProfile:
         profile.device_write_bps = config_dict["device_write_bps"]
     if "network_allowlist" in config_dict:
         profile.network_allowlist = config_dict["network_allowlist"]
+        if config_dict["network_allowlist"]:
+            logger.warning(
+                "network_allowlist is configured but not yet enforced at runtime. "
+                "Containers will have unrestricted network access unless "
+                "network_disabled is set to true."
+            )
 
     return profile
 
