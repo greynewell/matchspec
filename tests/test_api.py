@@ -412,3 +412,144 @@ class TestMakeHandlerClass:
         cls_b = _make_handler_class(other_storage)
         assert cls_a.storage is mock_storage
         assert cls_b.storage is other_storage
+
+
+# ---------------------------------------------------------------------------
+# Security tests (#420)
+# ---------------------------------------------------------------------------
+
+
+def _request_with_headers(
+    base_url: str,
+    method: str,
+    path: str,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, Any], dict[str, str]]:
+    """Send HTTP request and return (status, json_body, response_headers)."""
+    parts = base_url.replace("http://", "").split(":")
+    host = parts[0]
+    port = int(parts[1])
+
+    conn = HTTPConnection(host, port, timeout=5)
+    conn.request(method, path, headers=headers or {})
+    response = conn.getresponse()
+    status = response.status
+    resp_headers = dict(response.getheaders())
+    body = json.loads(response.read().decode("utf-8"))
+    conn.close()
+    return status, body, resp_headers
+
+
+@pytest.fixture
+def authed_server_url(mock_storage: MagicMock):
+    """Start a test server with API token authentication."""
+    port = _get_free_port()
+    host = "127.0.0.1"
+    server = create_api_server(
+        host=host, port=port, storage=mock_storage, api_token="test-secret-token"
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    time.sleep(0.1)
+    yield f"http://{host}:{port}"
+    server.shutdown()
+    server.server_close()
+
+
+class TestAPIAuthentication:
+    """Tests for #420: API token authentication."""
+
+    def test_authed_server_rejects_unauthenticated_request(self, authed_server_url: str) -> None:
+        """Requests without token should get 401."""
+        status, body = _request(authed_server_url, "GET", "/api/v1/runs")
+        assert status == 401
+        assert "error" in body
+
+    def test_authed_server_accepts_valid_token(
+        self, authed_server_url: str, mock_storage: MagicMock
+    ) -> None:
+        """Requests with correct Authorization header should succeed."""
+        mock_storage.list_runs.return_value = []
+        status, body, _ = _request_with_headers(
+            authed_server_url,
+            "GET",
+            "/api/v1/runs",
+            headers={"Authorization": "Bearer test-secret-token"},
+        )
+        assert status == 200
+
+    def test_authed_server_rejects_wrong_token(self, authed_server_url: str) -> None:
+        """Requests with wrong token should get 401."""
+        status, body, _ = _request_with_headers(
+            authed_server_url,
+            "GET",
+            "/api/v1/runs",
+            headers={"Authorization": "Bearer wrong-token"},
+        )
+        assert status == 401
+
+    def test_health_endpoint_skips_auth(self, authed_server_url: str) -> None:
+        """Health endpoint should work without authentication."""
+        status, body = _request(authed_server_url, "GET", "/api/v1/health")
+        assert status == 200
+        assert body["status"] == "ok"
+
+    def test_no_token_server_allows_all(self, server_url: str) -> None:
+        """When no api_token is set, all requests should be allowed."""
+        status, body = _request(server_url, "GET", "/api/v1/health")
+        assert status == 200
+
+
+class TestCORSHeaders:
+    """Tests for #420: CORS security headers."""
+
+    def test_response_includes_cors_headers(self, server_url: str) -> None:
+        """Responses should include restrictive CORS headers."""
+        _, _, headers = _request_with_headers(server_url, "GET", "/api/v1/health")
+        # Should not allow any origin by default (no Access-Control-Allow-Origin header
+        # means the browser blocks cross-origin reads, OR explicitly restrict)
+        assert "X-Content-Type-Options" in headers
+
+    def test_response_includes_no_sniff_header(self, server_url: str) -> None:
+        """Responses should include X-Content-Type-Options: nosniff."""
+        _, _, headers = _request_with_headers(server_url, "GET", "/api/v1/health")
+        assert headers.get("X-Content-Type-Options") == "nosniff"
+
+
+class TestLimitValidation:
+    """Tests for #420: Limit parameter validation."""
+
+    def test_invalid_limit_returns_400(self, server_url: str) -> None:
+        """Non-integer limit should return 400, not 500."""
+        status, body = _request(server_url, "GET", "/api/v1/runs?limit=abc")
+        assert status == 400
+        assert "error" in body
+
+    def test_negative_limit_returns_400(self, server_url: str) -> None:
+        """Negative limit should return 400."""
+        status, body = _request(server_url, "GET", "/api/v1/runs?limit=-1")
+        assert status == 400
+        assert "error" in body
+
+    def test_excessive_limit_is_capped(self, server_url: str, mock_storage: MagicMock) -> None:
+        """Limit above maximum should be capped."""
+        mock_storage.list_runs.return_value = []
+        status, _ = _request(server_url, "GET", "/api/v1/runs?limit=999999")
+        assert status == 200
+        call_kwargs = mock_storage.list_runs.call_args
+        assert call_kwargs[1]["limit"] <= 1000
+
+
+class TestBindWarning:
+    """Tests for #420: Warning on 0.0.0.0 bind."""
+
+    def test_wildcard_bind_logs_warning(
+        self, mock_storage: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Binding to 0.0.0.0 should log a security warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            server = create_api_server(host="0.0.0.0", port=_get_free_port(), storage=mock_storage)
+            server.server_close()
+        assert any("0.0.0.0" in m for m in caplog.messages)

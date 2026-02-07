@@ -50,19 +50,36 @@ _RUN_DETAIL_RE = re.compile(r"^/api/v1/runs/(?P<run_id>[^/]+)$")
 # ---------------------------------------------------------------------------
 
 
+# Maximum allowed value for the ?limit= query parameter.
+MAX_QUERY_LIMIT = 1000
+
+
 class BenchmarkAPIHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the benchmark results API.
 
     Attributes:
         storage: The :class:`SQLiteBackend` instance shared across requests.
             Injected via :func:`_make_handler_class`.
+        api_token: Optional bearer token for authentication. ``None`` disables auth.
     """
 
     storage: SQLiteBackend
+    api_token: str | None = None
 
     # Silence per-request log lines from BaseHTTPRequestHandler.
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         logger.debug(format, *args)
+
+    # ------------------------------------------------------------------
+    # Auth & security helpers
+    # ------------------------------------------------------------------
+
+    def _check_auth(self) -> bool:
+        """Return True if the request is authenticated (or auth is disabled)."""
+        if not self.api_token:
+            return True
+        auth_header = self.headers.get("Authorization", "")
+        return auth_header == f"Bearer {self.api_token}"
 
     # ------------------------------------------------------------------
     # Response helpers
@@ -74,6 +91,7 @@ class BenchmarkAPIHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 
@@ -91,9 +109,17 @@ class BenchmarkAPIHandler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
 
         try:
+            # Health endpoint is always accessible (no auth required)
             if path == "/api/v1/health":
                 self._handle_health()
-            elif path == "/api/v1/runs":
+                return
+
+            # All other endpoints require auth (when configured)
+            if not self._check_auth():
+                self._send_error_json(401, "Authentication required")
+                return
+
+            if path == "/api/v1/runs":
                 self._handle_list_runs(query)
             elif path == "/api/v1/stats":
                 self._handle_stats(query)
@@ -122,6 +148,10 @@ class BenchmarkAPIHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:  # noqa: N802
         """Dispatch DELETE requests."""
+        if not self._check_auth():
+            self._send_error_json(401, "Authentication required")
+            return
+
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
 
@@ -147,7 +177,18 @@ class BenchmarkAPIHandler(BaseHTTPRequestHandler):
         benchmark = _first(query, "benchmark")
         model = _first(query, "model")
         limit_str = _first(query, "limit")
-        limit = int(limit_str) if limit_str else 50
+        if limit_str:
+            try:
+                limit = int(limit_str)
+            except ValueError:
+                self._send_error_json(400, f"Invalid limit value: {limit_str!r}")
+                return
+            if limit < 1:
+                self._send_error_json(400, "limit must be a positive integer")
+                return
+            limit = min(limit, MAX_QUERY_LIMIT)
+        else:
+            limit = 50
 
         runs = asyncio.run(self.storage.list_runs(benchmark=benchmark, model=model, limit=limit))
         self._send_json({"runs": runs, "count": len(runs)})
@@ -196,7 +237,9 @@ def _first(query: dict[str, list[str]], key: str) -> str | None:
     return None
 
 
-def _make_handler_class(storage: SQLiteBackend) -> type[BenchmarkAPIHandler]:
+def _make_handler_class(
+    storage: SQLiteBackend, api_token: str | None = None
+) -> type[BenchmarkAPIHandler]:
     """Create a handler class with the given storage backend bound to it.
 
     This avoids global state by producing a new class whose ``storage``
@@ -205,7 +248,7 @@ def _make_handler_class(storage: SQLiteBackend) -> type[BenchmarkAPIHandler]:
     return type(
         "BoundBenchmarkAPIHandler",
         (BenchmarkAPIHandler,),
-        {"storage": storage},
+        {"storage": storage, "api_token": api_token},
     )
 
 
@@ -248,6 +291,7 @@ def create_api_server(
     port: int = 8000,
     storage: SQLiteBackend | None = None,
     db_path: str | Path | None = None,
+    api_token: str | None = None,
 ) -> HTTPServer:
     """Create (but do not start) an :class:`HTTPServer` for testing or embedding.
 
@@ -259,16 +303,24 @@ def create_api_server(
         port: Port number.
         storage: Pre-initialised storage backend.
         db_path: Path to SQLite database (ignored when *storage* is given).
+        api_token: Optional bearer token for authentication. ``None`` disables auth.
 
     Returns:
         An :class:`HTTPServer` ready for ``serve_forever()`` or single-request
         handling via ``handle_request()``.
     """
+    if host in ("0.0.0.0", "::"):
+        logger.warning(
+            "API server binding to %s — this exposes the API to all network interfaces. "
+            "Consider using 127.0.0.1 for local-only access, or set an api_token.",
+            host,
+        )
+
     if storage is None:
         storage = SQLiteBackend(db_path)
         asyncio.run(storage.initialize())
 
-    handler_class = _make_handler_class(storage)
+    handler_class = _make_handler_class(storage, api_token=api_token)
     return HTTPServer((host, port), handler_class)
 
 
