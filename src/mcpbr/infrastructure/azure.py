@@ -346,7 +346,7 @@ class AzureProvider(InfrastructureProvider):
 
         # Step 4: Install mcpbr (pin to local version)
         console.print(f"[cyan]Installing mcpbr=={__version__}...[/cyan]")
-        step4_cmd = f"python{py_ver} -m pip install mcpbr=={__version__}"
+        step4_cmd = f"python{py_ver} -m pip install 'mcpbr[slack]=={__version__}'"
         exit_code, _stdout, stderr = await self._ssh_exec(step4_cmd, timeout=300)
         if exit_code != 0:
             console.print(f"[yellow]⚠ mcpbr install issues: {stderr[:300]}[/yellow]")
@@ -612,27 +612,78 @@ class AzureProvider(InfrastructureProvider):
             for task_id in self.config.task_ids:
                 flags.append(f"-t {shlex.quote(task_id)}")
 
-        # Execute mcpbr
+        # Execute mcpbr in a detached process so it survives SSH drops
         raw_cmd = f"{self._mcpbr_cmd()} run -c ~/config.yaml {' '.join(flags)}"
         console.print(f"[dim]Running: {raw_cmd}[/dim]")
 
-        # Wrap with bash login shell + docker group access
-        cmd = self._wrap_cmd(raw_cmd)
-        _stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
+        log_path = "/home/azureuser/mcpbr_eval.log"
+        pid_path = "/home/azureuser/mcpbr_eval.pid"
+        exit_code_path = "/home/azureuser/mcpbr_eval.exit"
+        # Launch via nohup + setsid so the process is fully detached from SSH
+        detached_cmd = (
+            f'nohup setsid bash -lc \'sg docker -c "{raw_cmd}" > {log_path} 2>&1; '
+            f"echo $? > {exit_code_path}' &\n"
+            f"echo $! > {pid_path}\n"
+            f"disown\n"
+            f"sleep 1\n"
+            f"echo LAUNCHED"
+        )
+        _stdin, stdout, _stderr = self.ssh_client.exec_command(detached_cmd)
+        launch_output = stdout.read().decode().strip()
+        if "LAUNCHED" not in launch_output:
+            raise RuntimeError(f"Failed to launch detached eval: {launch_output}")
+        console.print("[green]✓ Evaluation launched (detached)[/green]")
 
-        # Stream output line by line
-        for line in stdout:
-            console.print(line.rstrip())
+        # Tail the log over SSH, reconnecting if the connection drops
 
-        # Wait for completion
-        exit_code = stdout.channel.recv_exit_status()
+        last_offset = 0
+        poll_interval = 10
+        while True:
+            try:
+                # Check if process is still running
+                check_cmd = f"cat {exit_code_path} 2>/dev/null || (kill -0 $(cat {pid_path}) 2>/dev/null && echo RUNNING || echo DEAD)"
+                _sin, sout, _serr = self.ssh_client.exec_command(check_cmd)
+                status = sout.read().decode().strip()
+
+                # Read new log output
+                tail_cmd = f"tail -c +{last_offset + 1} {log_path} 2>/dev/null"
+                _sin, sout, _serr = self.ssh_client.exec_command(tail_cmd)
+                new_output = sout.read().decode()
+                if new_output:
+                    for line in new_output.splitlines():
+                        console.print(line)
+                    last_offset += len(new_output.encode())
+
+                # Check completion
+                if status == "RUNNING":
+                    await asyncio.sleep(poll_interval)
+                    continue
+                elif status == "DEAD":
+                    self._error_occurred = True
+                    raise RuntimeError("Evaluation process died unexpectedly")
+                else:
+                    # status is the exit code
+                    exit_code = int(status)
+                    break
+            except (OSError, EOFError):
+                # SSH connection dropped — reconnect
+                console.print("[yellow]SSH connection lost, reconnecting...[/yellow]")
+                await asyncio.sleep(10)
+                try:
+                    await self._connect_ssh()
+                    console.print("[green]✓ SSH reconnected[/green]")
+                except Exception:
+                    console.print("[yellow]Reconnect failed, retrying in 30s...[/yellow]")
+                    await asyncio.sleep(30)
 
         if exit_code != 0:
             self._error_occurred = True
-            stderr_output = stderr.read().decode()
+            # Read any remaining stderr from the log
+            _sin, sout, _serr = self.ssh_client.exec_command(f"tail -50 {log_path}")
+            tail_output = sout.read().decode()
             console.print(f"[red]✗ Evaluation failed with exit code {exit_code}[/red]")
-            console.print(f"[red]{stderr_output[:2000]}[/red]")
-            raise RuntimeError(f"Evaluation failed: {stderr_output[:500]}")
+            console.print(f"[red]{tail_output[:2000]}[/red]")
+            raise RuntimeError(f"Evaluation failed with exit code {exit_code}")
 
         console.print("[green]✓ Evaluation completed successfully[/green]")
 
