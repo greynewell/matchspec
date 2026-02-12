@@ -166,10 +166,16 @@ class SupermodelBenchmark:
         return gt
 
     def _generate_problem_statement(self, task_cfg: dict, gt_count: int) -> str:
-        """Generate the problem statement for the agent."""
+        """Generate the problem statement for the agent.
+
+        Uses a single prompt that works for both conditions:
+        - Enhanced (MCP): analysis JSON exists in workdir, agent reads and filters it
+        - Baseline: no analysis file, agent does manual analysis
+        """
         task_id = task_cfg["id"]
         language = task_cfg.get("language", "typescript")
         description = task_cfg.get("description", "")
+        analysis_file = self._endpoint.analysis_filename
 
         return f"""Analyze this {language} codebase for {self.analysis_type} issues.
 
@@ -178,11 +184,16 @@ Description: {description}
 Analysis type: {self.analysis_type}
 
 INSTRUCTIONS:
-1. Read all source files in the workspace
-2. Perform {self.analysis_type} analysis
-3. Update the existing REPORT.json file with your findings
+1. First, check if a file named {analysis_file} exists in the workspace
+2. If it EXISTS: read it -- it contains pre-computed static analysis results with
+   dead code candidates. Filter out obvious false positives (framework lifecycle methods,
+   test utilities, dependency injection, migration methods) and write your filtered
+   findings to REPORT.json. Do NOT re-analyze the codebase manually.
+3. If it DOES NOT exist: manually analyze the codebase to find all dead code --
+   functions, classes, and constants that are never called, imported, or referenced.
+4. Update the existing REPORT.json file with your findings.
 
-CRITICAL: Update REPORT.json with a "dead_code" array of objects.
+CRITICAL: REPORT.json must contain a "dead_code" array of objects.
 Each object should have: file, name, type, and reason fields.
 Set "analysis_complete" to true when done.
 """

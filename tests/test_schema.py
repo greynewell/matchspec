@@ -236,10 +236,10 @@ class TestValidateAgainstSchema:
         assert not is_valid
         assert len(errors) > 0
 
-    def test_rejects_missing_required_field(self) -> None:
-        """Test that missing required field is rejected."""
+    def test_rejects_invalid_benchmark(self) -> None:
+        """Test that invalid benchmark value is rejected."""
         config = {
-            "provider": "anthropic",
+            "benchmark": "nonexistent-benchmark",
             "model": "claude-sonnet-4-5-20250514",
         }
 

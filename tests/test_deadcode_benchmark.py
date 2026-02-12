@@ -1,7 +1,5 @@
 """Tests for dead code detection benchmark."""
 
-import pytest
-
 from mcpbr.benchmarks import BENCHMARK_REGISTRY, create_benchmark
 from mcpbr.benchmarks.deadcode import DeadCodeBenchmark
 

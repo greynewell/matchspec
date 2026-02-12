@@ -848,6 +848,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Parameters unused for GSM8K but needed for benchmark interface consistency
   - Fixes TypeError when running GSM8K evaluations
 
+- **Supermodel Benchmark**: Multi-endpoint PR-based evaluation for Supermodel graph analysis
+  - Supports dead-code, impact, test-coverage, and circular-deps analysis types
+  - PR-based ground truth extraction from GitHub diffs
+  - Supermodel API integration with async polling and idempotency
+  - Condition-aware prompts: enhanced condition uses pre-computed analysis JSON, baseline does manual analysis
+  - P/R/F1 set-based evaluation with configurable resolved threshold
+  - Example config for wikidatabots dead code PR
+
+### Changed
+
+- Made `mcp_server` optional in `HarnessConfig` (defaults to `None`) for benchmarks that don't require an MCP server
+- Added null-safety guards for `mcp_server` in state tracker, harness summary, and cache key generation
+
 ### Infrastructure
 
 - Refactored release workflow to auto-bump version after GitHub UI release

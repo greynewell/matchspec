@@ -64,7 +64,9 @@ def _clone_or_update_corpus(corpus_path: Path | None = None) -> Path:
     return corpus_dir
 
 
-def _load_corpus_task(corpus_dir: Path, task_name: str = "typescript-express-app") -> dict[str, Any]:
+def _load_corpus_task(
+    corpus_dir: Path, task_name: str = "typescript-express-app"
+) -> dict[str, Any]:
     """Load a task from the corpus.
 
     Args:
@@ -378,17 +380,17 @@ Rules:
         resolved = precision >= 0.8 and recall >= 0.8
 
         # Log results for visibility
-        print(f"\n{'='*50}")
+        print(f"\n{'=' * 50}")
         print(f"DEAD CODE EVALUATION - {env.instance_id}")
         print(f"  Found: {len(agent_findings)} items")
         print(f"  Expected: {len(expected_dead)} dead functions")
         print(f"  True Positives: {tp}")
         print(f"  False Positives: {fp}")
         print(f"  False Negatives: {fn}")
-        print(f"  Precision: {precision*100:.1f}%")
-        print(f"  Recall: {recall*100:.1f}%")
-        print(f"  F1 Score: {f1*100:.1f}%")
-        print(f"{'='*50}\n")
+        print(f"  Precision: {precision * 100:.1f}%")
+        print(f"  Recall: {recall * 100:.1f}%")
+        print(f"  F1 Score: {f1 * 100:.1f}%")
+        print(f"{'=' * 50}\n")
 
         return {
             "resolved": resolved,

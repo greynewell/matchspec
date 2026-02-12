@@ -128,7 +128,7 @@ class ResultCache:
         }
 
         # Add MCP server config if this is MCP agent
-        if is_mcp:
+        if is_mcp and config.mcp_server:
             key_parts["mcp_server"] = {
                 "command": config.mcp_server.command,
                 "args": config.mcp_server.args,

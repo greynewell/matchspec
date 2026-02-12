@@ -1,0 +1,30 @@
+# Supermodel Dead Code Detection - wikidatabots (small Python repo, 24 files)
+# This is an ideal test case: tiny repo where baseline agent can grep the entire codebase.
+#
+# Usage:
+#   uv run mcpbr run --config config/supermodel-deadcode-wikidatabots.yaml -n 1
+#
+# Note: No mcp_server needed. The enhanced condition uses a pre-computed analysis JSON
+# placed in the workdir by SupermodelBenchmark.create_environment(is_mcp=True).
+# The agent reads it with its built-in Read tool.
+
+benchmark: "supermodel"
+analysis_type: "dead-code"
+
+tasks:
+  - id: wikidatabots_pr718
+    repo: josh/wikidatabots
+    pr_number: 718
+    merge_commit: "66391012eceb57565d417eed37bc42b2d7c6e5b7"
+    language: python
+    description: "Remove dead code -- 8 unused functions/constants across 3 files in 24-file repo"
+
+supermodel_api_base: "https://staging.api.supermodeltools.com"
+supermodel_api_key: null
+resolved_threshold: 0.5
+
+provider: "anthropic"
+agent_harness: "claude-code"
+model: "claude-sonnet-4-20250514"
+timeout_seconds: 600
+max_iterations: 30

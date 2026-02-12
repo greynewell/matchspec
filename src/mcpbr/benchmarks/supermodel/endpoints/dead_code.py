@@ -20,9 +20,10 @@ TS_PATTERNS = [
 
 # Patterns for Python declarations
 PY_PATTERNS = [
-    (r"^-\s*def\s+(\w+)\s*\(", "function"),
-    (r"^-\s*async\s+def\s+(\w+)\s*\(", "function"),
-    (r"^-\s*class\s+(\w+)[\s(:]", "class"),
+    (r"^-\s*def\s+(\w+)\s*[\(\[]", "function"),
+    (r"^-\s*async\s+def\s+(\w+)\s*[\(\[]", "function"),
+    (r"^-\s*class\s+(\w+)[\s(:\[]", "class"),
+    (r"^-\s*(_?[A-Z][A-Z_0-9]+)\s*[=:]", "const"),
 ]
 
 SKIP_FILE_PATTERNS = [
