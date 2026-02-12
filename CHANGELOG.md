@@ -101,6 +101,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **network_allowlist warning** (#418): Logs a warning when `network_allowlist` is configured
   but not yet enforced at runtime, instead of silently ignoring the setting
 
+## [0.12.4] - 2026-02-09
+
+### Added
+
+- **Eval lifecycle notifications** (#438): Notifications are now sent when an evaluation begins,
+  including benchmark name, model, task count, concurrency, and infrastructure mode
+- **Setup-only mode** (#445): New `setup_only` flag for static file generation workflows that
+  skip evaluation after environment setup
+
+## [0.12.3] - 2026-02-07
+
+### Fixed
+
+- **Version sync fix**: Fixed `__version__` in `__init__.py` being stuck at `0.12.0`, which
+  caused Azure VMs to install the wrong mcpbr version. Added `__init__.py` to the
+  `sync_version.py` pre-commit hook so versions stay in sync automatically
+
+## [0.12.2] - 2026-02-07
+
+### Added
+
+- **Incremental cloud storage uploads** (#435, #436): Upload evaluation results to cloud storage
+  (Azure Blob, S3, GCS) after each task completes, not just at the end. Prevents total data loss
+  when VMs crash or are terminated mid-evaluation. Non-blocking background uploads via
+  `_upload_to_cloud_async()`. Wired `incremental_save_path` from CLI to harness
+
+### Security
+
+- **v0.12.0 security and reliability audit** (#433): 16 issues fixed across the codebase
+
+## [0.12.1] - 2026-02-07
+
+### Fixed
+
+- **SUPERMODEL_CACHE_DIR wiring** (#412): Wire up `SUPERMODEL_CACHE_DIR` in supermodel config
+
 ## [0.12.0] - 2026-02-07
 
 ### Added
@@ -290,6 +326,149 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - GitHub Pages CNAME configuration
   - All documentation URLs updated to mcpbr.org
 
+## [0.11.1] - 2026-02-07
+
+### Fixed
+
+- **Misleading 'no changes detected' error** (#409): When an agent wrote changes that were
+  later reverted, the error field incorrectly reported "no changes detected." Now reports
+  "working tree is clean - changes were likely reverted" with tool call counts, and suppresses
+  the error entirely when a patch was generated and evaluated
+
+## [0.11.0] - 2026-02-07
+
+### Added
+
+- **AWS EC2 infrastructure provider** (#352): Run evaluations on AWS EC2 instances with automatic
+  provisioning, SSH connectivity, health checks, and full lifecycle management
+- **GCP Compute Engine infrastructure provider** (#353): Run evaluations on GCP VMs with instance
+  provisioning via `gcloud compute` CLI and GCP-managed keys
+- **Kubernetes infrastructure provider** (#355): Run evaluations as Kubernetes Jobs with resource
+  management, ConfigMap/Secret creation, and pod log streaming
+- **Cloudflare Workers infrastructure provider** (#354): Hybrid Worker-based evaluation with
+  Wrangler CLI integration and KV namespace management
+- **Cloud storage support** (#87): Upload results to S3, GCS, or Azure Blob Storage via CLI
+  `--upload-to` flag or YAML `cloud_storage` config
+- **Database backend** (#86): SQLite storage for persistent evaluation results with async
+  interface and query capabilities
+- **Sandbox execution** (#109): Configurable Docker security profiles (permissive, standard,
+  strict) with seccomp profiles and network controls
+- **Distributed execution** (#116): Coordinate evaluations across multiple workers with task
+  partitioning and automatic result merging
+- **Multi-benchmark runner** (#359): Run multiple benchmarks in parallel with aggregated results
+- **REST API server** (#83): HTTP API for querying results and server status via `mcpbr serve`
+- **Cross-platform compatibility** (#161): Windows support with platform detection and Docker
+  path normalization
+- **VS Code extension scaffold** (#163): Extension with sidebar views, benchmark commands, and
+  result tree providers
+- **Plugin registry** (#267): Discover and register MCP server benchmark plugins
+
+### Fixed
+
+- **Azure health check timeout** (#375): Increased timeout from 60s to 120s (configurable),
+  made quota check non-fatal
+- **CLI task filters not forwarded** (#367): Task IDs via `-t` flags now correctly forwarded to
+  remote infrastructure providers
+
+## [0.10.4] - 2026-02-06
+
+### Fixed
+
+- **Retry empty workspace after Docker copy** (#405): Under high concurrency, the Docker
+  filesystem copy from `/testbed` to `/workspace` can silently produce an empty workspace.
+  Now retries with a sync and, if necessary, a full re-copy before raising an error
+
+## [0.10.3] - 2026-02-06
+
+### Changed
+
+- **Slack notifications migrated to Bot API** (#404): Uses `slack_sdk.WebClient.chat_postMessage`
+  instead of raw webhook POST for richer formatting and thread support. Results JSON uploaded as
+  a file snippet in a thread reply. GitHub Gist integration for result sharing. Webhook fallback
+  on bot failure. `slack_sdk` is now an optional dependency (`pip install mcpbr[slack]`)
+
+## [0.10.2] - 2026-02-06
+
+### Fixed
+
+- **Eval timeout misclassification** (#399, #402): `exec_command` timeouts in `apply_patch()`
+  and `_apply_test_patch()` no longer bubble up as `asyncio.TimeoutError`. Timeouts increased
+  from 30s to 120s for Docker exec calls under concurrent load
+- **Container leak prevention** (#400, #402): `env.cleanup()` now has a 60s timeout with
+  force-kill fallback to prevent leaked Docker containers
+- **Cold-start staggering** (#401, #403): First-batch concurrent task launches staggered by 1s
+  per slot to avoid overwhelming Docker with simultaneous image pulls
+- **Zero-iteration retry** (#401, #403): Tasks that timeout with 0 iterations are automatically
+  retried once since images/containers are cached on the second attempt
+
+### Added
+
+- **Rich Slack notifications** (#398): Slack notifications now include file uploads and Gist
+  links for full result sharing
+
+## [0.10.0] - 2026-02-06
+
+### Added
+
+- **Random sampling** (#372): Wire `sampling.py` into harness/config with
+  `--sampling-strategy` (sequential/random/stratified), `--random-seed`, and `--stratify-field`
+  CLI flags. Non-deterministic by default; same seed guarantees reproducibility
+- **Dataset loading performance** (#360, #361): Add `dataset.select(range(n))` optimization to
+  all 26 HuggingFace benchmarks to avoid materializing full datasets when sampling
+- **Notifications** (#80, #206, #207, #208): Slack, Discord, and email completion alerts
+  auto-dispatched from harness. `--notify-slack`, `--notify-discord`, `--notify-email` CLI flags
+- **Azure monitoring** (#363): Run state persistence, `run-status`, `run-ssh`, `run-stop`,
+  `run-logs` CLI commands for managing Azure VMs
+- **Prometheus metrics** (#81, #209): `prometheus.py` with proper exposition format and
+  `export-metrics` CLI command
+- **W&B integration** (#82): `wandb_integration.py` with lazy import, `--wandb/--no-wandb` and
+  `--wandb-project` CLI flags
+- **Result badges** (#211): `badges.py` with shields.io URL generation and `badge` CLI command
+
+## [0.9.1] - 2026-02-06
+
+### Fixed
+
+- **Docker container name collision** (#383): Added unique UUID suffix to container names and
+  409 Conflict recovery with stale container removal and retry
+- **asyncio.TimeoutError not caught** (#384): Catch both `TimeoutError` and
+  `asyncio.TimeoutError` for Python <3.11 compatibility; added `eval_timeout_seconds` config
+  field (default 600s)
+- **MCP agent prompt missing workdir** (#385): Added `{workdir}` placeholder to
+  `MCP_PROMPT_SUFFIX` so the agent knows the repository location
+- **setup_command runs as wrong user** (#386): setup_command now executes as the mcpbr user
+  instead of root
+- **Workspace verification after copy** (#387): Added filesystem sync and file-count check
+- **setup_command failures silently swallowed** (#388): Non-zero exit codes now always print
+  a warning
+
+## [0.9.0] - 2026-02-06
+
+### Added
+
+- **Rate limiting** (#196): Token bucket algorithm with configurable requests-per-minute,
+  three backoff strategies (fixed, exponential, adaptive), Retry-After header parsing, and
+  real-time metrics tracking
+- **Benchmark reproducibility** (#136): Global random seed control, environment snapshot capture,
+  deterministic mode with `PYTHONHASHSEED`, and SHA256-checksummed reproducibility reports
+- **Privacy controls** (#120): Three-tier PII redaction (none, basic, strict), 7 built-in
+  patterns, custom regex support, task ID anonymization, and data retention policies
+- **Audit logging** (#118): HMAC-SHA256 hash chain for tamper detection, 13 auditable event
+  types, JSON/CSV export, and JSONL append-only file logging
+
+## [0.8.0] - 2026-02-06
+
+### Added
+
+- **Interactive tutorial system** (#198, #157): CLI-based tutorials with `mcpbr tutorial list`,
+  `start`, `progress`, and `reset` commands. 4 built-in tutorials with progress persistence
+- **API reference documentation** (#202, #156): Auto-generated docs with mkdocstrings
+- **Enhanced benchmark guides** (#203): 6 benchmark docs expanded to comprehensive guides
+- **Plugin development guide** (#160): Complete guide for extending mcpbr
+- **Best practices guide enhancements** (#159): 6 new sections including Security,
+  Performance Optimization, CI/CD Integration, Troubleshooting, Cost Management
+- **Custom domain** (#379): Documentation site now served at https://mcpbr.org/
+
 ## [0.7.0] - 2026-02-06
 
 ### Added
@@ -347,13 +526,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `action/action.yml` GitHub Action with basic and matrix examples
   - `ci-templates/` for GitLab CI and CircleCI integration
 
-## [0.5.5] - 2026-02-06
+## [0.5.4] - 2026-02-06
 
 ### Fixed
 
 - **Retry empty workspace after Docker copy** (#405): Under high concurrency, the Docker
   filesystem copy from `/testbed` to `/workspace` can silently produce an empty workspace.
   Now retries with a sync and, if necessary, a full re-copy before raising an error.
+
+## [0.5.3] - 2026-02-06
+
+### Fixed
+
+- **Azure provisioner version pinning** (#391): `pip install mcpbr` changed to
+  `pip install mcpbr==<local_version>` to prevent version mismatch on remote VMs
+
+## [0.5.2] - 2026-02-06
+
+### Fixed
+
+- **Docker container name collision** (#383): Added unique UUID suffix to container names
+  (backported from 0.9.1)
+- **asyncio.TimeoutError not caught** (#384): Catch both `TimeoutError` and
+  `asyncio.TimeoutError` (backported from 0.9.1)
+- **MCP agent prompt missing workdir** (#385): Added `{workdir}` placeholder (backported)
+- **setup_command runs as wrong user** (#386): Executes as mcpbr user (backported)
+- **Workspace verification after copy** (#387): Added sync and file-count check (backported)
+- **setup_command failures silently swallowed** (#388): Non-zero exit codes visible (backported)
+
+## [0.5.1] - 2026-02-06
+
+### Fixed
+
+- **setup_command timing** (#378): setup_command now runs outside the agent timer, preventing
+  expensive pre-computation from counting against the task timeout. Backported from main
 
 ## [0.5.0] - 2026-02-05
 
@@ -424,6 +630,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Code editing**: Aider Polyglot
   - **Repository understanding**: RepoQA
   - All benchmarks implement the full `Benchmark` protocol with `load_tasks`, `normalize_task`, `create_environment`, `evaluate`, `get_prebuilt_image`, and `get_prompt_template`
+
+## [0.4.15] - 2026-02-05
+
+### Fixed
+
+- **Evaluation hang prevention** (#370): Prevent evaluation from hanging after task completion
+
+## [0.4.14] - 2026-02-05
+
+### Added
+
+- **Setup script hook** (#366): Add setup script hook before timed tasks begin
+
+### Fixed
+
+- **Non-pytest test commands** (#365): Use upstream SWE-bench test commands for non-pytest
+  projects (sympy, sphinx, etc.)
+
+## [0.4.13] - 2026-02-02
+
+### Fixed
+
+- **MCP tool registration**: Replaced `claude mcp add` CLI command with `.mcp.json` file-based
+  configuration. The previous approach created broken tool registration where the MCP server
+  connected but its tools failed with "No such tool available"
+
+## [0.4.12] - 2026-02-02
+
+### Fixed
+
+- **Azure recursive provisioning**: Override infrastructure mode to local in VM config to prevent
+  recursive Azure provisioning on the VM
+
+## [0.4.11] - 2026-02-02
+
+### Fixed
+
+- **Azure Docker daemon**: Start and enable Docker daemon after installation via systemctl.
+  Use `bash -lc` + `sg docker` for remote commands. Add `--skip-preflight` to test task
+  validation
+
+## [0.4.10] - 2026-02-02
+
+### Fixed
+
+- **Azure VM dependency installation**: Install Docker, Python (via deadsnakes PPA), Node.js,
+  and mcpbr in separate steps. Use `python{version} -m pip/mcpbr` instead of system binaries.
+  Install Node.js for npx (needed by MCP servers)
+
+## [0.4.9] - 2026-02-02
+
+### Added
+
+- **Azure availability zones**: New `zone` field in Azure config for specifying availability
+  zones. Health checks now distinguish zone-specific vs location-wide SKU restrictions
+
+## [0.4.8] - 2026-02-02
+
+### Fixed
+
+- **Azure health check key mismatch**: `InfrastructureManager.run_with_infrastructure()` expected
+  `healthy`/`failures` keys but `AzureProvider.health_check()` returns `errors`. Now handles both
+
+## [0.4.7] - 2026-02-02
+
+### Fixed
+
+- **Azure infrastructure CLI wiring**: `infrastructure.mode: azure` in config was parsed but
+  never acted on. The CLI now routes to `InfrastructureManager.run_with_infrastructure()` for
+  non-local infrastructure modes
+
+## [0.4.5] - 2026-02-01
+
+### Added
+
+- **21 new benchmark implementations** (#6, #7, #18, #19, #20, #22, #24, #25, #26, #27, #28,
+  #33, #34, #35, #37, #38, #40, #45, #46, #49): Expanded from 4 benchmarks to 25+
+  - **Software Engineering**: APPS, CodeContests, BigCodeBench, LeetCode, CoderEval, Aider Polyglot
+  - **Code Generation**: MBPP
+  - **Math & Reasoning**: MATH, BigBench-Hard
+  - **Knowledge & QA**: TruthfulQA, HellaSwag, ARC, GAIA
+  - **Tool Use & Agents**: ToolBench, AgentBench, WebArena, TerminalBench, InterCode
+  - **ML Research**: MLAgentBench
+  - **Code Understanding**: RepoQA
+
+### Fixed
+
+- **SEO improvements**: Added robots.txt, Open Graph/Twitter Card meta tags, per-page meta
+  descriptions, and fixed SoftwareApplication schema
+
+### Documentation
+
+- **26 new benchmark documentation pages** with individual tutorials, evaluation methodology,
+  configuration examples, and troubleshooting for all benchmarks
 
 ## [0.4.4] - 2026-02-01
 
@@ -1044,6 +1344,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default benchmark is still SWE-bench
 - All existing configuration files work without modification
 
+## [0.1.1] - 2026-01-18
+
+### Fixed
+
+- Fixed README image display on mirrors such as PyPI
+
 ## [0.1.0] - 2026-01-17
 
 ### Added
@@ -1077,8 +1383,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Network access for containers to enable API calls from within Docker
 
 [0.12.5]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.5
+[0.12.4]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.4
+[0.12.3]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.3
+[0.12.2]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.2
+[0.12.1]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.1
 [0.12.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.0
-[0.5.5]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.5
+[0.11.1]: https://github.com/greynewell/mcpbr/releases/tag/v0.11.1
+[0.11.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.11.0
+[0.10.4]: https://github.com/greynewell/mcpbr/releases/tag/v0.10.4
+[0.10.3]: https://github.com/greynewell/mcpbr/releases/tag/v0.10.3
+[0.10.2]: https://github.com/greynewell/mcpbr/releases/tag/v0.10.2
+[0.10.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.10.0
+[0.9.1]: https://github.com/greynewell/mcpbr/releases/tag/v0.9.1
+[0.9.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.9.0
+[0.8.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.8.0
+[0.7.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.7.0
+[0.6.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.6.0
+[0.5.4]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.4
+[0.5.3]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.3
+[0.5.2]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.2
+[0.5.1]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.1
+[0.5.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.0
+[0.4.16]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.16
+[0.4.15]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.15
+[0.4.14]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.14
+[0.4.13]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.13
+[0.4.12]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.12
+[0.4.11]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.11
+[0.4.10]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.10
+[0.4.9]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.9
+[0.4.8]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.8
+[0.4.7]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.7
+[0.4.5]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.5
 [0.4.4]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.4
 [0.4.3]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.3
 [0.4.2]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.2
@@ -1102,10 +1438,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.3.14]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.14
 [0.3.13]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.13
 [0.3.12]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.12
-[0.7.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.7.0
-[0.6.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.6.0
-[0.5.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.5.0
-[0.4.16]: https://github.com/greynewell/mcpbr/releases/tag/v0.4.16
 [0.3.11]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.11
 [0.3.10]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.10
 [0.3.9]: https://github.com/greynewell/mcpbr/releases/tag/v0.3.9
@@ -1121,4 +1453,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.2.2]: https://github.com/greynewell/mcpbr/releases/tag/v0.2.2
 [0.2.1]: https://github.com/greynewell/mcpbr/releases/tag/v0.2.1
 [0.2.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.2.0
+[0.1.1]: https://github.com/greynewell/mcpbr/releases/tag/v0.1.1
 [0.1.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.1.0

@@ -1,0 +1,57 @@
+name: Changelog Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  changelog-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if CHANGELOG.md was updated
+        id: changelog
+        run: |
+          # Get the list of changed files in this PR
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+
+          if echo "$CHANGED_FILES" | grep -q "^CHANGELOG.md$"; then
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "CHANGELOG.md was updated in this PR."
+          else
+            echo "updated=false" >> $GITHUB_OUTPUT
+            echo "CHANGELOG.md was NOT updated in this PR."
+          fi
+
+      - name: Check if PR is exempt from changelog requirement
+        id: exempt
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_USER="${{ github.event.pull_request.user.login }}"
+
+          # Exempt dependabot PRs, chore-only PRs, and CI-only PRs
+          if [[ "$PR_USER" == "dependabot[bot]" ]] || \
+             [[ "$PR_TITLE" =~ ^chore: ]] || \
+             [[ "$PR_TITLE" =~ ^ci: ]] || \
+             [[ "$PR_TITLE" =~ ^test: ]]; then
+            echo "exempt=true" >> $GITHUB_OUTPUT
+            echo "PR is exempt from changelog requirement."
+          else
+            echo "exempt=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Warn if changelog is missing
+        if: steps.changelog.outputs.updated == 'false' && steps.exempt.outputs.exempt == 'false'
+        run: |
+          echo "::warning::CHANGELOG.md was not updated in this PR. If this PR includes user-visible changes, please add an entry under [Unreleased] in CHANGELOG.md."
+          echo ""
+          echo "## Changelog Reminder" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This PR does not include a CHANGELOG.md update." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "If this PR includes **user-visible changes** (new features, bug fixes, breaking changes), please add an entry under the \`[Unreleased]\` section in CHANGELOG.md." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See [AGENTS.md](../blob/main/AGENTS.md#changelog-maintenance) for formatting guidelines." >> $GITHUB_STEP_SUMMARY

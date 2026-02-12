@@ -49,6 +49,63 @@ jobs:
         run: |
           python3 scripts/sync_version.py
 
+      - name: Finalize CHANGELOG for released version
+        run: |
+          RELEASED_VERSION="${{ steps.current_version.outputs.version }}"
+          RELEASE_DATE=$(date +%Y-%m-%d)
+          REPO_URL="https://github.com/greynewell/mcpbr/releases/tag/v${RELEASED_VERSION}"
+
+          python3 << 'PYEOF'
+          import re
+          import sys
+          from datetime import date
+
+          version = "${{ steps.current_version.outputs.version }}"
+          release_date = "$RELEASE_DATE"
+          repo_url = f"https://github.com/greynewell/mcpbr/releases/tag/v{version}"
+
+          with open("CHANGELOG.md", "r") as f:
+              content = f.read()
+
+          # Check if [Unreleased] has content to move
+          unreleased_match = re.search(
+              r'(## \[Unreleased\]\n)(.*?)(## \[)',
+              content,
+              re.DOTALL
+          )
+
+          if not unreleased_match:
+              print("No [Unreleased] section found or it's empty. Skipping CHANGELOG finalization.")
+              sys.exit(0)
+
+          unreleased_content = unreleased_match.group(2).strip()
+
+          if not unreleased_content:
+              print("[Unreleased] section is empty. Skipping CHANGELOG finalization.")
+              sys.exit(0)
+
+          # Move [Unreleased] content to new versioned section
+          new_section = f"## [{version}] - {release_date}\n\n{unreleased_content}\n\n"
+          content = content.replace(
+              unreleased_match.group(0),
+              f"## [Unreleased]\n\n{new_section}{unreleased_match.group(3)}"
+          )
+
+          # Add version link if not already present
+          version_link = f"[{version}]: {repo_url}"
+          if version_link not in content:
+              # Insert after the first existing version link
+              first_link_match = re.search(r'\n(\[[\d.]+\]: https://)', content)
+              if first_link_match:
+                  insert_pos = first_link_match.start() + 1
+                  content = content[:insert_pos] + version_link + "\n" + content[insert_pos:]
+
+          with open("CHANGELOG.md", "w") as f:
+              f.write(content)
+
+          print(f"CHANGELOG.md finalized: [Unreleased] -> [{version}] - {release_date}")
+          PYEOF
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
@@ -56,15 +113,23 @@ jobs:
 
       - name: Commit and push version bump
         run: |
-          git add pyproject.toml package.json .claude-plugin/
-          git commit -m "chore: Bump version to ${{ steps.next_version.outputs.version }}"
+          git add pyproject.toml package.json .claude-plugin/ CHANGELOG.md
+          # Only commit CHANGELOG if it changed
+          if git diff --cached --quiet CHANGELOG.md; then
+            git commit -m "chore: Bump version to ${{ steps.next_version.outputs.version }}"
+          else
+            git commit -m "chore: Bump version to ${{ steps.next_version.outputs.version }}
+
+          Finalize CHANGELOG: move [Unreleased] entries to [${{ steps.current_version.outputs.version }}]"
+          fi
           git push origin main
 
       - name: Summary
         run: |
-          echo "## Version Bumped Successfully! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "## Version Bumped Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Released Version**: v${{ steps.current_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **New Version (on main)**: v${{ steps.next_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **CHANGELOG**: [Unreleased] entries moved to [${{ steps.current_version.outputs.version }}]" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Main branch is now ready for the next release." >> $GITHUB_STEP_SUMMARY
