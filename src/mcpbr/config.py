@@ -129,6 +129,17 @@ class MCPServerConfig(BaseModel):
         "registered with the agent. Use when setup produces static files the agent "
         "reads with native tools.",
     )
+    disallowed_native_tools: list[str] = Field(
+        default_factory=list,
+        description="Native tool names to disable via --disallowedTools when MCP is "
+        "active. Use to prevent the agent from bypassing MCP tools with native "
+        "equivalents (e.g., ['Read', 'Grep', 'Glob'] for a filesystem MCP server).",
+    )
+    system_prompt_append: str | None = Field(
+        default=None,
+        description="Text to append to the system prompt via --append-system-prompt "
+        "when MCP is active. Use to guide the agent toward MCP tools.",
+    )
 
     @model_validator(mode="after")
     def validate_setup_only_requires_setup_command(self) -> "MCPServerConfig":

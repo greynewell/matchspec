@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **MCP native tool blocking** (#450): New `disallowed_native_tools` and `system_prompt_append`
+  fields in `mcp_server` config. When set, `--disallowedTools` strips specified native tools
+  (e.g., Read, Grep, Glob) from the API tool definitions, forcing the agent to use MCP
+  equivalents. `--append-system-prompt` can guide the agent toward MCP tools. Essential for
+  meaningful MCP vs native tool benchmarking.
 - **Eval started notifications** (#413): Notifications are now sent when an evaluation begins,
   including benchmark name, model, task count, concurrency, and infrastructure mode
 - **Infrastructure lifecycle notifications** (#414): `infra_provisioned` and `infra_teardown`

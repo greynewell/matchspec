@@ -693,6 +693,14 @@ class ClaudeCodeHarness:
             if self.model:
                 command.extend(["--model", self.model])
 
+            # When MCP is active, disable specified native tools and optionally
+            # append to system prompt so the agent uses MCP equivalents
+            if self.mcp_server and not self.mcp_server.setup_only:
+                if self.mcp_server.disallowed_native_tools:
+                    command.extend(["--disallowedTools", *self.mcp_server.disallowed_native_tools])
+                if self.mcp_server.system_prompt_append:
+                    command.extend(["--append-system-prompt", self.mcp_server.system_prompt_append])
+
             command.append(prompt)
 
             # Prepare environment variables
@@ -979,6 +987,17 @@ class ClaudeCodeHarness:
             if self.model:
                 claude_args.extend(["--model", self.model])
 
+            # When MCP is active, disable specified native tools and optionally
+            # append to system prompt so the agent uses MCP equivalents
+            mcp_append_prompt = ""
+            if self.mcp_server and not self.mcp_server.setup_only:
+                if self.mcp_server.disallowed_native_tools:
+                    claude_args.extend(
+                        ["--disallowedTools", *self.mcp_server.disallowed_native_tools]
+                    )
+                if self.mcp_server.system_prompt_append:
+                    mcp_append_prompt = self.mcp_server.system_prompt_append
+
             claude_args_str = " ".join(claude_args)
 
             # Run Claude Code (MCP server already registered above)
@@ -988,7 +1007,18 @@ class ClaudeCodeHarness:
             quoted_prompt_file = shlex.quote(prompt_file)
 
             # Build inner command first, then quote for su -c
-            inner_cmd = f'source {quoted_env_file} && cd {quoted_workdir} && claude {claude_args_str} "$(cat {quoted_prompt_file})"'
+            if mcp_append_prompt:
+                inner_cmd = (
+                    f"source {quoted_env_file} && cd {quoted_workdir} && "
+                    f"claude {claude_args_str} "
+                    f"--append-system-prompt {shlex.quote(mcp_append_prompt)} "
+                    f'"$(cat {quoted_prompt_file})"'
+                )
+            else:
+                inner_cmd = (
+                    f"source {quoted_env_file} && cd {quoted_workdir} && "
+                    f'claude {claude_args_str} "$(cat {quoted_prompt_file})"'
+                )
 
             command = [
                 "/bin/bash",
