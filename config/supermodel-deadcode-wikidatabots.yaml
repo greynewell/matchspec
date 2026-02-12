@@ -17,7 +17,7 @@ tasks:
     pr_number: 718
     merge_commit: "66391012eceb57565d417eed37bc42b2d7c6e5b7"
     language: python
-    description: "Remove dead code -- 8 unused functions/constants across 3 files in 24-file repo"
+    description: "Dead code removal in a small Python utility repo"
 
 supermodel_api_base: "https://staging.api.supermodeltools.com"
 supermodel_api_key: null

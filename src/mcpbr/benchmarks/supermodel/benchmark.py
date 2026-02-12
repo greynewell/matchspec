@@ -116,7 +116,9 @@ class SupermodelBenchmark:
                 "scope_prefix": scope_prefix,
                 "description": description,
                 "ground_truth": gt,
-                "problem_statement": self._generate_problem_statement(task_cfg, len(gt)),
+                "problem_statement": self._generate_baseline_problem_statement(task_cfg),
+                "problem_statement_enhanced": self._generate_enhanced_problem_statement(task_cfg),
+                "problem_statement_baseline": self._generate_baseline_problem_statement(task_cfg),
             }
             tasks.append(task)
 
@@ -165,38 +167,93 @@ class SupermodelBenchmark:
 
         return gt
 
-    def _generate_problem_statement(self, task_cfg: dict, gt_count: int) -> str:
-        """Generate the problem statement for the agent.
+    def _generate_enhanced_problem_statement(self, task_cfg: dict) -> str:
+        """Generate problem statement for the enhanced (graph-assisted) condition.
 
-        Uses a single prompt that works for both conditions:
-        - Enhanced (MCP): analysis JSON exists in workdir, agent reads and filters it
-        - Baseline: no analysis file, agent does manual analysis
+        The agent gets a pre-computed analysis JSON from a call graph analyzer.
+        The analyzer has already done reachability analysis -- these ARE dead code.
+        The agent should do light validation and filter obvious false positives.
         """
-        task_id = task_cfg["id"]
         language = task_cfg.get("language", "typescript")
-        description = task_cfg.get("description", "")
         analysis_file = self._endpoint.analysis_filename
 
-        return f"""Analyze this {language} codebase for {self.analysis_type} issues.
+        return f"""You are a code analyst. Find all dead code in this {language} codebase.
 
-Task: {task_id}
-Description: {description}
-Analysis type: {self.analysis_type}
+A call graph analyzer has already analyzed this codebase and identified dead code
+candidates. The results are in `{analysis_file}`.
 
-INSTRUCTIONS:
-1. First, check if a file named {analysis_file} exists in the workspace
-2. If it EXISTS: read it -- it contains pre-computed static analysis results with
-   dead code candidates. Filter out obvious false positives (framework lifecycle methods,
-   test utilities, dependency injection, migration methods) and write your filtered
-   findings to REPORT.json. Do NOT re-analyze the codebase manually.
-3. If it DOES NOT exist: manually analyze the codebase to find all dead code --
-   functions, classes, and constants that are never called, imported, or referenced.
-4. Update the existing REPORT.json file with your findings.
+The analyzer uses full call graph reachability -- it traces which functions are
+actually called from entry points, not just whether a name appears in the code.
+This means its candidates ARE unreachable code, even if the name appears elsewhere
+(e.g., in __all__ exports, self-recursive calls, or atexit registrations that
+reference unused state).
 
-CRITICAL: REPORT.json must contain a "dead_code" array of objects.
-Each object should have: file, name, type, and reason fields.
-Set "analysis_complete" to true when done.
-"""
+IMPORTANT DISTINCTIONS:
+- A function listed in __all__ but never actually imported/called = DEAD
+- Two functions that only call each other but nothing calls either = DEAD cluster
+- A cleanup function registered with atexit but whose state is never populated = DEAD
+- A constant that is only referenced in its own module's dead functions = DEAD
+
+YOUR JOB:
+1. Read `{analysis_file}` to get the candidate list.
+2. For each candidate, do a quick sanity check -- only REMOVE a candidate if you
+   find clear evidence it is genuinely live (e.g., it IS an entry point called by
+   a framework, or it is imported and called in a main execution path).
+3. Err on the side of KEEPING candidates. The analyzer's call graph is more
+   reliable than a simple grep. If you're unsure, keep it.
+4. Write your filtered findings to REPORT.json.
+
+REPORT.json format:
+{{
+  "dead_code": [
+    {{"file": "path/to/file.py", "name": "unused_func", "type": "function", "reason": "unreachable from entry points"}},
+    ...
+  ],
+  "analysis_complete": true
+}}
+
+Type should be one of: function, class, method, const."""
+
+    def _generate_baseline_problem_statement(self, task_cfg: dict) -> str:
+        """Generate problem statement for the baseline (manual analysis) condition.
+
+        The agent must find dead code by reading and searching the codebase directly.
+        """
+        language = task_cfg.get("language", "typescript")
+
+        return f"""You are a code analyst. Find all dead code in this {language} codebase.
+
+Dead code = functions, classes, methods, and constants that are defined but never
+used in any meaningful execution path. This includes:
+- Functions/methods defined but never called from any entry point
+- Constants defined but never read by any live code
+- Functions that only call each other (dead clusters) with no external caller
+- Functions in __all__ that are never actually imported by other modules
+- Cleanup/utility functions whose associated state is never populated
+
+YOUR JOB:
+1. List all source files (exclude test files from the dead code search -- tests
+   are consumers, not definitions to check).
+2. Read each non-test source file and identify all function, class, and constant
+   definitions.
+3. For each definition, trace whether it is reachable from an actual entry point
+   (main functions, module-level code that runs on import, framework callbacks).
+   A function that is only referenced by its own definition or by other dead
+   functions is still dead.
+4. Write your findings to REPORT.json.
+
+REPORT.json format:
+{{
+  "dead_code": [
+    {{"file": "path/to/file.py", "name": "unused_func", "type": "function", "reason": "no callers from entry points"}},
+    ...
+  ],
+  "analysis_complete": true
+}}
+
+Type should be one of: function, class, method, const.
+When in doubt about whether something is dead, INCLUDE it -- false positives
+are better than false negatives for this analysis."""
 
     def normalize_task(self, task: dict[str, Any]) -> BenchmarkTask:
         instance_id = task.get("instance_id", "unknown")
@@ -223,6 +280,16 @@ Set "analysis_complete" to true when done.
         For baseline: clone repo at pre-merge commit, write REPORT.json placeholder.
         For MCP (enhanced): also call Supermodel API and place analysis JSON.
         """
+        # Swap problem_statement based on condition so the agent gets the right prompt
+        if is_mcp:
+            task["problem_statement"] = task.get(
+                "problem_statement_enhanced", task["problem_statement"]
+            )
+        else:
+            task["problem_statement"] = task.get(
+                "problem_statement_baseline", task["problem_statement"]
+            )
+
         instance_id = task["instance_id"]
         repo = task["repo"]
         merge_commit = task["merge_commit"]
@@ -425,8 +492,4 @@ Set "analysis_complete" to true when done.
         return None
 
     def get_prompt_template(self) -> str:
-        return (
-            "Analyze the codebase for {analysis_type} issues.\n\n"
-            "{{problem_statement}}\n\n"
-            "Update REPORT.json with your findings."
-        ).format(analysis_type=self.analysis_type)
+        return "{problem_statement}"
