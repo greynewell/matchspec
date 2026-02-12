@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **MCP log directory permission error** (#449): Claude CLI running as non-root `mcpbr` user
+- **MCP log directory permission error** (#451): Claude CLI running as non-root `mcpbr` user
   could fail with `EACCES` when creating MCP log directories under `~/.cache/`. The home
   directory and `.cache` subdirectory are now explicitly created and owned by the `mcpbr` user
   during container setup
