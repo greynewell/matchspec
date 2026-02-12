@@ -63,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Default disk size increased to 1 TB** (#434): `disk_gb` default changed from 250 to 1000
   across AWS, GCP, and Azure providers to accommodate swe-bench-verified evaluations
 
+### Infrastructure
+
+- **Python 3.13 and 3.14 CI support**: Added Python 3.13 and 3.14 to the CI test matrix and
+  declared support in pyproject.toml classifiers
+
 ### Fixed
 
 - **Azure SSH-resilient eval execution** (#446): Remote evaluation on Azure VMs now runs via
