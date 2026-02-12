@@ -794,8 +794,12 @@ CMD ["/bin/bash"]
 
         # Create a non-root user for running Claude CLI
         # Claude CLI blocks --dangerously-skip-permissions when running as root
+        # Ensure home directory (including .cache) is fully owned by mcpbr
+        # so Claude CLI can create MCP log directories at runtime
         create_user_cmd = (
             "useradd -m -s /bin/bash mcpbr && "
+            "mkdir -p /home/mcpbr/.cache && "
+            "chown -R mcpbr:mcpbr /home/mcpbr && "
             "chown -R mcpbr:mcpbr /workspace && "
             f"chown -R mcpbr:mcpbr {env.workdir}"
         )
