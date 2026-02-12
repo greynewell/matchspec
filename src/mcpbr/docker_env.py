@@ -328,6 +328,7 @@ class DockerEnvironmentManager:
         extra_volumes: dict[str, str] | None = None,
         sandbox_profile: "SandboxProfile | None" = None,
         audit_logger: "AuditLogger | None" = None,
+        claude_code_version: str | None = None,
     ) -> None:
         """Initialize the Docker environment manager.
 
@@ -336,9 +337,11 @@ class DockerEnvironmentManager:
             extra_volumes: Additional volume mounts (read-write) (host_path -> container_path).
             sandbox_profile: Security sandbox profile for containers. None uses defaults.
             audit_logger: Optional audit logger for sandbox security events.
+            claude_code_version: Pin a specific Claude Code npm version (e.g., '2.1.37').
         """
         self.client = docker.from_env()
         self.use_prebuilt = use_prebuilt
+        self.claude_code_version = claude_code_version
         self._extra_volumes = extra_volumes or {}
         self._sandbox_profile = sandbox_profile
         self._audit_logger = audit_logger
@@ -783,9 +786,12 @@ CMD ["/bin/bash"]
         if exit_code != 0:
             raise RuntimeError(f"Failed to install Node.js: {stderr}")
 
-        # Install Claude CLI globally
+        # Install Claude CLI globally (optionally pin a specific version)
+        claude_pkg = "@anthropic-ai/claude-code"
+        if self.claude_code_version:
+            claude_pkg = f"{claude_pkg}@{self.claude_code_version}"
         exit_code, stdout, stderr = await env.exec_command(
-            "npm install -g @anthropic-ai/claude-code",
+            f"npm install -g {claude_pkg}",
             timeout=120,
             workdir="/tmp",
         )

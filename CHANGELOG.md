@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (e.g., Read, Grep, Glob) from the API tool definitions, forcing the agent to use MCP
   equivalents. `--append-system-prompt` can guide the agent toward MCP tools. Essential for
   meaningful MCP vs native tool benchmarking.
+- **Claude Code version pinning** (#453): New `claude_code_version` config field lets you pin a
+  specific Claude Code version inside Docker containers (e.g., `claude_code_version: "2.1.37"`).
+  Useful for version comparison experiments. Older versions that lack `--max-turns` support
+  (pre-2.1.x) are automatically detected and the flag is omitted.
 - **Eval started notifications** (#413): Notifications are now sent when an evaluation begins,
   including benchmark name, model, task count, concurrency, and infrastructure mode
 - **Infrastructure lifecycle notifications** (#414): `infra_provisioned` and `infra_teardown`

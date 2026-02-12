@@ -533,6 +533,7 @@ class ClaudeCodeHarness:
         log_file: TextIO | InstanceLogWriter | None = None,
         mcp_logs_dir: Path | None = None,
         thinking_budget: int | None = None,
+        claude_code_version: str | None = None,
     ) -> None:
         """Initialize Claude Code harness.
 
@@ -545,6 +546,7 @@ class ClaudeCodeHarness:
             log_file: Optional file handle for writing raw JSON logs.
             mcp_logs_dir: Directory for MCP server logs. Default: ~/.mcpbr_state/logs
             thinking_budget: Extended thinking token budget. Set to enable thinking mode.
+            claude_code_version: Pinned Claude Code version (e.g., '2.1.37').
         """
         self.model = model
         self.mcp_server = mcp_server
@@ -556,6 +558,7 @@ class ClaudeCodeHarness:
         self.log_file = log_file
         self.mcp_logs_dir = mcp_logs_dir
         self.thinking_budget = thinking_budget
+        self.claude_code_version = claude_code_version
         self._console = Console()
 
     async def run_setup_command(
@@ -980,9 +983,12 @@ class ClaudeCodeHarness:
                 "--dangerously-skip-permissions",
                 "--output-format",
                 "stream-json",
-                "--max-turns",
-                str(self.max_iterations),
             ]
+
+            # --max-turns was added in Claude Code v2.1.x; skip for older versions
+            ver = self.claude_code_version or ""
+            if not ver or not ver.startswith(("0.", "1.", "2.0.")):
+                claude_args.extend(["--max-turns", str(self.max_iterations)])
 
             if self.model:
                 claude_args.extend(["--model", self.model])
@@ -1311,6 +1317,7 @@ def create_harness(
     log_file: TextIO | InstanceLogWriter | None = None,
     mcp_logs_dir: Path | None = None,
     thinking_budget: int | None = None,
+    claude_code_version: str | None = None,
 ) -> AgentHarness:
     """Factory function to create an agent harness.
 
@@ -1347,6 +1354,7 @@ def create_harness(
         log_file=log_file,
         mcp_logs_dir=mcp_logs_dir,
         thinking_budget=thinking_budget,
+        claude_code_version=claude_code_version,
     )
 
 

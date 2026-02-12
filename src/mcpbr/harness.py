@@ -271,6 +271,7 @@ def _create_mcp_agent(
         log_file=log_file,
         mcp_logs_dir=mcp_logs_dir,
         thinking_budget=config.thinking_budget,
+        claude_code_version=config.claude_code_version,
     )
 
 
@@ -303,6 +304,7 @@ def _create_baseline_agent(
         verbosity=verbosity,
         log_file=log_file,
         thinking_budget=config.thinking_budget,
+        claude_code_version=config.claude_code_version,
     )
 
 
@@ -1333,6 +1335,7 @@ async def run_evaluation(
         extra_volumes=config.volumes,
         sandbox_profile=sandbox_profile,
         audit_logger=audit_logger,
+        claude_code_version=config.claude_code_version,
     )
 
     # Build notification config early for lifecycle events (v0.13.0)

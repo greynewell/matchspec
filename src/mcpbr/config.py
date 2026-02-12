@@ -642,6 +642,12 @@ class HarnessConfig(BaseModel):
         description="Use pre-built SWE-bench Docker images when available",
     )
 
+    claude_code_version: str | None = Field(
+        default=None,
+        description="Pin a specific Claude Code version inside Docker containers "
+        "(e.g., '2.1.37'). Defaults to latest. Useful for version comparison experiments.",
+    )
+
     budget: float | None = Field(
         default=None,
         description="Maximum budget in USD for the evaluation (halts when reached)",
