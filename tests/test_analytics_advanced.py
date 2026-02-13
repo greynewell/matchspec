@@ -262,7 +262,7 @@ class TestErrorCategorization:
     """Tests for _categorize_error."""
 
     @pytest.mark.parametrize(
-        "error_msg,expected_category",
+        ("error_msg", "expected_category"),
         [
             ("Request timed out after 30s", "timeout"),
             ("Connection deadline exceeded", "timeout"),

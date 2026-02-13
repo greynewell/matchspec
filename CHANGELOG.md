@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-02-13
+
+### Added
+
+- **Strict code quality enforcement**: Expanded Ruff linting rules (B, UP, SIM, RUF, C4, PIE, PT,
+  ASYNC, S, T20) and added mypy type checking with Pydantic plugin across all 134 source files
+  - Added mypy pre-commit hook and CI type-check job
+  - Zero ruff violations (72 fixed across 36 files)
+  - Zero mypy errors (267 fixed across 39 files)
+  - All 4293 tests pass with no regressions
+
+### Fixed
+
+- **72 ruff lint violations** across 36 files: B904 (raise-without-from), SIM102/SIM105/SIM115/
+  SIM116/SIM117 (simplifications), RUF059/RUF003 (unused vars, Unicode), B007 (unused loop vars),
+  PT019 (pytest fixtures), S-rules (security: S310 URL validation, S108 temp dirs, S311 non-crypto
+  random, S110 exception handling, S608 SQL, S112 try-except-continue, S104 binding, S602 shell)
+- **267 mypy type errors** across 39 files: union-attr (128), assignment (33), no-any-return (28),
+  arg-type (23), and others. Fixed with proper type narrowing, assertions, annotations, and
+  type-safe patterns across infrastructure providers (GCP, AWS, Azure, Cloudflare, K8s), core
+  modules (harness, CLI, docker_env), and utility modules (providers, notifications, benchmarks)
+
+[0.14.0]: https://github.com/greynewell/mcpbr/releases/tag/v0.14.0
+
 ## [0.13.0] - 2026-02-13
 
 ### Fixed

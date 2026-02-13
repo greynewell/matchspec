@@ -68,7 +68,7 @@ class BenchmarkAPIHandler(BaseHTTPRequestHandler):
     api_token: str | None = None
 
     # Silence per-request log lines from BaseHTTPRequestHandler.
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+    def log_message(self, format: str, *args: Any) -> None:
         logger.debug(format, *args)
 
     # ------------------------------------------------------------------
@@ -104,7 +104,7 @@ class BenchmarkAPIHandler(BaseHTTPRequestHandler):
     # GET dispatcher
     # ------------------------------------------------------------------
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         """Dispatch GET requests to the appropriate handler."""
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
@@ -148,7 +148,7 @@ class BenchmarkAPIHandler(BaseHTTPRequestHandler):
     # DELETE dispatcher
     # ------------------------------------------------------------------
 
-    def do_DELETE(self) -> None:  # noqa: N802
+    def do_DELETE(self) -> None:
         """Dispatch DELETE requests."""
         if not self._check_auth():
             self._send_error_json(401, "Authentication required")
@@ -311,7 +311,7 @@ def create_api_server(
         An :class:`HTTPServer` ready for ``serve_forever()`` or single-request
         handling via ``handle_request()``.
     """
-    if host in ("0.0.0.0", "::"):
+    if host in ("0.0.0.0", "::"):  # noqa: S104 -- intentional check to warn users about binding to all interfaces
         logger.warning(
             "API server binding to %s — this exposes the API to all network interfaces. "
             "Consider using 127.0.0.1 for local-only access, or set an api_token.",

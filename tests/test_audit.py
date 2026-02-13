@@ -1,7 +1,5 @@
 """Tests for audit logging module."""
 
-# ruff: noqa: N801
-
 import csv
 import json
 import os
@@ -984,7 +982,7 @@ class TestAuditIntegration:
 
             assert len(json_data) == len(csv_rows) == 2
 
-            for json_entry, csv_row in zip(json_data, csv_rows):
+            for json_entry, csv_row in zip(json_data, csv_rows, strict=False):
                 assert json_entry["event_id"] == csv_row["event_id"]
                 assert json_entry["action"] == csv_row["action"]
                 assert json_entry["resource"] == csv_row["resource"]
@@ -1029,7 +1027,7 @@ class TestAuditIntegration:
             logger.log(action=AuditAction.BENCHMARK_COMPLETED, resource="bench-1")
 
             # Verify in-memory integrity
-            valid, errors = logger.verify_integrity()
+            valid, _errors = logger.verify_integrity()
             assert valid is True
 
             # Verify file was written

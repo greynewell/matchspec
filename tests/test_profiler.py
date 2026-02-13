@@ -1,7 +1,7 @@
 """Tests for performance profiling infrastructure."""
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -18,8 +18,8 @@ class TestToolCallProfile:
 
     def test_duration_calculation(self) -> None:
         """Test duration calculation in milliseconds and seconds."""
-        start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 1, 12, 0, 1, 500000, tzinfo=timezone.utc)  # 1.5 seconds later
+        start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 1, 12, 0, 1, 500000, tzinfo=UTC)  # 1.5 seconds later
 
         profile = ToolCallProfile(
             tool_name="Read",
@@ -33,7 +33,7 @@ class TestToolCallProfile:
 
     def test_tool_call_with_error(self) -> None:
         """Test tool call profile with error information."""
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         end = start
         profile = ToolCallProfile(
             tool_name="Bash",
@@ -74,8 +74,8 @@ class TestPerformanceProfiler:
     def test_record_tool_call(self) -> None:
         """Test recording tool calls."""
         profiler = PerformanceProfiler()
-        start = datetime.now(timezone.utc)
-        end = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
+        end = datetime.now(UTC)
 
         profiler.record_tool_call(
             tool_name="Read",
@@ -128,7 +128,7 @@ class TestPerformanceProfiler:
         profiler.start_task()
         time.sleep(0.1)
 
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         profiler.record_tool_call("Read", start, start, True)
 
         time_to_first = profiler._calculate_time_to_first_tool()
@@ -140,13 +140,13 @@ class TestPerformanceProfiler:
         profiler = PerformanceProfiler()
 
         # Record two tool calls with gap between them
-        start1 = datetime.now(timezone.utc)
+        start1 = datetime.now(UTC)
         end1 = start1
         profiler.record_tool_call("Read", start1, end1, True)
 
         time.sleep(0.05)
 
-        start2 = datetime.now(timezone.utc)
+        start2 = datetime.now(UTC)
         end2 = start2
         profiler.record_tool_call("Bash", start2, end2, True)
 
@@ -160,7 +160,7 @@ class TestPerformanceProfiler:
         profiler = PerformanceProfiler()
 
         # Add multiple tool calls with varying latencies
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         for i in range(10):
             start = base_time
             # Simulate different latencies
@@ -182,7 +182,7 @@ class TestPerformanceProfiler:
         profiler.start_task()
 
         # Record some tool calls
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         profiler.record_tool_call("Read", start, start, True)
         profiler.record_tool_call("Bash", start, start, False, error="Command failed")
 
@@ -212,7 +212,7 @@ class TestPerformanceProfiler:
         # Add slow tool calls
         from datetime import timedelta
 
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         start = base_time
         end = start + timedelta(seconds=5)  # 5 second call
         profiler.record_tool_call("Bash", start, end, True)
@@ -239,7 +239,7 @@ class TestPerformanceProfiler:
         profiler = PerformanceProfiler()
         profiler.start_task()
 
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         # Record mostly failing tool calls
         for i in range(10):
             profiler.record_tool_call("Bash", start, start, success=(i < 2), error="Failed")
@@ -257,7 +257,7 @@ class TestMemorySample:
     def test_memory_sample_creation(self) -> None:
         """Test creating memory samples."""
         sample = MemorySample(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             rss_mb=256.5,
             vms_mb=512.0,
         )
@@ -362,16 +362,16 @@ class TestProfilingIntegration:
         profiler.sample_memory()
 
         # Simulate tool calls
-        start1 = datetime.now(timezone.utc)
+        start1 = datetime.now(UTC)
         time.sleep(0.05)
-        end1 = datetime.now(timezone.utc)
+        end1 = datetime.now(UTC)
         profiler.record_tool_call("Read", start1, end1, True, result_size_bytes=1024)
 
         time.sleep(0.02)
 
-        start2 = datetime.now(timezone.utc)
+        start2 = datetime.now(UTC)
         time.sleep(0.03)
-        end2 = datetime.now(timezone.utc)
+        end2 = datetime.now(UTC)
         profiler.record_tool_call("Bash", start2, end2, True)
 
         # Sample memory again
@@ -414,7 +414,7 @@ class TestProfilingIntegration:
         profiler = PerformanceProfiler()
         profiler.start_task()
 
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         end = start
 
         # Mix of successful and failed calls
@@ -437,7 +437,7 @@ class TestProfilingIntegration:
         profiler = PerformanceProfiler()
 
         # Single value
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         profiler.record_tool_call("Read", start, start, True)
 
         latencies = profiler._calculate_tool_latencies()
@@ -449,7 +449,7 @@ class TestProfilingIntegration:
         from datetime import timedelta
 
         profiler2 = PerformanceProfiler()
-        base = datetime.now(timezone.utc)
+        base = datetime.now(UTC)
         profiler2.record_tool_call("Read", base, base, True)
         end2 = base + timedelta(seconds=1)
         profiler2.record_tool_call("Read", base, end2, True)

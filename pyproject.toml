@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcpbr"
-version = "0.13.4"
+version = "0.14.0"
 description = "Model Context Protocol Benchmark Runner - evaluate MCP servers against software engineering benchmarks"
 readme = "README.md"
 license = "MIT"
@@ -46,6 +46,12 @@ dev = [
     "ruff>=0.1.0",
     "pre-commit>=3.0.0",
     "slack_sdk>=3.27.0",
+    "mypy>=1.11.0",
+    "types-docker",
+    "types-paramiko",
+    "types-PyYAML",
+    "types-requests",
+    "types-psutil",
 ]
 docs = [
     "mkdocs>=1.5.0",
@@ -90,8 +96,47 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
-ignore = ["E501"]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "W",     # pycodestyle warnings
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade (Python 3.11+)
+    "SIM",   # simplify
+    "RUF",   # ruff-specific
+    "C4",    # flake8-comprehensions
+    "PIE",   # misc linting
+    "PT",    # pytest-style
+    "ASYNC", # async bugs
+    "S",     # bandit (security)
+    "T20",   # print detection
+]
+ignore = [
+    "E501",    # line too long (handled by formatter)
+    "B008",    # function call in default argument (Click pattern)
+    "S101",    # assert usage (fine in tests)
+    "S603",    # subprocess call - check for untrusted input
+    "S607",    # start process with partial path
+    "T201",    # print statement (CLI tool uses print)
+    "SIM108",  # ternary operator (readability preference)
+    "PT011",   # pytest.raises too broad
+    "PT012",   # pytest.raises multiple statements
+    "RUF012",  # mutable class variable (Pydantic models)
+    "ASYNC109",# async function timeout param (trio-specific, not asyncio)
+    "ASYNC110",# async sleep in loop (trio-specific)
+    "ASYNC221",# await in async for (trio-specific)
+    "ASYNC230",# open call in async function (trio-specific)
+    "ASYNC240",# async generator (trio-specific)
+    "ASYNC251",# async sleep in async for (trio-specific)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S", "T20"]
+"infrastructure/**/*.py" = ["S603", "S607"]
+"src/mcpbr/infrastructure/**/*.py" = ["S603", "S607", "S108"]
+"scripts/**/*.py" = ["T20", "S"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -99,3 +144,46 @@ testpaths = ["tests"]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m not integration')",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unreachable = true
+no_implicit_optional = true
+strict_equality = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "datasets",
+    "datasets.*",
+    "google.generativeai",
+    "google.generativeai.*",
+    "wandb",
+    "wandb.*",
+    "slack_sdk",
+    "slack_sdk.*",
+    "uvicorn",
+    "uvicorn.*",
+    "fastapi",
+    "fastapi.*",
+    "tomli",
+    "tomli.*",
+    "weasyprint",
+    "weasyprint.*",
+    "terminal_bench",
+    "terminal_bench.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "mcpbr.models",
+    "mcpbr.config",
+    "mcpbr.evaluation",
+    "mcpbr.pricing",
+]
+disallow_untyped_defs = true
+warn_unused_ignores = true

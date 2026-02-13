@@ -21,8 +21,6 @@ from pathlib import Path
 class VersionNotFoundError(Exception):
     """Raised when version cannot be found in pyproject.toml."""
 
-    pass
-
 
 def get_version_from_pyproject(pyproject_path: Path) -> str:
     """Extract version from pyproject.toml."""

@@ -25,7 +25,7 @@ from mcpbr.reports.pdf_report import PDFReportGenerator
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def minimal_results() -> dict:
     """Minimal results data with only required fields."""
     return {
@@ -65,7 +65,7 @@ def minimal_results() -> dict:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def comprehensive_results() -> dict:
     """Comprehensive results data with all optional fields populated."""
     return {
@@ -131,7 +131,7 @@ def comprehensive_results() -> dict:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def runner() -> CliRunner:
     """Create a CliRunner for CLI tests."""
     return CliRunner()
@@ -606,9 +606,11 @@ class TestPDFReportGenerator:
         gen = PDFReportGenerator(minimal_results)
         out = tmp_path / "report.pdf"
 
-        with patch.dict("sys.modules", {"weasyprint": None}):
-            with pytest.raises(ImportError, match="weasyprint"):
-                gen.save_pdf(out)
+        with (
+            patch.dict("sys.modules", {"weasyprint": None}),
+            pytest.raises(ImportError, match="weasyprint"),
+        ):
+            gen.save_pdf(out)
 
     def test_branding_escapes_html(self, minimal_results: dict) -> None:
         """generate_html() escapes HTML in branding strings."""

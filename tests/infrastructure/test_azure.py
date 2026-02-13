@@ -1,5 +1,6 @@
 """Tests for Azure infrastructure provider."""
 
+import contextlib
 import json
 from pathlib import Path
 from typing import Any
@@ -1198,11 +1199,8 @@ class TestTaskValidation:
 
         mock_client.exec_command.return_value = (None, mock_stdout, mock_stderr)
 
-        try:
+        with pytest.raises(RuntimeError, match="exit code 1"):
             await azure_provider._run_test_task()
-        except RuntimeError as e:
-            # Verify error message includes output info
-            assert "exit code 1" in str(e)
 
     async def test_run_test_task_uses_correct_timeout(self, azure_provider: AzureProvider) -> None:
         """Test task validation uses 600s timeout."""
@@ -1499,9 +1497,7 @@ def _mock_detached_eval(mock_client, exit_code=0, log_output=""):
             mock_stdout.read.return_value = b"LAUNCHED\n"
         elif "kill -0" in cmd:
             mock_stdout.read.return_value = str(exit_code).encode() + b"\n"
-        elif "tail -c" in cmd:
-            mock_stdout.read.return_value = log_output.encode() if log_output else b""
-        elif "tail -50" in cmd:
+        elif "tail -c" in cmd or "tail -50" in cmd:
             mock_stdout.read.return_value = log_output.encode() if log_output else b""
         else:
             mock_stdout.read.return_value = b""
@@ -1601,7 +1597,8 @@ class TestRemoteExecution:
 
         launch_cmd = mock_client.exec_command.call_args_list[0][0][0]
         # Should have no -M or -B flags when running both
-        assert "-M" not in launch_cmd and "-B" not in launch_cmd
+        assert "-M" not in launch_cmd
+        assert "-B" not in launch_cmd
 
     async def test_run_evaluation_streams_output(self, azure_provider: AzureProvider) -> None:
         """Test run_evaluation streams log output via polling."""
@@ -1656,10 +1653,8 @@ class TestRemoteExecution:
         azure_provider.ssh_client = mock_client
         _mock_detached_eval(mock_client, exit_code=1, log_output="error\n")
 
-        try:
+        with contextlib.suppress(RuntimeError):
             await azure_provider.run_evaluation(None, run_mcp=True, run_baseline=False)
-        except RuntimeError:
-            pass
 
         assert azure_provider._error_occurred is True
 
@@ -1770,11 +1765,13 @@ class TestResultsDownload:
         mock_sftp = MagicMock()
         mock_client.open_sftp.return_value = mock_sftp
 
-        with patch(
-            "builtins.open", mock_open(read_data='{"metadata": {}, "summary": {}, "tasks": []}')
+        with (
+            patch(
+                "builtins.open", mock_open(read_data='{"metadata": {}, "summary": {}, "tasks": []}')
+            ),
+            patch("pathlib.Path.unlink"),
         ):
-            with patch("pathlib.Path.unlink"):
-                await azure_provider._download_results()
+            await azure_provider._download_results()
 
         mock_client.open_sftp.assert_called_once()
 
@@ -1793,11 +1790,13 @@ class TestResultsDownload:
         mock_sftp = MagicMock()
         mock_client.open_sftp.return_value = mock_sftp
 
-        with patch(
-            "builtins.open", mock_open(read_data='{"metadata": {}, "summary": {}, "tasks": []}')
+        with (
+            patch(
+                "builtins.open", mock_open(read_data='{"metadata": {}, "summary": {}, "tasks": []}')
+            ),
+            patch("pathlib.Path.unlink"),
         ):
-            with patch("pathlib.Path.unlink"):
-                await azure_provider._download_results()
+            await azure_provider._download_results()
 
         mock_sftp.get.assert_called_once()
         call_args = mock_sftp.get.call_args[0]
@@ -1818,9 +1817,8 @@ class TestResultsDownload:
 
         json_data = '{"metadata": {}, "summary": {"pass_rate": 0.9}, "tasks": []}'
 
-        with patch("builtins.open", mock_open(read_data=json_data)):
-            with patch("pathlib.Path.unlink"):
-                result = await azure_provider._download_results()
+        with patch("builtins.open", mock_open(read_data=json_data)), patch("pathlib.Path.unlink"):
+            result = await azure_provider._download_results()
 
         from mcpbr.harness import EvaluationResults
 
@@ -1859,10 +1857,12 @@ class TestResultsDownload:
         mock_sftp = MagicMock()
         mock_client.open_sftp.return_value = mock_sftp
 
-        with patch("builtins.open", mock_open(read_data="invalid json")):
-            with patch("pathlib.Path.unlink"):
-                with pytest.raises(json.JSONDecodeError):
-                    await azure_provider._download_results()
+        with (
+            patch("builtins.open", mock_open(read_data="invalid json")),
+            patch("pathlib.Path.unlink"),
+            pytest.raises(json.JSONDecodeError),
+        ):
+            await azure_provider._download_results()
 
 
 # ============================================================================
@@ -2197,11 +2197,13 @@ class TestArtifactDownloadSafety:
         mock_sftp = MagicMock()
         mock_client.open_sftp.return_value = mock_sftp
 
-        with patch(
-            "builtins.open", mock_open(read_data='{"metadata": {}, "summary": {}, "tasks": []}')
+        with (
+            patch(
+                "builtins.open", mock_open(read_data='{"metadata": {}, "summary": {}, "tasks": []}')
+            ),
+            patch("pathlib.Path.unlink"),
         ):
-            with patch("pathlib.Path.unlink"):
-                await azure_provider._download_results()
+            await azure_provider._download_results()
 
         assert azure_provider._remote_output_dir == "/home/azureuser/.mcpbr_run_12345"
 
@@ -2216,12 +2218,11 @@ class TestArtifactDownloadSafety:
         azure_provider._ssh_exec = mock_ssh_exec
 
         mock_sftp = MagicMock()
-        mock_sftp.get.side_effect = IOError("SFTP download failed")
+        mock_sftp.get.side_effect = OSError("SFTP download failed")
         mock_client.open_sftp.return_value = mock_sftp
 
-        with pytest.raises(IOError):
-            with patch("pathlib.Path.unlink"):
-                await azure_provider._download_results()
+        with pytest.raises(IOError), patch("pathlib.Path.unlink"):
+            await azure_provider._download_results()
 
         mock_sftp.close.assert_called_once()
 
@@ -2239,7 +2240,7 @@ class TestArtifactDownloadSafety:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise IOError("Transient SFTP failure")
+                raise OSError("Transient SFTP failure")
             # Second attempt succeeds -- create results.json
             (local_dir / "results.json").write_text("{}")
 
@@ -2266,7 +2267,7 @@ class TestArtifactDownloadSafety:
         azure_provider._remote_output_dir = "/home/azureuser/.mcpbr_run_12345"
 
         def mock_recursive_download(_sftp: Any, _remote_dir: str, _local_dir: Path) -> None:
-            raise IOError("Persistent SFTP failure")
+            raise OSError("Persistent SFTP failure")
 
         azure_provider._recursive_download = mock_recursive_download
 
@@ -2275,9 +2276,11 @@ class TestArtifactDownloadSafety:
 
         output_dir = tmp_path / "artifacts"
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with pytest.raises(RuntimeError, match="Failed to download artifacts"):
-                await azure_provider.collect_artifacts(output_dir)
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(RuntimeError, match="Failed to download artifacts"),
+        ):
+            await azure_provider.collect_artifacts(output_dir)
 
         assert azure_provider._artifacts_collected is False
 

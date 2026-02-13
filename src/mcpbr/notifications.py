@@ -389,7 +389,8 @@ def send_slack_bot_notification(
 
         client = WebClient(token=bot_token)
         response = client.chat_postMessage(channel=channel, text=message_text)
-        return response.get("ts")
+        ts: str | None = response.get("ts")
+        return ts
 
     color_emoji = "\u2705" if event.resolution_rate >= 0.3 else "\u26a0\ufe0f"
     if event.event_type == "regression" and event.regression_count:
@@ -422,7 +423,8 @@ def send_slack_bot_notification(
 
     client = WebClient(token=bot_token)
     response = client.chat_postMessage(channel=channel, text=message_text)
-    return response.get("ts")
+    result_ts: str | None = response.get("ts")
+    return result_ts
 
 
 def post_slack_thread_reply(
@@ -488,7 +490,8 @@ def create_gist_report(
             timeout=30,
         )
         response.raise_for_status()
-        return response.json().get("html_url")
+        url: str | None = response.json().get("html_url")
+        return url
     except Exception as e:
         logger.warning("Failed to create GitHub Gist: %s", e)
         return None

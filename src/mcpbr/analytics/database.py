@@ -6,9 +6,10 @@ enabling trend analysis, regression detection, and historical comparisons.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -122,7 +123,7 @@ class ResultsDatabase:
         config = metadata.get("config", {})
         summary_mcp = results_data.get("summary", {}).get("mcp", {})
 
-        timestamp = metadata.get("timestamp", datetime.now(timezone.utc).isoformat())
+        timestamp = metadata.get("timestamp", datetime.now(UTC).isoformat())
 
         cur = self._conn.execute(
             """
@@ -151,7 +152,7 @@ class ResultsDatabase:
         )
 
         run_id = cur.lastrowid
-        assert run_id is not None  # guaranteed by AUTOINCREMENT
+        assert run_id is not None
 
         # Insert task-level results
         tasks = results_data.get("tasks", [])
@@ -235,7 +236,7 @@ class ResultsDatabase:
         if clauses:
             where = "WHERE " + " AND ".join(clauses)
 
-        query = f"SELECT * FROM runs {where} ORDER BY timestamp DESC LIMIT ?"
+        query = f"SELECT * FROM runs {where} ORDER BY timestamp DESC LIMIT ?"  # noqa: S608 -- WHERE clause built from hardcoded column names with parameterized values
         params.append(limit)
 
         cur = self._conn.execute(query, params)
@@ -305,22 +306,13 @@ class ResultsDatabase:
         if clauses:
             where = "WHERE " + " AND ".join(clauses)
 
-        query = f"""
-            SELECT
-                r.id,
-                r.timestamp,
-                r.resolution_rate,
-                r.total_cost,
-                r.resolved_tasks,
-                r.total_tasks,
-                COALESCE(SUM(t.tokens_input + t.tokens_output), 0) AS total_tokens
-            FROM runs r
-            LEFT JOIN task_results t ON t.run_id = r.id
-            {where}
-            GROUP BY r.id
-            ORDER BY r.timestamp ASC
-            LIMIT ?
-        """
+        base_query = (
+            "SELECT r.id, r.timestamp, r.resolution_rate, r.total_cost,"
+            " r.resolved_tasks, r.total_tasks,"
+            " COALESCE(SUM(t.tokens_input + t.tokens_output), 0) AS total_tokens"
+            " FROM runs r LEFT JOIN task_results t ON t.run_id = r.id"
+        )
+        query = f"{base_query} {where} GROUP BY r.id ORDER BY r.timestamp ASC LIMIT ?"
         params.append(limit)
 
         cur = self._conn.execute(query, params)
@@ -349,7 +341,7 @@ class ResultsDatabase:
         Returns:
             Number of runs deleted.
         """
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=max_age_days)).isoformat()
         cur = self._conn.execute("DELETE FROM runs WHERE timestamp < ?", (cutoff,))
         self._conn.commit()
         return cur.rowcount
@@ -379,8 +371,6 @@ class ResultsDatabase:
         d: dict[str, Any] = dict(row)
         for key in ("metadata_json", "result_json"):
             if key in d and d[key] is not None:
-                try:
+                with contextlib.suppress(json.JSONDecodeError, TypeError):
                     d[key] = json.loads(d[key])
-                except (json.JSONDecodeError, TypeError):
-                    pass  # leave raw string on decode failure
         return d

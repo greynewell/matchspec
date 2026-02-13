@@ -124,12 +124,14 @@ class TestS3Stream:
 
     def test_init_without_boto3(self):
         """Test graceful degradation when boto3 is not installed."""
-        with patch.dict("sys.modules", {"boto3": None}):
-            with patch("mcpbr.result_streaming.logger") as mock_logger:
-                stream = S3Stream(bucket="test-bucket")
+        with (
+            patch.dict("sys.modules", {"boto3": None}),
+            patch("mcpbr.result_streaming.logger") as mock_logger,
+        ):
+            stream = S3Stream(bucket="test-bucket")
 
-                assert stream._available is False
-                mock_logger.warning.assert_called_once()
+            assert stream._available is False
+            mock_logger.warning.assert_called_once()
 
     def test_init_with_boto3(self):
         """Test successful initialization with a mocked boto3."""

@@ -32,13 +32,13 @@ def test_parse_tool_usage_captures_partial_stream():
     (
         total_tool_calls,
         tool_usage,
-        tool_failures,
-        tool_errors,
-        num_turns,
+        _tool_failures,
+        _tool_errors,
+        _num_turns,
         tokens_in,
         tokens_out,
-        result_subtype,
-        cost_usd,
+        _result_subtype,
+        _cost_usd,
     ) = _parse_tool_usage_from_stream(partial_stdout)
 
     # Verify tool call counting
@@ -59,14 +59,14 @@ def test_parse_tool_usage_captures_tool_failures():
 
     (
         total_tool_calls,
-        tool_usage,
+        _tool_usage,
         tool_failures,
         tool_errors,
-        num_turns,
-        tokens_in,
-        tokens_out,
-        result_subtype,
-        cost_usd,
+        _num_turns,
+        _tokens_in,
+        _tokens_out,
+        _result_subtype,
+        _cost_usd,
     ) = _parse_tool_usage_from_stream(partial_stdout)
 
     # Verify failure tracking
@@ -190,7 +190,7 @@ async def test_docker_timeout_captures_partial_stdout():
         log_path.write_text(log_content)
 
         # Simulate what the timeout handler does: read back the log
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             stdout_lines = []
             for line in f:
                 if line.startswith("[STDOUT] "):
@@ -201,13 +201,13 @@ async def test_docker_timeout_captures_partial_stdout():
         (
             total_tool_calls,
             tool_usage,
-            tool_failures,
-            tool_errors,
-            num_turns,
+            _tool_failures,
+            _tool_errors,
+            _num_turns,
             tokens_in,
             tokens_out,
-            result_subtype,
-            cost_usd,
+            _result_subtype,
+            _cost_usd,
         ) = _parse_tool_usage_from_stream(partial_stdout)
 
         # Verify that statistics were captured
@@ -252,8 +252,8 @@ def test_empty_partial_stdout_returns_zeros():
         num_turns,
         tokens_in,
         tokens_out,
-        result_subtype,
-        cost_usd,
+        _result_subtype,
+        _cost_usd,
     ) = _parse_tool_usage_from_stream("")
 
     assert total_tool_calls == 0
@@ -276,13 +276,13 @@ def test_malformed_json_handled_gracefully():
     (
         total_tool_calls,
         tool_usage,
-        tool_failures,
-        tool_errors,
-        num_turns,
+        _tool_failures,
+        _tool_errors,
+        _num_turns,
         tokens_in,
-        tokens_out,
-        result_subtype,
-        cost_usd,
+        _tokens_out,
+        _result_subtype,
+        _cost_usd,
     ) = _parse_tool_usage_from_stream(partial_stdout)
 
     # Should parse valid lines and skip invalid ones

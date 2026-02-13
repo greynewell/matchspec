@@ -107,7 +107,7 @@ class MLAgentBenchBenchmark:
                 "research_problem": task.get("research_problem", ""),
                 "domain": task.get("domain", ""),
                 "metric": task.get("metric", ""),
-                "baseline_score": task.get("baseline_score", None),
+                "baseline_score": task.get("baseline_score"),
             },
         )
 

@@ -10,13 +10,9 @@ import yaml
 class CircularInheritanceError(Exception):
     """Raised when circular inheritance is detected in config files."""
 
-    pass
-
 
 class ConfigInheritanceError(Exception):
     """Raised when there's an error loading or merging inherited configs."""
-
-    pass
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -56,7 +52,7 @@ def resolve_config_path(extends_path: str, current_config_path: Path) -> str:
         Resolved absolute path or URL
     """
     # Check if it's a URL
-    if extends_path.startswith("http://") or extends_path.startswith("https://"):
+    if extends_path.startswith(("http://", "https://")):
         return extends_path
 
     # Convert to Path for easier handling
@@ -85,8 +81,8 @@ def load_config_file(config_path: str) -> dict[str, Any]:
     """
     try:
         # Check if it's a URL
-        if config_path.startswith("http://") or config_path.startswith("https://"):
-            with urllib.request.urlopen(config_path, timeout=10) as response:
+        if config_path.startswith(("http://", "https://")):
+            with urllib.request.urlopen(config_path, timeout=10) as response:  # noqa: S310 -- URL scheme validated above
                 content = response.read().decode("utf-8")
                 return yaml.safe_load(content) or {}
         else:
@@ -158,7 +154,7 @@ def load_config_with_inheritance(
 
         # For URLs, we need to handle visited tracking differently
         # since we don't have a proper path
-        if resolved_path.startswith("http://") or resolved_path.startswith("https://"):
+        if resolved_path.startswith(("http://", "https://")):
             # Load remote config
             if resolved_path in _visited:
                 raise CircularInheritanceError(

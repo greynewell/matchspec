@@ -175,7 +175,18 @@ If any linting errors remain, they MUST be fixed manually before proceeding.
 uvx ruff check --fix src/ tests/ && uvx ruff format src/ tests/ && uvx ruff check src/ tests/
 ```
 
-### 2. Run Tests
+### 2. Run Type Checking
+
+```bash
+# Run mypy on source code
+uv run mypy src/mcpbr/
+```
+
+**Expected output:** `Success: no issues found`
+
+If any type errors remain, they MUST be fixed before proceeding.
+
+### 3. Run Tests
 
 ```bash
 # Run all non-integration tests
@@ -187,7 +198,7 @@ uv run pytest -m integration
 
 **Expected result:** All tests must pass with 0 failures.
 
-### 3. Update CHANGELOG
+### 4. Update CHANGELOG
 
 **MANDATORY:** If your changes are user-visible, update CHANGELOG.md:
 
@@ -201,7 +212,7 @@ uv run pytest -m integration
 cat CHANGELOG.md | head -30
 ```
 
-### 4. Verify Changes
+### 5. Verify Changes
 
 - Review all modified files
 - Ensure no unintended changes were introduced
@@ -217,7 +228,8 @@ The project uses Ruff for linting with the following configuration:
 
 - **Line length:** 100 characters (E501 is ignored)
 - **Target Python version:** 3.11+
-- **Enabled rules:** E (pycodestyle errors), F (pyflakes), I (isort), N (pep8-naming), W (pycodestyle warnings)
+- **Enabled rules:** E (pycodestyle), F (pyflakes), I (isort), N (pep8-naming), W (warnings), B (bugbear), UP (pyupgrade), SIM (simplify), RUF (ruff-specific), C4 (comprehensions), PIE (misc), PT (pytest-style), ASYNC (async bugs), S (security/bandit), T20 (print detection)
+- **Type checking:** mypy with Pydantic plugin, strict mode on core modules
 
 ### Common Linting Issues to Avoid
 
@@ -226,6 +238,10 @@ The project uses Ruff for linting with the following configuration:
 3. **Undefined names** - All variables and functions must be defined before use
 4. **Line too long** - While E501 is ignored, try to keep lines under 100 chars when reasonable
 5. **Trailing whitespace** - Remove trailing whitespace from all lines
+6. **Mutable default args** (B006) - Don't use `[]` or `{}` as default arguments
+7. **Exception chaining** (B904) - Use `raise X from err` inside `except` blocks
+8. **Modern Python** (UP) - Use Python 3.11+ patterns (e.g., `X | Y` unions, `match` statements)
+9. **Simplifications** (SIM) - Collapse nested `with`/`if` statements, use `contextlib.suppress()`
 
 ### Code Style
 
@@ -422,11 +438,12 @@ Checklist for CHANGELOG:
 
 1. ✅ All linting checks pass (`uvx ruff check src/ tests/`)
 2. ✅ Code is formatted (`uvx ruff format src/ tests/`)
-3. ✅ All tests pass (`uv run pytest -m "not integration"`)
-4. ✅ **CHANGELOG.md is updated** (for user-visible changes)
-5. ✅ Code is documented
-6. ✅ README is updated (if applicable)
-7. ✅ Changes are committed with descriptive commit messages
+3. ✅ Type checking passes (`uv run mypy src/mcpbr/`)
+4. ✅ All tests pass (`uv run pytest -m "not integration"`)
+5. ✅ **CHANGELOG.md is updated** (for user-visible changes)
+6. ✅ Code is documented
+7. ✅ README is updated (if applicable)
+8. ✅ Changes are committed with descriptive commit messages
 
 ### PR Title Format
 
@@ -537,9 +554,10 @@ git push
 ### ✅ DO: Check Linting First
 
 ```bash
-# Good: Check linting before commit
+# Good: Check linting and types before commit
 uvx ruff check --fix src/ tests/
 uvx ruff format src/ tests/
+uv run mypy src/mcpbr/
 uv run pytest -m "not integration"
 git commit -m "feat: add new feature"
 git push
@@ -590,14 +608,17 @@ uvx ruff check --fix src/ tests/
 uvx ruff format src/ tests/
 uvx ruff check src/ tests/  # Verify all fixed
 
-# 5. Run tests
+# 5. Run type checking
+uv run mypy src/mcpbr/
+
+# 6. Run tests
 uv run pytest -m "not integration"
 
-# 6. Commit changes (include CHANGELOG.md)
+# 7. Commit changes (include CHANGELOG.md)
 git add src/ tests/ CHANGELOG.md
 git commit -m "feat: add my new feature"
 
-# 7. Push and create PR
+# 8. Push and create PR
 git push -u origin feature/my-new-feature
 gh pr create --title "feat: add my new feature" --body "Implements #123"
 ```
@@ -615,9 +636,10 @@ The project uses GitHub Actions for CI/CD. All PRs must pass:
 
 1. **Lint Check** - `uvx ruff check src/ tests/`
 2. **Format Check** - `uvx ruff format --check src/ tests/`
-3. **Build Check** - Package builds successfully
-4. **Test (Python 3.11)** - All tests pass on Python 3.11
-5. **Test (Python 3.12)** - All tests pass on Python 3.12
+3. **Type Check** - `mypy src/mcpbr/`
+4. **Build Check** - Package builds successfully
+5. **Test (Python 3.11)** - All tests pass on Python 3.11
+6. **Test (Python 3.12)** - All tests pass on Python 3.12
 
 You can view check results on any PR:
 ```bash
@@ -626,11 +648,11 @@ gh pr checks <PR_NUMBER>
 
 ## Summary
 
-**Remember:** The most important rule is to run linting, formatting, and tests BEFORE committing. This ensures high code quality and prevents CI/CD failures.
+**Remember:** The most important rule is to run linting, formatting, type checking, and tests BEFORE committing. This ensures high code quality and prevents CI/CD failures.
 
 **Pre-commit command:**
 ```bash
-uvx ruff check --fix src/ tests/ && uvx ruff format src/ tests/ && uv run pytest -m "not integration"
+uvx ruff check --fix src/ tests/ && uvx ruff format src/ tests/ && uv run mypy src/mcpbr/ && uv run pytest -m "not integration"
 ```
 
 Happy coding! 🚀

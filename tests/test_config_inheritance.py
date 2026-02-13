@@ -367,7 +367,7 @@ model: sonnet
 """)
 
             with pytest.raises(
-                ConfigInheritanceError, match="Config file not found.*nonexistent.yaml"
+                ConfigInheritanceError, match=r"Config file not found.*nonexistent.yaml"
             ):
                 load_config_with_inheritance(config_path)
 

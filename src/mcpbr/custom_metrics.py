@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass
@@ -136,7 +137,7 @@ def _compute_avg_tokens(results: list[dict[str, Any]]) -> float:
 
 def _compute_avg_cost(results: list[dict[str, Any]]) -> float:
     """Average cost per result."""
-    costs = [r.get("cost", 0.0) for r in results]
+    costs: list[float] = [r.get("cost", 0.0) for r in results]
     if not costs:
         return 0.0
     return statistics.mean(costs)
@@ -144,7 +145,7 @@ def _compute_avg_cost(results: list[dict[str, Any]]) -> float:
 
 def _compute_avg_time(results: list[dict[str, Any]]) -> float:
     """Average runtime in seconds per result."""
-    runtimes = [r.get("runtime_seconds", 0.0) for r in results]
+    runtimes: list[float] = [r.get("runtime_seconds", 0.0) for r in results]
     if not runtimes:
         return 0.0
     return statistics.mean(runtimes)
@@ -324,7 +325,7 @@ def compute_metrics(
     # Phase 1: compute all callable metrics
     for name in callable_names:
         metric_def = registry.get(name)
-        assert metric_def is not None  # guaranteed above
+        assert metric_def is not None
         assert callable(metric_def.compute_fn)
         computed[name] = metric_def.compute_fn(results)
 
@@ -399,7 +400,4 @@ def validate_metric(metric_def: dict[str, Any]) -> bool:
         return False
 
     higher_is_better = metric_def.get("higher_is_better", True)
-    if not isinstance(higher_is_better, bool):
-        return False
-
-    return True
+    return isinstance(higher_is_better, bool)

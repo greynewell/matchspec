@@ -1,7 +1,6 @@
 """Evaluation logic for applying patches and running tests."""
 
 import ast
-import asyncio
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -103,27 +102,27 @@ async def apply_patch(
 
         await env.write_file("fix.patch", patch, workdir=workdir)
 
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, _stdout, stderr = await env.exec_command(
             "git apply --check fix.patch",
             timeout=120,
             workdir=workdir,
         )
 
         if exit_code != 0:
-            exit_code2, stdout2, stderr2 = await env.exec_command(
+            exit_code2, _stdout2, stderr2 = await env.exec_command(
                 "git apply --check -3 fix.patch",
                 timeout=120,
                 workdir=workdir,
             )
             if exit_code2 != 0:
                 return False, f"Patch does not apply: {stderr or stderr2}"
-            exit_code, stdout, stderr = await env.exec_command(
+            exit_code, _stdout, stderr = await env.exec_command(
                 "git apply -3 fix.patch",
                 timeout=120,
                 workdir=workdir,
             )
         else:
-            exit_code, stdout, stderr = await env.exec_command(
+            exit_code, _stdout, stderr = await env.exec_command(
                 "git apply fix.patch",
                 timeout=120,
                 workdir=workdir,
@@ -134,7 +133,7 @@ async def apply_patch(
 
         return True, ""
 
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         # Catch exec_command timeouts here so they don't bubble up as
         # asyncio.TimeoutError to the harness, which would misclassify
         # this as an agent/eval timeout (#399).
@@ -192,7 +191,7 @@ async def run_tests(
                 }
             )
 
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             results.append(
                 {
                     "test": test,
@@ -263,9 +262,7 @@ def _build_test_command(test: str, uses_prebuilt: bool = False, repo: str | None
         # Run with Django test runner
         test_module = ".".join(test.split(".")[:2])  # Extract test_utils.tests
         return f"{activate}cd /testbed/tests && ./runtests.py {test_module}"
-    elif "::" in test:
-        return f"{activate}python -m pytest {test} -xvs 2>&1"
-    elif test.endswith(".py"):
+    elif "::" in test or test.endswith(".py"):
         return f"{activate}python -m pytest {test} -xvs 2>&1"
     else:
         return f"{activate}python -m pytest -k '{test}' -xvs 2>&1"
@@ -294,27 +291,27 @@ async def _apply_test_patch(
     try:
         await env.write_file("test.patch", test_patch, workdir=workdir)
 
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, _stdout, _stderr = await env.exec_command(
             "git apply --check test.patch",
             timeout=120,
             workdir=workdir,
         )
 
         if exit_code != 0:
-            exit_code, stdout, stderr = await env.exec_command(
+            exit_code, _stdout, _stderr = await env.exec_command(
                 "git apply --check -3 test.patch",
                 timeout=120,
                 workdir=workdir,
             )
             if exit_code != 0:
                 return True, ""
-            exit_code, stdout, stderr = await env.exec_command(
+            exit_code, _stdout, _stderr = await env.exec_command(
                 "git apply -3 test.patch",
                 timeout=120,
                 workdir=workdir,
             )
         else:
-            exit_code, stdout, stderr = await env.exec_command(
+            exit_code, _stdout, _stderr = await env.exec_command(
                 "git apply test.patch",
                 timeout=120,
                 workdir=workdir,
@@ -325,7 +322,7 @@ async def _apply_test_patch(
 
         return True, ""
 
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         # Don't let exec timeouts bubble up to the harness (#399)
         return True, ""
 
@@ -372,7 +369,7 @@ async def evaluate_patch(
     if not env.uses_prebuilt:
         try:
             await _install_dependencies(env)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             return EvaluationResult(
                 resolved=False,
                 patch_applied=True,

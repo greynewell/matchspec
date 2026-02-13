@@ -7,7 +7,7 @@ classification, checkpointing, and configurable error handling policies.
 import asyncio
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -210,7 +210,7 @@ class GracefulExecutor:
                 task_id=task_id,
                 error=str(e),
                 failure_type=failure_type,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 retryable=failure_type == FailureType.TRANSIENT,
             )
             self.checkpoint.failed_tasks.append(failure)
@@ -232,10 +232,7 @@ class GracefulExecutor:
             return False
 
         # If max_failures is set and we've reached it, stop
-        if self.max_failures is not None and failure_count >= self.max_failures:
-            return False
-
-        return True
+        return not (self.max_failures is not None and failure_count >= self.max_failures)
 
     def get_partial_report(self) -> dict[str, Any]:
         """Generate a report of execution progress including partial results.

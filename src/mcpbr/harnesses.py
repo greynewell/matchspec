@@ -117,7 +117,7 @@ async def _run_cli_command(
             stdout.decode("utf-8", errors="replace"),
             stderr.decode("utf-8", errors="replace"),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         process.kill()
         return -1, "", "Command timed out"
 
@@ -198,7 +198,7 @@ async def _run_cli_streaming(
             "\n".join(stdout_lines),
             "\n".join(stderr_lines),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         process.kill()
         return -1, "\n".join(stdout_lines), "Command timed out"
 
@@ -218,7 +218,7 @@ async def _get_git_diff(workdir: str) -> str:
     await _run_cli_command(["git", "add", "-A"], workdir, timeout=30)
 
     # Try with filter first (excludes debug scripts, test files)
-    exit_code, stdout, stderr = await _run_cli_command(
+    exit_code, stdout, _stderr = await _run_cli_command(
         [
             "git",
             "diff",
@@ -233,7 +233,7 @@ async def _get_git_diff(workdir: str) -> str:
         return stdout
 
     # Fallback: try without filter if nothing found (for new files like HumanEval solution.py)
-    exit_code, stdout, stderr = await _run_cli_command(
+    exit_code, stdout, _stderr = await _run_cli_command(
         ["git", "diff", "--cached", "HEAD"],
         workdir,
         timeout=30,
@@ -260,7 +260,7 @@ async def _get_git_diff_in_docker(env: TaskEnvironment) -> str:
         workdir=workdir,
     )
 
-    _, status_out, _ = await env.exec_command(
+    _, _status_out, _ = await env.exec_command(
         "git status --short",
         timeout=30,
         workdir=workdir,
@@ -268,7 +268,7 @@ async def _get_git_diff_in_docker(env: TaskEnvironment) -> str:
 
     await env.exec_command("git add -A", timeout=30, workdir=workdir)
 
-    exit_code, stdout, stderr = await env.exec_command(
+    exit_code, stdout, _stderr = await env.exec_command(
         "git diff --cached HEAD --diff-filter=M",
         timeout=30,
         workdir=workdir,
@@ -276,7 +276,7 @@ async def _get_git_diff_in_docker(env: TaskEnvironment) -> str:
     if exit_code == 0 and stdout.strip():
         return stdout
 
-    exit_code, stdout, stderr = await env.exec_command(
+    exit_code, stdout, _stderr = await env.exec_command(
         "git diff --cached HEAD",
         timeout=30,
         workdir=workdir,
@@ -593,7 +593,7 @@ class ClaudeCodeHarness:
         # Create env file with MCP server env vars so setup_command has access
         # to API keys etc. This runs before _solve_in_docker which creates the
         # full env file, so we write a minimal version here.
-        env_file = "/tmp/.mcpbr_env.sh"
+        env_file = "/tmp/.mcpbr_env.sh"  # noqa: S108 -- Docker container temp directory
         env_exports = ""
         for key, value in self.mcp_server.get_expanded_env().items():
             safe_key = key.replace("-", "_").replace(".", "_")
@@ -776,13 +776,13 @@ class ClaudeCodeHarness:
                 num_turns = self.max_iterations
 
             if exit_code != 0:
-                error_msg = stderr or "Unknown error"
+                exit_error_msg = stderr or "Unknown error"
                 if mcp_json_path and os.path.exists(mcp_json_path):
                     os.remove(mcp_json_path)
                 return AgentResult(
                     patch="",
                     success=False,
-                    error=f"Claude Code failed (exit {exit_code}): {error_msg}",
+                    error=f"Claude Code failed (exit {exit_code}): {exit_error_msg}",
                     stdout=stdout,
                     stderr=stderr,
                     tokens_input=tokens_in,
@@ -799,7 +799,7 @@ class ClaudeCodeHarness:
                 os.remove(mcp_json_path)
 
             # Check git status to understand what happened
-            git_exit, git_status, git_stderr = await _run_cli_command(
+            _git_exit, git_status, git_stderr = await _run_cli_command(
                 ["git", "status", "--short"],
                 workdir,
                 timeout=30,
@@ -808,7 +808,7 @@ class ClaudeCodeHarness:
             patch = await _get_git_diff(workdir)
 
             # Generate appropriate error message if no patch
-            error_msg = None
+            error_msg: str | None = None
             if not patch:
                 error_msg = _generate_no_patch_error_message(
                     git_status=git_status,
@@ -878,14 +878,14 @@ class ClaudeCodeHarness:
         if self.thinking_budget is not None:
             docker_env["MAX_THINKING_TOKENS"] = str(self.thinking_budget)
 
-        prompt_file = "/tmp/.mcpbr_prompt.txt"
+        prompt_file = "/tmp/.mcpbr_prompt.txt"  # noqa: S108 -- Docker container temp directory
         await env.exec_command(
             f"cat > {prompt_file} << 'MCPBR_PROMPT_EOF'\n{prompt}\nMCPBR_PROMPT_EOF",
             timeout=10,
         )
         await env.exec_command(f"chown mcpbr:mcpbr {prompt_file}", timeout=5)
 
-        env_file = "/tmp/.mcpbr_env.sh"
+        env_file = "/tmp/.mcpbr_env.sh"  # noqa: S108 -- Docker container temp directory
         # Use shlex.quote() to safely escape all environment variable values
         env_exports = (
             f"export ANTHROPIC_API_KEY={shlex.quote(api_key)}\nexport HOME='/home/mcpbr'\n"
@@ -1007,7 +1007,7 @@ class ClaudeCodeHarness:
                 if verbose:
                     self._console.print("[green]✓ MCP server configured via .mcp.json[/green]")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = "Failed to write MCP configuration file."
                 if verbose:
                     self._console.print(f"[red]✗ {error_msg}[/red]")
@@ -1097,7 +1097,7 @@ class ClaudeCodeHarness:
                 # Sanitize instance_id to prevent path traversal
                 safe_instance_id = instance_id.replace("/", "_").replace("\\", "_")
                 mcp_log_path = state_dir / f"{safe_instance_id}_mcp.log"
-                mcp_log_file = open(mcp_log_path, "w")
+                mcp_log_file = open(mcp_log_path, "w")  # noqa: SIM115 - managed by finally block
 
             if verbose:
                 from .log_formatter import FormatterConfig
@@ -1166,20 +1166,20 @@ class ClaudeCodeHarness:
                 num_turns = self.max_iterations
 
             if exit_code != 0:
-                error_msg = stderr or "Unknown error"
+                exit_error_msg = stderr or "Unknown error"
 
                 # Add context about timeout vs other failures
                 if num_turns == 0 and total_tool_calls == 0:
                     # Agent never started - likely timeout during execution
                     if exit_code == 124:  # Standard timeout exit code
-                        error_msg = f"Task timed out after {timeout}s before starting execution. This may indicate the Claude Code agent failed to initialize or hung during startup."
+                        exit_error_msg = f"Task timed out after {timeout}s before starting execution. This may indicate the Claude Code agent failed to initialize or hung during startup."
                     else:
-                        error_msg = f"Agent failed before making any progress (exit {exit_code}). {error_msg}"
+                        exit_error_msg = f"Agent failed before making any progress (exit {exit_code}). {exit_error_msg}"
 
                     if mcp_server_name:
-                        error_msg += f"\n\nMCP server was registered: {mcp_server_name}. Check MCP server logs for initialization issues."
+                        exit_error_msg += f"\n\nMCP server was registered: {mcp_server_name}. Check MCP server logs for initialization issues."
                         if mcp_log_path:
-                            error_msg += f"\nMCP server logs saved to: {mcp_log_path}"
+                            exit_error_msg += f"\nMCP server logs saved to: {mcp_log_path}"
 
                 if mcp_server_name:
                     await env.exec_command(
@@ -1190,7 +1190,7 @@ class ClaudeCodeHarness:
                 return AgentResult(
                     patch="",
                     success=False,
-                    error=f"Claude Code failed (exit {exit_code}): {error_msg}",
+                    error=f"Claude Code failed (exit {exit_code}): {exit_error_msg}",
                     stdout=stdout,
                     stderr=stderr,
                     tokens_input=tokens_in,
@@ -1221,18 +1221,18 @@ class ClaudeCodeHarness:
             )
 
             # Also check file modification time
-            _, file_info, _ = await env.exec_command(
+            _, _file_info, _ = await env.exec_command(
                 "stat -c '%Y %n' /workspace/astropy/modeling/separable.py",
                 timeout=10,
             )
 
             patch = await _get_git_diff_in_docker(env)
 
-            error_msg = None
+            patch_error_msg: str | None = None
             if not patch:
                 buggy_line = sep_check.strip()
                 # Use helper function to generate accurate error message
-                error_msg = _generate_no_patch_error_message(
+                patch_error_msg = _generate_no_patch_error_message(
                     git_status=git_status,
                     git_stderr=git_stderr,
                     buggy_line=buggy_line,
@@ -1242,7 +1242,7 @@ class ClaudeCodeHarness:
             return AgentResult(
                 patch=patch,
                 success=bool(patch),
-                error=error_msg,
+                error=patch_error_msg,
                 iterations=num_turns or 1,
                 stdout=stdout,
                 stderr=stderr,
@@ -1254,7 +1254,7 @@ class ClaudeCodeHarness:
                 tool_errors=tool_errors,
                 cost_usd=cost_usd,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Task execution timed out - but we may have partial stdout with tool usage stats
             # Try to parse what we have so far from MCP log file
             partial_stdout = ""
@@ -1264,7 +1264,7 @@ class ClaudeCodeHarness:
                     mcp_log_file.close()
                     # Read back the log to extract stdout lines
                     if mcp_log_path and mcp_log_path.exists():
-                        with open(mcp_log_path, "r") as f:
+                        with open(mcp_log_path) as f:
                             stdout_lines = []
                             for line in f:
                                 if line.startswith("[STDOUT] "):
@@ -1395,7 +1395,7 @@ def create_harness(
 
     harness_class = HARNESS_REGISTRY[harness_name]
 
-    return harness_class(
+    harness: AgentHarness = harness_class(
         model=model,
         mcp_server=mcp_server,
         prompt=prompt,
@@ -1406,6 +1406,7 @@ def create_harness(
         thinking_budget=thinking_budget,
         claude_code_version=claude_code_version,
     )
+    return harness
 
 
 def list_available_harnesses() -> list[str]:

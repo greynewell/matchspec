@@ -299,7 +299,7 @@ class TestPrewarmImages:
         """Test that parallel pulls are limited by max_parallel."""
         images = [f"img_{i}" for i in range(6)]
         mock_get.return_value = images
-        mock_check.return_value = {img: False for img in images}
+        mock_check.return_value = dict.fromkeys(images, False)
 
         mock_client = MagicMock()
         mock_docker.return_value = mock_client

@@ -1,5 +1,7 @@
 """Tests for benchmark filtering functionality."""
 
+import contextlib
+
 from mcpbr.benchmarks import CyberGymBenchmark, MCPToolBenchmark, SWEBenchmark
 from mcpbr.config import HarnessConfig, MCPServerConfig
 
@@ -61,7 +63,7 @@ class TestSWEBenchmarkFiltering:
         benchmark = SWEBenchmark()
         # Mock test - in real scenario would load from dataset
         # Just verify the method accepts filter parameters
-        try:
+        with contextlib.suppress(Exception):
             # This will fail without network/dataset but should accept parameters
             _ = benchmark.load_tasks(
                 sample_size=1,
@@ -69,9 +71,6 @@ class TestSWEBenchmarkFiltering:
                 filter_category=None,
                 filter_tags=None,
             )
-        except Exception:
-            # Expected to fail without dataset, but method signature is correct
-            pass
 
     def test_load_tasks_signature_includes_filters(self) -> None:
         """Test that load_tasks method signature includes filter parameters."""

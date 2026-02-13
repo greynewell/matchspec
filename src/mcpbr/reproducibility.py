@@ -12,7 +12,7 @@ import platform
 import random
 import sys
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Environment variables relevant to reproducibility
@@ -112,11 +112,11 @@ def _collect_packages() -> dict[str, str]:
         from importlib.metadata import distributions
 
         for dist in distributions():
-            name = dist.metadata.get("Name", "")
-            version = dist.metadata.get("Version", "")
+            name = dist.metadata["Name"] or ""
+            version = dist.metadata["Version"] or ""
             if name:
                 packages[name] = version
-    except Exception:
+    except Exception:  # noqa: S110 -- best-effort package collection; environment may lack importlib.metadata
         # importlib.metadata may not be available in all environments
         pass
     return packages
@@ -160,7 +160,7 @@ def capture_environment(mcpbr_version: str, seed: int | None = None) -> Environm
         platform=platform.system(),
         platform_version=platform.version(),
         mcpbr_version=mcpbr_version,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         packages=_collect_packages(),
         env_vars=_collect_env_vars(),
         global_seed=seed,
@@ -262,7 +262,7 @@ def generate_reproducibility_report(
             platform="",
             platform_version="",
             mcpbr_version=mcpbr_version,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             global_seed=config.global_seed,
         )
 

@@ -1,5 +1,6 @@
 """Tests for thinking_budget configuration and extended thinking mode."""
 
+import contextlib
 from unittest.mock import patch
 
 import pytest
@@ -279,12 +280,12 @@ class TestThinkingBudgetEnvironmentVariable:
             # Return timeout to exit quickly
             return 124, "", "timeout"
 
-        with patch("mcpbr.harnesses._run_cli_command", side_effect=mock_run_cli):
-            with patch("mcpbr.harnesses.shutil.which", return_value="/usr/bin/claude"):
-                try:
-                    await harness.solve(task, "/tmp/test", timeout=1)
-                except Exception:
-                    pass
+        with (
+            patch("mcpbr.harnesses._run_cli_command", side_effect=mock_run_cli),
+            patch("mcpbr.harnesses.shutil.which", return_value="/usr/bin/claude"),
+            contextlib.suppress(Exception),
+        ):
+            await harness.solve(task, "/tmp/test", timeout=1)
 
         # Verify MAX_THINKING_TOKENS was set in environment
         assert captured_env is not None
@@ -312,12 +313,12 @@ class TestThinkingBudgetEnvironmentVariable:
             captured_env = env
             return 124, "", "timeout"
 
-        with patch("mcpbr.harnesses._run_cli_command", side_effect=mock_run_cli):
-            with patch("mcpbr.harnesses.shutil.which", return_value="/usr/bin/claude"):
-                try:
-                    await harness.solve(task, "/tmp/test", timeout=1)
-                except Exception:
-                    pass
+        with (
+            patch("mcpbr.harnesses._run_cli_command", side_effect=mock_run_cli),
+            patch("mcpbr.harnesses.shutil.which", return_value="/usr/bin/claude"),
+            contextlib.suppress(Exception),
+        ):
+            await harness.solve(task, "/tmp/test", timeout=1)
 
         # Verify no env dict was passed (should be None)
         assert captured_env is None

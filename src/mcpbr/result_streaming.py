@@ -132,7 +132,7 @@ class S3Stream:
     def _init_client(self) -> None:
         """Initialize the boto3 S3 client if boto3 is available."""
         try:
-            import boto3
+            import boto3  # type: ignore[import-not-found]
 
             kwargs: dict[str, Any] = {}
             if self._region_name:
@@ -250,7 +250,7 @@ class WebhookStream:
                     response.status_code,
                     self._url,
                 )
-            return success
+            return bool(success)
         except Exception:
             logger.exception("Failed to POST result to webhook %s", self._url)
             return False

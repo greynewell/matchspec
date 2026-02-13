@@ -164,11 +164,11 @@ class RegistryClient:
             RegistryError: If the fetch fails.
         """
         try:
-            req = urllib.request.Request(
+            req = urllib.request.Request(  # noqa: S310 -- URL scheme validated in __init__
                 self.registry_url,
                 headers={"Accept": "application/json", "User-Agent": "mcpbr"},
             )
-            response = urllib.request.urlopen(req, timeout=self.timeout)
+            response = urllib.request.urlopen(req, timeout=self.timeout)  # noqa: S310 -- URL scheme validated in __init__
             data = json.loads(response.read(MAX_RESPONSE_SIZE).decode("utf-8"))
             self._cache = Registry.from_dict(data)
             return self._cache
@@ -201,8 +201,6 @@ class RegistryClient:
 
 class RegistryError(RuntimeError):
     """Raised when a registry operation fails."""
-
-    pass
 
 
 def generate_registry_entry() -> dict[str, Any]:

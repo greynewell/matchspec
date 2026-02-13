@@ -64,7 +64,7 @@ class TestGenerateJsonSchema:
             refs = [opt for opt in mcp_server["anyOf"] if "$ref" in opt or "properties" in opt]
             assert len(refs) > 0, "mcp_server anyOf should contain $ref or properties"
         else:
-            assert False, f"mcp_server has unexpected structure: {mcp_server.keys()}"
+            raise AssertionError(f"mcp_server has unexpected structure: {mcp_server.keys()}")
 
     def test_schema_has_examples(self) -> None:
         """Test that schema includes example configurations."""
@@ -420,5 +420,5 @@ class TestSchemaIntegration:
 
             # Validate an example against loaded schema
             example = loaded["examples"][0]
-            is_valid, errors = validate_against_schema(example)
+            is_valid, _errors = validate_against_schema(example)
             assert is_valid

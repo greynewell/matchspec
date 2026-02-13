@@ -48,7 +48,7 @@ class TestAWSDownloadResultsSFTPLeak:
         mock_ssh = MagicMock()
         mock_sftp = MagicMock()
         mock_ssh.open_sftp.return_value = mock_sftp
-        mock_sftp.get.side_effect = IOError("Download failed")
+        mock_sftp.get.side_effect = OSError("Download failed")
         aws_provider.ssh_client = mock_ssh
 
         # Mock _ssh_exec to return a valid remote path
@@ -65,7 +65,7 @@ class TestAWSDownloadResultsSFTPLeak:
         mock_ssh = MagicMock()
         mock_sftp = MagicMock()
         mock_ssh.open_sftp.return_value = mock_sftp
-        mock_sftp.get.side_effect = IOError("Download failed")
+        mock_sftp.get.side_effect = OSError("Download failed")
         aws_provider.ssh_client = mock_ssh
 
         aws_provider._ssh_exec = AsyncMock(return_value=(0, "/home/ubuntu/.mcpbr_run_001\n", ""))
@@ -117,10 +117,12 @@ class TestAWSCollectArtifactsSFTPLeak:
         aws_provider._ssh_exec = AsyncMock(return_value=(0, "/home/ubuntu/.mcpbr_run_001\n", ""))
 
         # Make _recursive_download raise — retry logic wraps into RuntimeError
-        with patch("asyncio.to_thread", side_effect=OSError("Download failed")):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                with pytest.raises(RuntimeError, match="Failed to download artifacts"):
-                    await aws_provider.collect_artifacts(tmp_path / "artifacts")
+        with (
+            patch("asyncio.to_thread", side_effect=OSError("Download failed")),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(RuntimeError, match="Failed to download artifacts"),
+        ):
+            await aws_provider.collect_artifacts(tmp_path / "artifacts")
 
         mock_sftp.close.assert_called()
 
@@ -169,7 +171,7 @@ class TestGCPDownloadResultsSFTPLeak:
         mock_ssh = MagicMock()
         mock_sftp = MagicMock()
         mock_ssh.open_sftp.return_value = mock_sftp
-        mock_sftp.get.side_effect = IOError("Download failed")
+        mock_sftp.get.side_effect = OSError("Download failed")
         gcp_provider.ssh_client = mock_ssh
 
         gcp_provider._ssh_exec = AsyncMock(return_value=(0, "/home/ubuntu/.mcpbr_run_001\n", ""))
@@ -224,10 +226,12 @@ class TestGCPCollectArtifactsSFTPLeak:
         gcp_provider._ssh_exec = AsyncMock(return_value=(0, "/home/ubuntu/.mcpbr_run_001\n", ""))
 
         # Make _recursive_download raise — retry logic wraps into RuntimeError
-        with patch("asyncio.to_thread", side_effect=OSError("Download failed")):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                with pytest.raises(RuntimeError, match="Failed to download artifacts"):
-                    await gcp_provider.collect_artifacts(tmp_path / "artifacts")
+        with (
+            patch("asyncio.to_thread", side_effect=OSError("Download failed")),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(RuntimeError, match="Failed to download artifacts"),
+        ):
+            await gcp_provider.collect_artifacts(tmp_path / "artifacts")
 
         mock_sftp.close.assert_called()
 

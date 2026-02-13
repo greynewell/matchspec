@@ -365,12 +365,12 @@ class TestNotFound:
 
     def test_wrong_api_version(self, server_url: str) -> None:
         """Should return 404 for wrong API version."""
-        status, body = _request(server_url, "GET", "/api/v2/health")
+        status, _body = _request(server_url, "GET", "/api/v2/health")
         assert status == 404
 
     def test_delete_unknown_route(self, server_url: str) -> None:
         """Should return 404 for DELETE on unknown route."""
-        status, body = _request(server_url, "DELETE", "/api/v1/stats")
+        status, _body = _request(server_url, "DELETE", "/api/v1/stats")
         assert status == 404
 
 
@@ -470,7 +470,7 @@ class TestAPIAuthentication:
     ) -> None:
         """Requests with correct Authorization header should succeed."""
         mock_storage.list_runs.return_value = []
-        status, body, _ = _request_with_headers(
+        status, _body, _ = _request_with_headers(
             authed_server_url,
             "GET",
             "/api/v1/runs",
@@ -480,7 +480,7 @@ class TestAPIAuthentication:
 
     def test_authed_server_rejects_wrong_token(self, authed_server_url: str) -> None:
         """Requests with wrong token should get 401."""
-        status, body, _ = _request_with_headers(
+        status, _body, _ = _request_with_headers(
             authed_server_url,
             "GET",
             "/api/v1/runs",
@@ -496,7 +496,7 @@ class TestAPIAuthentication:
 
     def test_no_token_server_allows_all(self, server_url: str) -> None:
         """When no api_token is set, all requests should be allowed."""
-        status, body = _request(server_url, "GET", "/api/v1/health")
+        status, _body = _request(server_url, "GET", "/api/v1/health")
         assert status == 200
 
 

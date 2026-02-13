@@ -22,7 +22,7 @@ import subprocess
 import tempfile
 import time
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +86,8 @@ class CloudflareProvider(InfrastructureProvider):
                     Expects config.infrastructure.cloudflare to be set.
         """
         self.config = config
+        if config.infrastructure.cloudflare is None:
+            raise ValueError("Cloudflare configuration is required for CloudflareProvider")
         self.cf_config = config.infrastructure.cloudflare
         self.worker_name: str | None = None
         self.worker_url: str | None = None
@@ -105,13 +107,14 @@ class CloudflareProvider(InfrastructureProvider):
         Returns:
             The auth token string (existing or newly generated).
         """
-        existing_token = getattr(self.cf_config, "auth_token", None)
+        existing_token: str | None = getattr(self.cf_config, "auth_token", None)
         if existing_token:
             return existing_token
 
         # Generate a secure random token (48 bytes = 64 chars in URL-safe base64)
         token = secrets.token_urlsafe(48)
-        self.cf_config.auth_token = token
+        # Store the token as a dynamic attribute for use during deployment
+        object.__setattr__(self.cf_config, "auth_token", token)
         self._console.print(
             "[yellow]Warning: No auth_token configured. "
             "Auto-generated a secure token for Worker authentication.[/yellow]"
@@ -491,7 +494,7 @@ export default {
         Raises:
             RuntimeError: If the command fails.
         """
-        cmd = ["npx", "wrangler"] + args
+        cmd = ["npx", "wrangler", *args]
         self._console.print(f"[dim]$ {' '.join(cmd)}[/dim]")
 
         result = subprocess.run(
@@ -622,7 +625,7 @@ export default {
         Raises:
             RuntimeError: If KV namespace creation fails.
         """
-        existing_ns = getattr(self.cf_config, "kv_namespace", None)
+        existing_ns: str | None = self.cf_config.kv_namespace
         if existing_ns:
             self._console.print(f"[dim]Using existing KV namespace: {existing_ns}[/dim]")
             self.kv_namespace_id = existing_ns
@@ -655,9 +658,10 @@ export default {
                 f"Failed to parse KV namespace ID from wrangler output: {e}\nOutput: {output[:500]}"
             ) from e
 
-        self.kv_namespace_id = ns_id
-        self._console.print(f"[green]KV namespace created: {ns_id}[/green]")
-        return ns_id
+        ns_id_str: str = str(ns_id)
+        self.kv_namespace_id = ns_id_str
+        self._console.print(f"[green]KV namespace created: {ns_id_str}[/green]")
+        return ns_id_str
 
     # ------------------------------------------------------------------
     # Worker invocation and polling
@@ -698,7 +702,7 @@ export default {
 
         self._console.print(f"[cyan]Submitting evaluation to Worker: {url}[/cyan]")
 
-        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")  # noqa: S310 -- URL constructed from validated worker_url
 
         try:
             response = await asyncio.to_thread(
@@ -712,7 +716,7 @@ export default {
         except urllib.error.URLError as e:
             raise RuntimeError(f"Failed to connect to Worker: {e.reason}") from e
 
-        run_id = response_data.get("run_id")
+        run_id: str | None = response_data.get("run_id")
         if not run_id:
             raise RuntimeError(f"Worker did not return a run_id: {response_data}")
 
@@ -747,7 +751,7 @@ export default {
         if auth_token:
             headers["Authorization"] = f"Bearer {auth_token}"
 
-        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")  # noqa: S310 -- URL constructed from validated worker_url
 
         try:
             await asyncio.to_thread(urllib.request.urlopen, req, timeout=_DEFAULT_HTTP_TIMEOUT)
@@ -775,7 +779,7 @@ export default {
         if auth_token:
             headers["Authorization"] = f"Bearer {auth_token}"
 
-        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")  # noqa: S310 -- URL constructed from validated worker_url
 
         try:
             await asyncio.to_thread(urllib.request.urlopen, req, timeout=_DEFAULT_HTTP_TIMEOUT)
@@ -830,7 +834,7 @@ export default {
 
             # Check status
             try:
-                req = urllib.request.Request(status_url, headers=headers, method="GET")
+                req = urllib.request.Request(status_url, headers=headers, method="GET")  # noqa: S310 -- URL constructed from validated worker_url
                 response = await asyncio.to_thread(
                     urllib.request.urlopen, req, timeout=_DEFAULT_HTTP_TIMEOUT
                 )
@@ -846,11 +850,12 @@ export default {
 
                 if current_status == "completed":
                     # Fetch results
-                    req = urllib.request.Request(results_url, headers=headers, method="GET")
+                    req = urllib.request.Request(results_url, headers=headers, method="GET")  # noqa: S310 -- URL constructed from validated worker_url
                     response = await asyncio.to_thread(
                         urllib.request.urlopen, req, timeout=_DEFAULT_HTTP_TIMEOUT
                     )
-                    return json.loads(response.read().decode("utf-8"))
+                    results: dict[str, Any] = json.loads(response.read().decode("utf-8"))
+                    return results
 
                 if current_status == "failed":
                     error_msg = status_data.get("error", "Unknown error")
@@ -968,7 +973,7 @@ export default {
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                req = urllib.request.Request(health_url, method="GET")
+                req = urllib.request.Request(health_url, method="GET")  # noqa: S310 -- URL constructed from validated worker_url
                 response = await asyncio.to_thread(
                     urllib.request.urlopen, req, timeout=_DEFAULT_HTTP_TIMEOUT
                 )
@@ -1080,11 +1085,13 @@ export default {
         if hasattr(results, "__dataclass_fields__"):
             from dataclasses import asdict
 
-            return asdict(results)
+            result_dict: dict[str, Any] = asdict(results)
+            return result_dict
         elif hasattr(results, "model_dump"):
-            return results.model_dump()
+            model_dict: dict[str, Any] = results.model_dump()
+            return model_dict
         elif hasattr(results, "__dict__"):
-            return results.__dict__
+            return dict(results.__dict__)
         else:
             return {"raw": str(results)}
 
@@ -1103,7 +1110,7 @@ export default {
 
         self._console.print("[cyan]Collecting artifacts...[/cyan]")
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         zip_path = output_dir.parent / f"artifacts_cf_{timestamp}.zip"
 
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:

@@ -1,6 +1,5 @@
 """Integration tests for MCP server logging functionality."""
 
-import asyncio
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -153,7 +152,7 @@ class TestMCPLogging:
             (0, "", ""),  # chown prompt
             (0, "", ""),  # env file write
             (0, "", ""),  # chown env
-            asyncio.TimeoutError(),  # MCP registration times out
+            TimeoutError(),  # MCP registration times out
             (0, "", ""),  # cleanup temp files
         ]
 

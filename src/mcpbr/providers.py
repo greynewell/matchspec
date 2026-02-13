@@ -191,7 +191,7 @@ class OpenAIProvider:
                 "OpenAI API key required. Set OPENAI_API_KEY environment variable "
                 "or pass api_key parameter."
             )
-        import openai
+        import openai  # type: ignore[import-not-found]
 
         self._client = openai.OpenAI(api_key=self._api_key)
 
@@ -266,7 +266,7 @@ class GeminiProvider:
                 "Google API key required. Set GOOGLE_API_KEY environment variable "
                 "or pass api_key parameter."
             )
-        import google.generativeai as genai
+        import google.generativeai as genai  # type: ignore[import-not-found]
 
         genai.configure(api_key=self._api_key)
         self._genai = genai
@@ -423,7 +423,7 @@ class QwenProvider:
                 "DashScope API key required. Set DASHSCOPE_API_KEY environment variable "
                 "or pass api_key parameter."
             )
-        import openai
+        import openai  # type: ignore[import-not-found]
 
         self._client = openai.OpenAI(
             api_key=self._api_key,
@@ -513,7 +513,8 @@ def create_provider(
         )
 
     provider_class = PROVIDER_REGISTRY[provider_name]
-    return provider_class(model=model, api_key=api_key)
+    provider: ModelProvider = provider_class(model=model, api_key=api_key)
+    return provider
 
 
 def validate_provider_config(provider_name: str, model: str) -> tuple[bool, str | None]:

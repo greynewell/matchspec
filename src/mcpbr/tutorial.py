@@ -7,7 +7,7 @@ from basic usage through advanced analytics and reporting.
 import json
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -736,7 +736,7 @@ class TutorialEngine:
             tutorial_id=tutorial_id,
             current_step=0,
             completed_steps=[],
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(UTC).isoformat(),
             completed_at=None,
         )
         self.save_progress(progress)
@@ -807,7 +807,7 @@ class TutorialEngine:
             else:
                 # All steps completed
                 progress.current_step = len(tutorial.steps)
-                progress.completed_at = datetime.now(timezone.utc).isoformat()
+                progress.completed_at = datetime.now(UTC).isoformat()
 
         self.save_progress(progress)
         return progress
@@ -849,7 +849,7 @@ class TutorialEngine:
         if step.validation.startswith("command_runs:"):
             cmd = step.validation[len("command_runs:") :]
             try:
-                result = subprocess.run(
+                result = subprocess.run(  # noqa: S602 -- tutorial validation runs user-defined shell commands by design
                     cmd,
                     shell=True,
                     capture_output=True,

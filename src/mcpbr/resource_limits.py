@@ -295,12 +295,12 @@ class ResourceMonitor:
                 pids=pids,
             )
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
             logger.warning(f"docker stats timed out for container {container_id}")
-            raise RuntimeError(f"docker stats timed out for container {container_id}")
+            raise RuntimeError(f"docker stats timed out for container {container_id}") from e
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse docker stats output: {e}")
-            raise RuntimeError(f"Failed to parse docker stats output: {e}")
+            raise RuntimeError(f"Failed to parse docker stats output: {e}") from e
 
     def is_within_limits(self, usage: ResourceUsage) -> bool:
         """Check whether resource usage is within configured limits.
@@ -338,26 +338,20 @@ class ResourceMonitor:
                 )
 
         # Check memory
-        if self.limits.memory_mb is not None:
-            if usage.memory_mb > self.limits.memory_mb:
-                violations.append(
-                    f"Memory usage ({usage.memory_mb:.1f}MB) exceeds limit "
-                    f"({self.limits.memory_mb}MB)"
-                )
+        if self.limits.memory_mb is not None and usage.memory_mb > self.limits.memory_mb:
+            violations.append(
+                f"Memory usage ({usage.memory_mb:.1f}MB) exceeds limit ({self.limits.memory_mb}MB)"
+            )
 
         # Check disk
-        if self.limits.disk_mb is not None:
-            if usage.disk_mb > self.limits.disk_mb:
-                violations.append(
-                    f"Disk usage ({usage.disk_mb:.1f}MB) exceeds limit ({self.limits.disk_mb}MB)"
-                )
+        if self.limits.disk_mb is not None and usage.disk_mb > self.limits.disk_mb:
+            violations.append(
+                f"Disk usage ({usage.disk_mb:.1f}MB) exceeds limit ({self.limits.disk_mb}MB)"
+            )
 
         # Check PIDs
-        if self.limits.pids_limit is not None:
-            if usage.pids > self.limits.pids_limit:
-                violations.append(
-                    f"PID count ({usage.pids}) exceeds limit ({self.limits.pids_limit})"
-                )
+        if self.limits.pids_limit is not None and usage.pids > self.limits.pids_limit:
+            violations.append(f"PID count ({usage.pids}) exceeds limit ({self.limits.pids_limit})")
 
         return violations
 

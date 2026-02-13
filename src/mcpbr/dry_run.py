@@ -367,12 +367,11 @@ async def dry_run(config: HarnessConfig, verbosity: int = 0) -> DryRunResult:
     )
 
     # 8. Budget warning
-    if config.budget is not None and estimated_cost is not None:
-        if estimated_cost > config.budget:
-            warnings.append(
-                f"Estimated cost ({format_cost(estimated_cost)}) exceeds budget "
-                f"({format_cost(config.budget)}). Evaluation may be halted early."
-            )
+    if config.budget is not None and estimated_cost is not None and estimated_cost > config.budget:
+        warnings.append(
+            f"Estimated cost ({format_cost(estimated_cost)}) exceeds budget "
+            f"({format_cost(config.budget)}). Evaluation may be halted early."
+        )
 
     return DryRunResult(
         benchmark_name=benchmark_name,

@@ -266,11 +266,11 @@ class HumanEvalBenchmark:
             RuntimeError: If Python installation fails.
         """
         # Check if Python is already available
-        exit_code, stdout, stderr = await env.exec_command("python3 --version", timeout=10)
+        exit_code, _stdout, _stderr = await env.exec_command("python3 --version", timeout=10)
         python_available = exit_code == 0
 
         # Check if git is available
-        exit_code, stdout, stderr = await env.exec_command("git --version", timeout=10)
+        exit_code, _stdout, _stderr = await env.exec_command("git --version", timeout=10)
         git_available = exit_code == 0
 
         if python_available and git_available:
@@ -285,17 +285,17 @@ class HumanEvalBenchmark:
             packages.append("git")
 
         install_cmd = f"apt-get update -qq && apt-get install -y -qq {' '.join(packages)} 2>&1"
-        exit_code, stdout, stderr = await env.exec_command(install_cmd, timeout=300)
+        exit_code, _stdout, stderr = await env.exec_command(install_cmd, timeout=300)
 
         # Verify Python installation succeeded
         if not python_available:
-            exit_code, stdout, stderr = await env.exec_command("python3 --version", timeout=10)
+            exit_code, _stdout, stderr = await env.exec_command("python3 --version", timeout=10)
             if exit_code != 0:
                 raise RuntimeError(f"Failed to install Python 3: {stderr}")
 
         # Verify git installation succeeded
         if not git_available:
-            exit_code, stdout, stderr = await env.exec_command("git --version", timeout=10)
+            exit_code, _stdout, stderr = await env.exec_command("git --version", timeout=10)
             if exit_code != 0:
                 raise RuntimeError(f"Failed to install git: {stderr}")
 
@@ -466,7 +466,7 @@ class HumanEvalBenchmark:
             lines = solution.split("\n")
             code_lines = []
             in_function = False
-            base_indent = None
+            base_indent: int = 0
 
             for line in lines:
                 stripped = line.strip()
@@ -481,9 +481,7 @@ class HumanEvalBenchmark:
                     if stripped:  # Non-empty line
                         line_indent = len(line) - len(line.lstrip())
                         # Stop at next top-level (same or less indentation) def/class
-                        if line_indent <= base_indent and (
-                            stripped.startswith("def ") or stripped.startswith("class ")
-                        ):
+                        if line_indent <= base_indent and (stripped.startswith(("def ", "class "))):
                             # Reached next top-level definition, stop
                             break
                     code_lines.append(line)

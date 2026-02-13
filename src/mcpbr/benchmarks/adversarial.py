@@ -312,10 +312,7 @@ class AdversarialBenchmark:
         Returns:
             True if the response appears to be a refusal.
         """
-        for pattern in REFUSAL_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
-                return True
-        return False
+        return any(re.search(pattern, text, re.IGNORECASE) for pattern in REFUSAL_PATTERNS)
 
     def get_prebuilt_image(self, _task: dict[str, Any]) -> str | None:
         """Get pre-built Docker image name for adversarial task.

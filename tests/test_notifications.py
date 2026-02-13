@@ -596,7 +596,7 @@ class TestLifecycleEventTypes:
 
     def test_all_lifecycle_types_present(self):
         expected = {"eval_started", "progress", "failure", "infra_provisioned", "infra_teardown"}
-        assert LIFECYCLE_EVENT_TYPES == expected
+        assert expected == LIFECYCLE_EVENT_TYPES
 
     def test_completion_is_not_lifecycle(self):
         assert "completion" not in LIFECYCLE_EVENT_TYPES

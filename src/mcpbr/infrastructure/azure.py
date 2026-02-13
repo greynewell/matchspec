@@ -40,6 +40,8 @@ class AzureProvider(InfrastructureProvider):
             config: Harness configuration with Azure settings.
         """
         self.config = config
+        if config.infrastructure.azure is None:
+            raise ValueError("Azure configuration is required for AzureProvider")
         self.azure_config = config.infrastructure.azure
         self.vm_name: str | None = None
         self.vm_ip: str | None = None
@@ -198,6 +200,7 @@ class AzureProvider(InfrastructureProvider):
         Raises:
             RuntimeError: If IP retrieval fails.
         """
+        assert self.vm_name is not None
         result = subprocess.run(
             [
                 "az",
@@ -220,7 +223,7 @@ class AzureProvider(InfrastructureProvider):
         if result.returncode != 0:
             raise RuntimeError(f"Failed to get VM IP: {result.stderr}")
 
-        ip = json.loads(result.stdout)
+        ip: str = json.loads(result.stdout)
         return ip
 
     async def _wait_for_ssh(self, timeout: int = 300) -> None:
@@ -250,6 +253,7 @@ class AzureProvider(InfrastructureProvider):
                 # automated provisioning where MITM risk is low, but enterprise
                 # deployments may want to use RejectPolicy with pre-seeded keys.
                 self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                assert self.vm_ip is not None
                 self.ssh_client.connect(
                     self.vm_ip,
                     username="azureuser",
@@ -378,6 +382,7 @@ class AzureProvider(InfrastructureProvider):
         sftp = None
         try:
             # Upload via SFTP
+            assert self.ssh_client is not None
             sftp = self.ssh_client.open_sftp()
             sftp.put(temp_config_path, "/home/azureuser/config.yaml")
             console.print("[green]✓ Configuration transferred[/green]")
@@ -453,7 +458,7 @@ class AzureProvider(InfrastructureProvider):
         console.print("[green]✓ Test task passed - setup validated[/green]")
 
     @staticmethod
-    def get_run_status(state: "RunState") -> dict:
+    def get_run_status(state: "RunState") -> dict[str, Any]:
         """Get the status of an Azure VM run.
 
         Args:
@@ -481,7 +486,8 @@ class AzureProvider(InfrastructureProvider):
         )
         if result.returncode != 0:
             return {"error": result.stderr.strip(), "status": "unknown"}
-        return json.loads(result.stdout)
+        result_dict: dict[str, Any] = json.loads(result.stdout)
+        return result_dict
 
     @staticmethod
     def get_ssh_command(state: "RunState") -> str:
@@ -565,6 +571,8 @@ class AzureProvider(InfrastructureProvider):
             # Save run state for monitoring
             from datetime import datetime
 
+            assert self.vm_name is not None
+            assert self.vm_ip is not None
             run_state = RunState(
                 vm_name=self.vm_name,
                 vm_ip=self.vm_ip,
@@ -633,6 +641,7 @@ class AzureProvider(InfrastructureProvider):
             f"sleep 1\n"
             f"echo LAUNCHED"
         )
+        assert self.ssh_client is not None
         _stdin, stdout, _stderr = self.ssh_client.exec_command(detached_cmd, timeout=30)
         launch_output = stdout.read().decode().strip()
         if "LAUNCHED" not in launch_output:
@@ -646,7 +655,7 @@ class AzureProvider(InfrastructureProvider):
         reconnect_failures = 0
         # 24h overall deadline for the evaluation
         deadline = time.time() + 24 * 3600
-        ssh_exceptions = (OSError, EOFError)
+        ssh_exceptions: tuple[type[Exception], ...] = (OSError, EOFError)
         if paramiko is not None:
             ssh_exceptions = (OSError, EOFError, paramiko.SSHException)
 
@@ -658,6 +667,7 @@ class AzureProvider(InfrastructureProvider):
                     f"(kill -0 $(cat {pid_path}) 2>/dev/null "
                     f"&& echo RUNNING || echo DEAD)"
                 )
+                assert self.ssh_client is not None
                 _sin, sout, _serr = self.ssh_client.exec_command(check_cmd)
                 status = sout.read().decode().strip()
 
@@ -689,14 +699,14 @@ class AzureProvider(InfrastructureProvider):
                         await asyncio.sleep(poll_interval)
                         continue
                     break
-            except ssh_exceptions:
+            except ssh_exceptions as e:
                 # SSH connection dropped — reconnect
                 reconnect_failures += 1
                 if reconnect_failures > max_reconnect_attempts:
                     self._error_occurred = True
                     raise RuntimeError(
                         f"SSH reconnect failed after {max_reconnect_attempts} attempts"
-                    )
+                    ) from e
                 console.print(
                     f"[yellow]SSH connection lost, reconnecting "
                     f"(attempt {reconnect_failures}/{max_reconnect_attempts})...[/yellow]"
@@ -715,6 +725,7 @@ class AzureProvider(InfrastructureProvider):
         if exit_code != 0:
             self._error_occurred = True
             # Read any remaining stderr from the log
+            assert self.ssh_client is not None
             _sin, sout, _serr = self.ssh_client.exec_command(f"tail -50 {log_path}")
             tail_output = sout.read().decode()
             console.print(f"[red]✗ Evaluation failed with exit code {exit_code}[/red]")
@@ -757,6 +768,7 @@ class AzureProvider(InfrastructureProvider):
         results_path = f"{remote_output_dir}/results.json"
 
         # Download results.json
+        assert self.ssh_client is not None
         sftp = self.ssh_client.open_sftp()
 
         with tempfile.NamedTemporaryFile(mode="r", suffix=".json", delete=False) as f:
@@ -815,6 +827,7 @@ class AzureProvider(InfrastructureProvider):
         for attempt in range(max_attempts):
             sftp = None
             try:
+                assert self.ssh_client is not None
                 sftp = self.ssh_client.open_sftp()
                 await asyncio.to_thread(
                     self._recursive_download, sftp, remote_output_dir, local_archive_dir

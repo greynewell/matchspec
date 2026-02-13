@@ -9,7 +9,7 @@ on benchmark history.
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -267,7 +267,7 @@ class ImageCache:
             logger.warning(f"Failed to list Docker images: {e}")
             return list(self._entries.values())
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         found_tags: set[str] = set()
 
         for image in images:
@@ -339,7 +339,7 @@ class ImageCache:
             logger.debug(f"Image {image_tag!r} is not tracked in cache, skipping record_use")
             return
 
-        entry.last_used = datetime.now(timezone.utc)
+        entry.last_used = datetime.now(UTC)
         entry.use_count += 1
         self._save_metadata()
 

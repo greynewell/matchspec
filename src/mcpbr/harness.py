@@ -1,12 +1,13 @@
 """Main evaluation harness orchestrating parallel task execution."""
 
 import asyncio
+import contextlib
 import logging
 import sys
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -107,9 +108,7 @@ def _should_retry_zero_iteration(result: dict[str, Any]) -> bool:
     if result.get("iterations", -1) != 0:
         return False
     tokens = result.get("tokens", {})
-    if tokens.get("input", -1) != 0 or tokens.get("output", -1) != 0:
-        return False
-    return True
+    return not (tokens.get("input", -1) != 0 or tokens.get("output", -1) != 0)
 
 
 _INFRA_ERROR_PATTERNS = [
@@ -258,12 +257,14 @@ def agent_result_to_dict(
         )  # Default True for successful evals
 
         if getattr(eval_result, "fail_to_pass", None):
+            assert eval_result.fail_to_pass is not None
             data["fail_to_pass"] = {
                 "passed": eval_result.fail_to_pass.passed,
                 "total": eval_result.fail_to_pass.total,
             }
 
         if getattr(eval_result, "pass_to_pass", None):
+            assert eval_result.pass_to_pass is not None
             data["pass_to_pass"] = {
                 "passed": eval_result.pass_to_pass.passed,
                 "total": eval_result.pass_to_pass.total,
@@ -617,12 +618,8 @@ async def _run_mcp_evaluation(
         # one-time operations (e.g. pre-computing code graphs) that must not
         # count against timeout_seconds.
         if env and hasattr(agent, "run_setup_command"):
-            try:
+            with contextlib.suppress(TimeoutError):
                 await agent.run_setup_command(env, verbose=verbose)
-            except asyncio.TimeoutError:
-                # Setup timeout is non-fatal – the agent still gets its
-                # full timeout budget even if setup didn't finish.
-                pass
 
         # Sample memory before agent execution
         if profiler:
@@ -676,7 +673,7 @@ async def _run_mcp_evaluation(
 
         return result
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         end_time = time.time()
         runtime_seconds = end_time - start_time
         # Force-kill the container immediately so blocking executor threads
@@ -684,10 +681,8 @@ async def _run_mcp_evaluation(
         # asyncio.wait_for only cancels the Future but the underlying thread
         # keeps reading from the Docker socket indefinitely.
         if env:
-            try:
+            with contextlib.suppress(Exception):
                 env.container.kill()
-            except Exception:
-                pass
         # Preserve agent metrics if the agent completed before the timeout
         # (timeout may have occurred during evaluation, not during agent solve)
         if agent_result is not None:
@@ -732,13 +727,13 @@ async def _run_mcp_evaluation(
             teardown_start = time.time()
             try:
                 await asyncio.wait_for(env.cleanup(), timeout=60)
-            except (asyncio.TimeoutError, Exception) as cleanup_err:
+            except (TimeoutError, Exception) as cleanup_err:
                 logger.warning("Container cleanup failed for MCP task: %s", cleanup_err)
                 try:
                     if hasattr(env, "container") and env.container:
                         env.container.kill()
                         env.container.remove(force=True)
-                except Exception:
+                except Exception:  # noqa: S110 -- best-effort cleanup; container may already be gone
                     pass
             if profiler:
                 teardown_end = time.time()
@@ -850,16 +845,14 @@ async def _run_baseline_evaluation(
 
         return result
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         end_time = time.time()
         runtime_seconds = end_time - start_time
         # Force-kill the container immediately so blocking executor threads
         # (stuck in Docker exec_run/exec_start) get unblocked.
         if env:
-            try:
+            with contextlib.suppress(Exception):
                 env.container.kill()
-            except Exception:
-                pass
         # Preserve agent metrics if the agent completed before the timeout
         # (timeout may have occurred during evaluation, not during agent solve)
         if agent_result is not None:
@@ -904,13 +897,13 @@ async def _run_baseline_evaluation(
             teardown_start = time.time()
             try:
                 await asyncio.wait_for(env.cleanup(), timeout=60)
-            except (asyncio.TimeoutError, Exception) as cleanup_err:
+            except (TimeoutError, Exception) as cleanup_err:
                 logger.warning("Container cleanup failed for baseline task: %s", cleanup_err)
                 try:
                     if hasattr(env, "container") and env.container:
                         env.container.kill()
                         env.container.remove(force=True)
-                except Exception:
+                except Exception:  # noqa: S110 -- best-effort cleanup; container may already be gone
                     pass
             if profiler:
                 teardown_end = time.time()
@@ -962,7 +955,7 @@ def _calculate_mcp_tool_stats(results: list[TaskResult]) -> dict[str, Any]:
     # Note: tool_usage contains total calls (successful + failed)
     # tool_failures contains only failed calls
     # So succeeded = total - failed, not total + failed
-    by_tool = {}
+    by_tool: dict[str, dict[str, Any]] = {}
     for tool_name in set(list(tool_usage.keys()) + list(tool_failures.keys())):
         total_calls_for_tool = tool_usage.get(tool_name, 0)
         failure_count = tool_failures.get(tool_name, 0)
@@ -980,7 +973,7 @@ def _calculate_mcp_tool_stats(results: list[TaskResult]) -> dict[str, Any]:
         }
 
         # Add sample errors if available
-        if tool_name in tool_errors and tool_errors[tool_name]:
+        if tool_errors.get(tool_name):
             by_tool[tool_name]["sample_errors"] = tool_errors[tool_name]
 
     return {
@@ -1161,13 +1154,12 @@ class _ProgressTracker:
 
     def should_notify(self, completed: int, current_time: float) -> bool:
         """Return True if a progress notification should be sent now."""
-        if self._task_interval > 0:
-            if completed - self._last_notified_count >= self._task_interval:
-                return True
-        if self._time_interval_seconds > 0:
-            if current_time - self._last_notified_time >= self._time_interval_seconds:
-                return True
-        return False
+        if self._task_interval > 0 and completed - self._last_notified_count >= self._task_interval:
+            return True
+        return (
+            self._time_interval_seconds > 0
+            and current_time - self._last_notified_time >= self._time_interval_seconds
+        )
 
     def mark_notified(self, completed: int, current_time: float) -> None:
         """Record that a notification was sent."""
@@ -1327,6 +1319,7 @@ async def run_evaluation(
         try:
             from .storage.cloud import create_cloud_storage
 
+            assert config.cloud_storage is not None
             cloud_storage = create_cloud_storage(config.cloud_storage)
             cloud_run_id = (
                 incremental_save_path.stem
@@ -1342,7 +1335,7 @@ async def run_evaluation(
     metadata_for_save = None
     if incremental_save_path:
         metadata_for_save = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "config": {
                 "provider": config.provider,
                 "agent_harness": config.agent_harness,
@@ -1800,9 +1793,9 @@ async def run_evaluation(
                             f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
                         )
                         # Cancel all pending tasks
-                        for task in async_tasks:
-                            if not task.done():
-                                task.cancel()
+                        for pending_task in async_tasks:
+                            if not pending_task.done():
+                                pending_task.cancel()
                         # Wait for cancellation to complete
                         await asyncio.gather(*async_tasks, return_exceptions=True)
                         break
@@ -1846,7 +1839,7 @@ async def run_evaluation(
 
                         # Upload incrementally to cloud storage
                         if cloud_storage and cloud_run_id:
-                            files: list[tuple[Path, str]] = []
+                            files = []
                             if incremental_save_path:
                                 jsonl_path = (
                                     incremental_save_path.with_suffix(
@@ -1908,9 +1901,9 @@ async def run_evaluation(
                             f"Stopping evaluation (spent ${current_cost:.4f}).[/yellow]"
                         )
                         # Cancel all pending tasks
-                        for task in async_tasks:
-                            if not task.done():
-                                task.cancel()
+                        for pending_task in async_tasks:
+                            if not pending_task.done():
+                                pending_task.cancel()
                         # Wait for cancellation to complete
                         await asyncio.gather(*async_tasks, return_exceptions=True)
                         break
@@ -1959,7 +1952,7 @@ async def run_evaluation(
             executor = getattr(loop, "_default_executor", None)
             if executor is not None:
                 executor.shutdown(wait=False, cancel_futures=True)
-                loop._default_executor = None
+                setattr(loop, "_default_executor", None)  # noqa: B010
         except RuntimeError as exc:
             console.print(f"[yellow]Default executor shutdown skipped: {exc}[/yellow]")
 
@@ -2041,7 +2034,7 @@ async def run_evaluation(
 
     # Build metadata with incremental evaluation stats
     metadata = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "config": {
             "model": config.model,
             "provider": config.provider,
@@ -2094,6 +2087,7 @@ async def run_evaluation(
         }
 
     # Build summary based on mode
+    summary: dict[str, Any]
     if config.comparison_mode:
         # Comparison mode summary
         summary = {
@@ -2155,6 +2149,10 @@ async def run_evaluation(
                 logger.debug("Statistical significance computation failed", exc_info=True)
     else:
         # Single server mode summary (original)
+        assert cost_effectiveness is not None
+        assert tool_coverage is not None
+        assert mcp_tool_stats is not None
+        assert comprehensive_stats is not None
         summary = {
             "mcp": {
                 "resolved": mcp_resolved,

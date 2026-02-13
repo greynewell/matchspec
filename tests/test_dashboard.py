@@ -1,7 +1,5 @@
 """Tests for the real-time evaluation dashboard."""
 
-# ruff: noqa: N801
-
 import json
 import time
 from unittest.mock import AsyncMock, patch
@@ -509,24 +507,28 @@ class TestCheckDependencies:
 
     def test_check_dependencies_raises_when_fastapi_missing(self) -> None:
         """Test ImportError raised when fastapi is missing."""
-        with patch("mcpbr.dashboard.HAS_FASTAPI", False):
-            with pytest.raises(ImportError, match="fastapi"):
-                _check_dependencies()
+        with (
+            patch("mcpbr.dashboard.HAS_FASTAPI", False),
+            pytest.raises(ImportError, match="fastapi"),
+        ):
+            _check_dependencies()
 
     def test_check_dependencies_raises_when_uvicorn_missing(self) -> None:
         """Test ImportError raised when uvicorn is missing."""
-        with patch("mcpbr.dashboard.HAS_UVICORN", False):
-            with pytest.raises(ImportError, match="uvicorn"):
-                _check_dependencies()
+        with (
+            patch("mcpbr.dashboard.HAS_UVICORN", False),
+            pytest.raises(ImportError, match="uvicorn"),
+        ):
+            _check_dependencies()
 
     def test_check_dependencies_raises_when_both_missing(self) -> None:
         """Test ImportError lists both missing packages."""
         with (
             patch("mcpbr.dashboard.HAS_FASTAPI", False),
             patch("mcpbr.dashboard.HAS_UVICORN", False),
+            pytest.raises(ImportError, match=r"fastapi.*uvicorn"),
         ):
-            with pytest.raises(ImportError, match="fastapi.*uvicorn"):
-                _check_dependencies()
+            _check_dependencies()
 
 
 # ---------------------------------------------------------------------------
@@ -563,9 +565,8 @@ class TestDashboardServer:
 
     def test_init_raises_when_deps_missing(self) -> None:
         """Test that DashboardServer raises if deps are missing."""
-        with patch("mcpbr.dashboard.HAS_FASTAPI", False):
-            with pytest.raises(ImportError):
-                DashboardServer(DashboardState())
+        with patch("mcpbr.dashboard.HAS_FASTAPI", False), pytest.raises(ImportError):
+            DashboardServer(DashboardState())
 
     def test_update_task_proxy(self) -> None:
         """Test that server.update_task delegates to state."""

@@ -11,8 +11,9 @@ All calculations use only the Python standard library.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass
@@ -165,7 +166,8 @@ def _extract_tasks(results_data: dict[str, Any]) -> list[dict[str, Any]]:
     Returns:
         List of task dictionaries (possibly empty).
     """
-    return results_data.get("tasks", [])
+    tasks: list[dict[str, Any]] = results_data.get("tasks", [])
+    return tasks
 
 
 def _calc_resolution_rate(results_data: dict[str, Any]) -> float:

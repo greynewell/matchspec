@@ -26,7 +26,6 @@ class InfrastructureProvider(ABC):
         Raises:
             Exception: If setup fails.
         """
-        pass
 
     @abstractmethod
     async def run_evaluation(self, config: Any, run_mcp: bool, run_baseline: bool) -> Any:
@@ -43,10 +42,9 @@ class InfrastructureProvider(ABC):
         Raises:
             Exception: If evaluation fails.
         """
-        pass
 
     @abstractmethod
-    async def collect_artifacts(self, output_dir: Path) -> Path:
+    async def collect_artifacts(self, output_dir: Path) -> Path | None:
         """Collect logs/results/traces into ZIP archive.
 
         This method packages evaluation outputs into a single ZIP file
@@ -56,12 +54,11 @@ class InfrastructureProvider(ABC):
             output_dir: Directory containing evaluation outputs.
 
         Returns:
-            Path to the created ZIP archive.
+            Path to the created ZIP archive, or None if no artifacts found.
 
         Raises:
             Exception: If artifact collection fails.
         """
-        pass
 
     @abstractmethod
     async def cleanup(self, force: bool = False) -> None:
@@ -79,7 +76,6 @@ class InfrastructureProvider(ABC):
         Raises:
             Exception: If cleanup fails.
         """
-        pass
 
     @abstractmethod
     async def health_check(self, **kwargs: Any) -> dict[str, Any]:
@@ -100,4 +96,3 @@ class InfrastructureProvider(ABC):
         Raises:
             Exception: If health check cannot be performed.
         """
-        pass

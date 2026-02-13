@@ -7,7 +7,7 @@ allowing users to resume evaluations and skip already-completed tasks.
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -55,8 +55,8 @@ class EvaluationState:
     """State for an entire evaluation run."""
 
     state_version: str = "1.0"
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     config_hash: str = ""
     tasks: dict[str, TaskState] = field(default_factory=dict)
 
@@ -76,8 +76,8 @@ class EvaluationState:
         tasks = {k: TaskState.from_dict(v) for k, v in data.get("tasks", {}).items()}
         return cls(
             state_version=data.get("state_version", "1.0"),
-            created_at=data.get("created_at", datetime.now(timezone.utc).isoformat()),
-            updated_at=data.get("updated_at", datetime.now(timezone.utc).isoformat()),
+            created_at=data.get("created_at", datetime.now(UTC).isoformat()),
+            updated_at=data.get("updated_at", datetime.now(UTC).isoformat()),
             config_hash=data.get("config_hash", ""),
             tasks=tasks,
         )
@@ -177,7 +177,7 @@ class StateTracker:
             return
 
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.state.updated_at = datetime.now(timezone.utc).isoformat()
+        self.state.updated_at = datetime.now(UTC).isoformat()
 
         with open(self.state_file, "w") as f:
             json.dump(self.state.to_dict(), f, indent=2)
@@ -240,7 +240,7 @@ class StateTracker:
             completed=completed,
             mcp_result=mcp_result,
             baseline_result=baseline_result,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             error=error,
         )
 

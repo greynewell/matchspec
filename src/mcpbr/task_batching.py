@@ -243,7 +243,7 @@ class TaskBatcher:
             groups[key].append(task)
 
         batches: list[TaskBatch] = []
-        for key, group_tasks in sorted(groups.items()):
+        for _key, group_tasks in sorted(groups.items()):
             for chunk in self._split_into_chunks(group_tasks):
                 common_image = self._common_value(chunk, "image")
                 common_repo = self._common_value(chunk, "repo")

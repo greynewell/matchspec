@@ -98,7 +98,7 @@ class TestS3ErrorHandling:
                 "ListObjectsV2 operation: The AWS Access Key Id you provided does "
                 "not exist in our records.",
             )
-            with pytest.raises(CloudStorageError, match="authentication|credential|access"):
+            with pytest.raises(CloudStorageError, match=r"authentication|credential|access"):
                 storage.list_objects()
 
     def test_list_objects_timeout_raises(self) -> None:
@@ -127,7 +127,7 @@ class TestS3ErrorHandling:
         class NonSerializable:
             pass
 
-        with pytest.raises(CloudStorageError, match="serialize|JSON"):
+        with pytest.raises(CloudStorageError, match=r"serialize|JSON"):
             storage.upload_results("run-001", {"data": NonSerializable()})
 
     @patch("mcpbr.storage.cloud.subprocess.run")

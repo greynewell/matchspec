@@ -47,7 +47,7 @@ def pearson_correlation(x: list[float], y: list[float]) -> dict[str, Any]:
     x_mean = math.fsum(x) / n
     y_mean = math.fsum(y) / n
 
-    numerator = math.fsum((xi - x_mean) * (yi - y_mean) for xi, yi in zip(x, y))
+    numerator = math.fsum((xi - x_mean) * (yi - y_mean) for xi, yi in zip(x, y, strict=False))
     denom_x = math.fsum((xi - x_mean) ** 2 for xi in x)
     denom_y = math.fsum((yi - y_mean) ** 2 for yi in y)
 

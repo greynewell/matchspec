@@ -19,7 +19,7 @@ def mock_docker_client():
 
 
 @pytest.fixture
-def manager(mock_docker_client):  # noqa: ARG001
+def manager(mock_docker_client):
     """Create a DockerEnvironmentManager instance."""
     return DockerEnvironmentManager()
 
@@ -43,15 +43,17 @@ class TestDockerRetryLogic:
         mock_docker_client.containers.run.return_value = mock_container
 
         # Mock the necessary methods
-        with patch.object(manager, "_copy_repo_to_workspace", return_value=None):
-            with patch.object(manager, "_install_claude_cli", return_value=None):
-                env = await manager.create_environment(
-                    task={
-                        "instance_id": "test-instance",
-                        "repo": "test/repo",
-                        "base_commit": "abc123",
-                    }
-                )
+        with (
+            patch.object(manager, "_copy_repo_to_workspace", return_value=None),
+            patch.object(manager, "_install_claude_cli", return_value=None),
+        ):
+            env = await manager.create_environment(
+                task={
+                    "instance_id": "test-instance",
+                    "repo": "test/repo",
+                    "base_commit": "abc123",
+                }
+            )
 
         assert env.container == mock_container
         # Should only call run once
@@ -72,15 +74,17 @@ class TestDockerRetryLogic:
 
         start_time = time.time()
 
-        with patch.object(manager, "_copy_repo_to_workspace", return_value=None):
-            with patch.object(manager, "_install_claude_cli", return_value=None):
-                env = await manager.create_environment(
-                    task={
-                        "instance_id": "test-instance",
-                        "repo": "test/repo",
-                        "base_commit": "abc123",
-                    }
-                )
+        with (
+            patch.object(manager, "_copy_repo_to_workspace", return_value=None),
+            patch.object(manager, "_install_claude_cli", return_value=None),
+        ):
+            env = await manager.create_environment(
+                task={
+                    "instance_id": "test-instance",
+                    "repo": "test/repo",
+                    "base_commit": "abc123",
+                }
+            )
 
         elapsed = time.time() - start_time
 
@@ -98,16 +102,18 @@ class TestDockerRetryLogic:
             "500 Server Error", status_code=500
         )
 
-        with pytest.raises(Exception) as exc_info:
-            with patch.object(manager, "_copy_repo_to_workspace", return_value=None):
-                with patch.object(manager, "_install_claude_cli", return_value=None):
-                    await manager.create_environment(
-                        task={
-                            "instance_id": "test-instance",
-                            "repo": "test/repo",
-                            "base_commit": "abc123",
-                        }
-                    )
+        with (
+            pytest.raises(Exception) as exc_info,
+            patch.object(manager, "_copy_repo_to_workspace", return_value=None),
+            patch.object(manager, "_install_claude_cli", return_value=None),
+        ):
+            await manager.create_environment(
+                task={
+                    "instance_id": "test-instance",
+                    "repo": "test/repo",
+                    "base_commit": "abc123",
+                }
+            )
 
         # Should have tried max_retries + 1 times (initial + 3 retries = 4 total)
         assert mock_docker_client.containers.run.call_count == 4
@@ -121,16 +127,18 @@ class TestDockerRetryLogic:
             "404 Not Found", status_code=404
         )
 
-        with pytest.raises(Exception) as exc_info:
-            with patch.object(manager, "_copy_repo_to_workspace", return_value=None):
-                with patch.object(manager, "_install_claude_cli", return_value=None):
-                    await manager.create_environment(
-                        task={
-                            "instance_id": "test-instance",
-                            "repo": "test/repo",
-                            "base_commit": "abc123",
-                        }
-                    )
+        with (
+            pytest.raises(Exception) as exc_info,
+            patch.object(manager, "_copy_repo_to_workspace", return_value=None),
+            patch.object(manager, "_install_claude_cli", return_value=None),
+        ):
+            await manager.create_environment(
+                task={
+                    "instance_id": "test-instance",
+                    "repo": "test/repo",
+                    "base_commit": "abc123",
+                }
+            )
 
         # Should only try once for non-500 errors
         assert mock_docker_client.containers.run.call_count == 1
@@ -144,16 +152,18 @@ class TestDockerRetryLogic:
         # Fail with a different exception type
         mock_docker_client.containers.run.side_effect = ValueError("Invalid argument")
 
-        with pytest.raises(ValueError) as exc_info:
-            with patch.object(manager, "_copy_repo_to_workspace", return_value=None):
-                with patch.object(manager, "_install_claude_cli", return_value=None):
-                    await manager.create_environment(
-                        task={
-                            "instance_id": "test-instance",
-                            "repo": "test/repo",
-                            "base_commit": "abc123",
-                        }
-                    )
+        with (
+            pytest.raises(ValueError) as exc_info,
+            patch.object(manager, "_copy_repo_to_workspace", return_value=None),
+            patch.object(manager, "_install_claude_cli", return_value=None),
+        ):
+            await manager.create_environment(
+                task={
+                    "instance_id": "test-instance",
+                    "repo": "test/repo",
+                    "base_commit": "abc123",
+                }
+            )
 
         # Should only try once for non-APIError exceptions
         assert mock_docker_client.containers.run.call_count == 1
@@ -174,15 +184,17 @@ class TestDockerRetryLogic:
 
         start_time = time.time()
 
-        with patch.object(manager, "_copy_repo_to_workspace", return_value=None):
-            with patch.object(manager, "_install_claude_cli", return_value=None):
-                await manager.create_environment(
-                    task={
-                        "instance_id": "test-instance",
-                        "repo": "test/repo",
-                        "base_commit": "abc123",
-                    }
-                )
+        with (
+            patch.object(manager, "_copy_repo_to_workspace", return_value=None),
+            patch.object(manager, "_install_claude_cli", return_value=None),
+        ):
+            await manager.create_environment(
+                task={
+                    "instance_id": "test-instance",
+                    "repo": "test/repo",
+                    "base_commit": "abc123",
+                }
+            )
 
         elapsed = time.time() - start_time
 

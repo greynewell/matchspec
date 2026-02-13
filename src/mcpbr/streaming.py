@@ -233,14 +233,14 @@ class StreamingOutputHandler:
         if not self.config.progressive_json:
             return
 
-        data = {
+        data: dict[str, Any] = {
             "metadata": self.metadata,
             "summary": self._get_current_summary(),
             "tasks": [],
         }
 
         for task in self.results:
-            task_data = {"instance_id": task.instance_id}
+            task_data: dict[str, Any] = {"instance_id": task.instance_id}
             if task.mcp:
                 task_data["mcp"] = task.mcp
             if task.baseline:
@@ -255,14 +255,14 @@ class StreamingOutputHandler:
         if not self.config.progressive_yaml:
             return
 
-        data = {
+        data: dict[str, Any] = {
             "metadata": self.metadata,
             "summary": self._get_current_summary(),
             "tasks": [],
         }
 
         for task in self.results:
-            task_data = {"instance_id": task.instance_id}
+            task_data: dict[str, Any] = {"instance_id": task.instance_id}
             if task.mcp:
                 task_data["mcp"] = task.mcp
             if task.baseline:

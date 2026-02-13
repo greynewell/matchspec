@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import math
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -59,7 +59,7 @@ def _make_results_data(
 ) -> dict:
     """Build a minimal results data dict suitable for store_run / ComparisonEngine."""
     if timestamp is None:
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
     if tasks is None:
         tasks = []
@@ -357,8 +357,8 @@ class TestResultsDatabase:
     def test_cleanup_removes_old_runs(self, tmp_path: Path) -> None:
         """cleanup deletes runs older than max_age_days."""
         with ResultsDatabase(tmp_path / "clean.db") as db:
-            old_ts = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
-            recent_ts = datetime.now(timezone.utc).isoformat()
+            old_ts = (datetime.now(UTC) - timedelta(days=100)).isoformat()
+            recent_ts = datetime.now(UTC).isoformat()
 
             db.store_run(_make_results_data(timestamp=old_ts))
             db.store_run(_make_results_data(timestamp=recent_ts))

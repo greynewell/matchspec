@@ -172,7 +172,7 @@ def test_preflight_api_key_masking(mock_config, config_path):
         # Mock which
         mock_which.return_value = "/usr/bin/npx"
 
-        checks, failures = run_comprehensive_preflight(mock_config, config_path)
+        checks, _failures = run_comprehensive_preflight(mock_config, config_path)
 
         # Verify API key check shows masked key
         api_key_check = next(c for c in checks if c.name == "ANTHROPIC_API_KEY")

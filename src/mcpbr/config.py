@@ -191,7 +191,7 @@ class MCPServerConfig(BaseModel):
         """
         result = {}
         for key, value in self.env.items():
-            expanded = re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), ""), value)
+            expanded = re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(str(m.group(1)), ""), value)
             result[key] = expanded
         return result
 

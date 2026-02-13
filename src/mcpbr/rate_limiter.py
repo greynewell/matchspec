@@ -277,14 +277,14 @@ class RateLimiter:
             return self.config.initial_delay_seconds
 
         # Exponential: initial * 2^attempt, capped at max
-        delay = min(
+        delay: float = min(
             self.config.initial_delay_seconds * (2**attempt),
             self.config.max_delay_seconds,
         )
 
         if self.config.strategy == RateLimitStrategy.ADAPTIVE:
             # Add random jitter of 0-25% to prevent thundering herd
-            jitter = delay * random.uniform(0.0, 0.25)
+            jitter = delay * random.uniform(0.0, 0.25)  # noqa: S311 -- not used for cryptographic purposes; jitter for rate limiting
             delay += jitter
 
         return delay

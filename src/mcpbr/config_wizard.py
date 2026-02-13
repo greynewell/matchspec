@@ -586,12 +586,11 @@ def validate_config_dict(config: dict[str, Any]) -> list[str]:
 
     # Check thinking_budget
     thinking = config.get("thinking_budget")
-    if thinking is not None:
-        if isinstance(thinking, int):
-            if thinking < 1024:
-                errors.append("thinking_budget must be at least 1024")
-            elif thinking > 31999:
-                errors.append("thinking_budget cannot exceed 31999")
+    if thinking is not None and isinstance(thinking, int):
+        if thinking < 1024:
+            errors.append("thinking_budget must be at least 1024")
+        elif thinking > 31999:
+            errors.append("thinking_budget cannot exceed 31999")
 
     # Check budget
     budget = config.get("budget")

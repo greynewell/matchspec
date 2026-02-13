@@ -1,6 +1,7 @@
 """Command-line interface for mcpbr."""
 
 import asyncio
+import contextlib
 import csv
 import json
 import sys
@@ -110,7 +111,6 @@ def main() -> None:
     Environment Variables:
       ANTHROPIC_API_KEY    Required for Anthropic API access
     """
-    pass
 
 
 def _build_results_dict(results):
@@ -735,11 +735,8 @@ def run(
 
     # Copy config file to output directory with SameFileError handling
     config_copy_path = final_output_dir / "config.yaml"
-    try:
+    with contextlib.suppress(shutil.SameFileError):
         shutil.copy2(config_path, config_copy_path)
-    except shutil.SameFileError:
-        # Skip copy if source and destination are the same file
-        pass
 
     # Create README.txt in output directory with finalized config values
     readme_content = f"""This directory contains the complete output from an mcpbr evaluation run.
@@ -823,7 +820,7 @@ To archive:
         # Fallback to old MCP-only check if pre-flight is skipped but health check is not
         from .smoke_test import run_mcp_preflight_check
 
-        success, error_msg = asyncio.run(run_mcp_preflight_check(config_path))
+        success, _error_msg = asyncio.run(run_mcp_preflight_check(config_path))
         if not success:
             console.print(
                 "\n[yellow]Use --skip-health-check to proceed anyway (not recommended)[/yellow]"
@@ -873,62 +870,60 @@ To archive:
         console.print(f"  Log dir: {log_dir_path}")
     console.print()
 
-    log_file = None
-    try:
-        if log_file_path:
-            log_file_path.parent.mkdir(parents=True, exist_ok=True)
-            log_file = open(log_file_path, "w")
+    with contextlib.ExitStack() as stack:
+        log_file = None
+        try:
+            if log_file_path:
+                log_file_path.parent.mkdir(parents=True, exist_ok=True)
+                log_file = stack.enter_context(open(log_file_path, "w"))
 
-        if log_dir_path:
-            log_dir_path.mkdir(parents=True, exist_ok=True)
+            if log_dir_path:
+                log_dir_path.mkdir(parents=True, exist_ok=True)
 
-        if infra_mode != "local":
-            from .infrastructure.manager import InfrastructureManager
+            if infra_mode != "local":
+                from .infrastructure.manager import InfrastructureManager
 
-            # Merge CLI-only parameters into config so they propagate to remote VMs
-            if selected_task_ids:
-                config.task_ids = selected_task_ids
+                # Merge CLI-only parameters into config so they propagate to remote VMs
+                if selected_task_ids:
+                    config.task_ids = selected_task_ids
 
-            infra_result = asyncio.run(
-                InfrastructureManager.run_with_infrastructure(
-                    config=config,
-                    config_path=Path(config_path),
-                    output_dir=final_output_dir,
-                    run_mcp=run_mcp,
-                    run_baseline=run_baseline,
+                infra_result = asyncio.run(
+                    InfrastructureManager.run_with_infrastructure(
+                        config=config,
+                        config_path=Path(config_path),
+                        output_dir=final_output_dir,
+                        run_mcp=run_mcp,
+                        run_baseline=run_baseline,
+                    )
                 )
-            )
-            results = infra_result["results"]
-        else:
-            # Enable incremental save for crash recovery
-            incremental_path = final_output_dir / "incremental_results"
-            results = asyncio.run(
-                run_evaluation(
-                    config=config,
-                    run_mcp=run_mcp,
-                    run_baseline=run_baseline,
-                    verbose=verbose,
-                    verbosity=verbosity,
-                    log_file=log_file,
-                    log_dir=log_dir_path,
-                    task_ids=selected_task_ids,
-                    state_tracker=state_tracker,
-                    from_task=from_task,
-                    incremental_save_path=incremental_path,
-                    mcp_logs_dir=final_output_dir,
+                results = infra_result["results"]
+            else:
+                # Enable incremental save for crash recovery
+                incremental_path = final_output_dir / "incremental_results"
+                results = asyncio.run(
+                    run_evaluation(
+                        config=config,
+                        run_mcp=run_mcp,
+                        run_baseline=run_baseline,
+                        verbose=verbose,
+                        verbosity=verbosity,
+                        log_file=log_file,
+                        log_dir=log_dir_path,
+                        task_ids=selected_task_ids,
+                        state_tracker=state_tracker,
+                        from_task=from_task,
+                        incremental_save_path=incremental_path,
+                        mcp_logs_dir=final_output_dir,
+                    )
                 )
-            )
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Evaluation interrupted by user[/yellow]")
-        sys.exit(130)
-    except Exception as e:
-        console.print(f"[red]Evaluation failed: {e}[/red]")
-        if verbose:
-            console.print_exception()
-        sys.exit(1)
-    finally:
-        if log_file:
-            log_file.close()
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Evaluation interrupted by user[/yellow]")
+            sys.exit(130)
+        except Exception as e:
+            console.print(f"[red]Evaluation failed: {e}[/red]")
+            if verbose:
+                console.print_exception()
+            sys.exit(1)
 
     # Use comparison summary if in comparison mode
     if results.summary.get("mcp_server_a"):
@@ -985,28 +980,31 @@ To archive:
     if html_path:
         from .reports import HTMLReportGenerator
 
-        generator = HTMLReportGenerator(results_dict)
-        generator.save(html_path)
+        assert results_dict is not None
+        html_gen = HTMLReportGenerator(results_dict)
+        html_gen.save(html_path)
         console.print(f"[green]HTML report saved to {html_path}[/green]")
 
     if enhanced_md_path:
         from .reports import EnhancedMarkdownGenerator
 
-        generator = EnhancedMarkdownGenerator(results_dict)
-        generator.save(enhanced_md_path)
+        assert results_dict is not None
+        md_gen = EnhancedMarkdownGenerator(results_dict)
+        md_gen.save(enhanced_md_path)
         console.print(f"[green]Enhanced Markdown report saved to {enhanced_md_path}[/green]")
 
     if pdf_path:
         from .reports import PDFReportGenerator
 
-        generator = PDFReportGenerator(results_dict)
+        assert results_dict is not None
+        pdf_gen = PDFReportGenerator(results_dict)
         try:
-            generator.save_pdf(pdf_path)
+            pdf_gen.save_pdf(pdf_path)
             console.print(f"[green]PDF report saved to {pdf_path}[/green]")
         except ImportError:
             # Fall back to HTML if weasyprint not available
             html_fallback = pdf_path.with_suffix(".html")
-            generator.save_html(html_fallback)
+            pdf_gen.save_html(html_fallback)
             console.print(
                 f"[yellow]weasyprint not installed — saved print-ready HTML to {html_fallback}[/yellow]"
             )
@@ -1019,6 +1017,7 @@ To archive:
             from .storage.cloud import AzureBlobStorage, GCSStorage, S3Storage, create_cloud_storage
 
             # Parse --upload-to URI or use config dict
+            storage: S3Storage | GCSStorage | AzureBlobStorage
             if isinstance(cloud_cfg, str):
                 if cloud_cfg.startswith("s3://"):
                     bucket = cloud_cfg[5:]
@@ -1070,7 +1069,8 @@ To archive:
                 results_dict = _build_results_dict(results)
             from .wandb_integration import log_evaluation
 
-            log_evaluation(results_dict, project=getattr(config, "wandb_project", None))
+            wb_project: str = getattr(config, "wandb_project", None) or "mcpbr"
+            log_evaluation(results_dict, project=wb_project)
         except Exception as e:
             click.echo(f"W&B logging failed: {e}", err=True)
 
@@ -1158,10 +1158,9 @@ To archive:
 
         # Only report "no resolutions" if tasks were actually run
         # If total is 0, no tasks were run (not a failure)
-        if mcp_only and mcp_total > 0 and mcp_resolved == 0:
-            console.print("\n[yellow]⚠ No tasks resolved (0% success)[/yellow]")
-            exit_code = 2
-        elif baseline_only and baseline_total > 0 and baseline_resolved == 0:
+        if (mcp_only and mcp_total > 0 and mcp_resolved == 0) or (
+            baseline_only and baseline_total > 0 and baseline_resolved == 0
+        ):
             console.print("\n[yellow]⚠ No tasks resolved (0% success)[/yellow]")
             exit_code = 2
         elif not mcp_only and not baseline_only:
@@ -1231,10 +1230,10 @@ def init(
     if list_templates:
         templates = get_all_templates()
         console.print("[bold]Available Templates[/bold]\n")
-        for template in templates:
-            console.print(f"[cyan]{template.id}[/cyan] - {template.name}")
-            console.print(f"  {template.description}")
-            console.print(f"  Category: {template.category} | Tags: {', '.join(template.tags)}\n")
+        for tmpl in templates:
+            console.print(f"[cyan]{tmpl.id}[/cyan] - {tmpl.name}")
+            console.print(f"  {tmpl.description}")
+            console.print(f"  Category: {tmpl.category} | Tags: {', '.join(tmpl.tags)}\n")
         return
 
     # Check if output file already exists
@@ -1256,9 +1255,9 @@ def init(
         idx = 1
         for category, templates in templates_by_cat.items():
             console.print(f"[bold]{category}[/bold]")
-            for template in templates:
-                console.print(f"  [{idx}] {template.name} - {template.description}")
-                template_choices.append((str(idx), template.id))
+            for tmpl in templates:
+                console.print(f"  [{idx}] {tmpl.name} - {tmpl.description}")
+                template_choices.append((str(idx), tmpl.id))
                 idx += 1
             console.print()
 
@@ -1542,7 +1541,6 @@ def config() -> None:
       mcpbr config schema                   # Show JSON schema
       mcpbr config schema --save schema.json  # Save schema to file
     """
-    pass
 
 
 @main.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -2035,7 +2033,6 @@ def cache() -> None:
       mcpbr cache clear    # Clear all cached results
       mcpbr cache prune    # Remove old cache entries
     """
-    pass
 
 
 @cache.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -2285,7 +2282,7 @@ def export(input_path: Path, output_format: str, output_path: Path) -> None:
         console.print("[yellow]No rows to export[/yellow]")
         return
 
-    fieldnames = sorted({key for row in rows for key in row.keys()})
+    fieldnames = sorted({key for row in rows for key in row})
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with output_path.open("w", newline="", encoding="utf-8") as f:
@@ -2430,8 +2427,8 @@ def compare(
             "summary": comparison.get("summary", {}),
             "tasks": [],
         }
-        generator = EnhancedMarkdownGenerator(md_data)
-        generator.save(md_path)
+        md_generator = EnhancedMarkdownGenerator(md_data)
+        md_generator.save(md_path)
         console.print(f"[green]Markdown comparison report saved to {md_path}[/green]")
 
 
@@ -2453,7 +2450,6 @@ def analytics() -> None:
       mcpbr analytics leaderboard
       mcpbr analytics regression --baseline run1.json --current run2.json
     """
-    pass
 
 
 @analytics.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -2494,51 +2490,13 @@ def store(result_file: Path, db_path: Path, label: str | None) -> None:
         console.print(f"[red]Error loading {result_file}: {e}[/red]")
         sys.exit(1)
 
-    metadata = data.get("metadata", {})
-    config = metadata.get("config", {})
-    summary = data.get("summary", {})
-    tasks = data.get("tasks", [])
-
-    mcp_summary = summary.get("mcp", {})
+    mcp_summary = data.get("summary", {}).get("mcp", {})
     total_tasks = mcp_summary.get("total", 0)
     resolved_tasks = mcp_summary.get("resolved", 0)
     resolution_rate = mcp_summary.get("rate", 0)
-    total_cost = mcp_summary.get("total_cost", 0)
-
-    run_data = {
-        "benchmark": config.get("benchmark", "unknown"),
-        "model": config.get("model", "unknown"),
-        "provider": config.get("provider", "unknown"),
-        "agent_harness": config.get("agent_harness", "unknown"),
-        "sample_size": config.get("sample_size", 0),
-        "timeout_seconds": config.get("timeout_seconds", 0),
-        "max_iterations": config.get("max_iterations", 0),
-        "resolution_rate": resolution_rate,
-        "total_cost": total_cost or 0,
-        "total_tasks": total_tasks,
-        "resolved_tasks": resolved_tasks,
-        "metadata_json": json.dumps({"label": label, "source": str(result_file)}),
-    }
-
-    task_results = []
-    for task in tasks:
-        mcp = task.get("mcp", {}) or {}
-        task_results.append(
-            {
-                "instance_id": task.get("instance_id", ""),
-                "resolved": mcp.get("resolved", False),
-                "cost": mcp.get("cost", 0),
-                "tokens_input": mcp.get("tokens_input", 0),
-                "tokens_output": mcp.get("tokens_output", 0),
-                "iterations": mcp.get("iterations", 0),
-                "tool_calls": mcp.get("tool_calls", 0),
-                "runtime_seconds": mcp.get("runtime_seconds", 0),
-                "error": mcp.get("error", ""),
-            }
-        )
 
     with ResultsDatabase(db_path) as db:
-        run_id = db.store_run(run_data, task_results)
+        run_id = db.store_run(data)
         console.print(f"[green]Stored run #{run_id} in {db_path}[/green]")
         console.print(f"  {resolved_tasks}/{total_tasks} resolved ({resolution_rate:.1%})")
         if label:
@@ -2808,7 +2766,6 @@ def regression_cmd(
 @main.group()
 def tutorial():
     """Interactive tutorials for learning mcpbr."""
-    pass
 
 
 @tutorial.command("list")

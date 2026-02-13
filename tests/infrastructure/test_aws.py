@@ -310,14 +310,14 @@ class TestHealthCheckHelpers:
     def test_check_aws_cli_installed_success(self, mock_run: MagicMock) -> None:
         """Test AWS CLI check when installed."""
         mock_run.return_value = Mock(returncode=0, stdout="/usr/local/bin/aws")
-        ok, msg = _check_aws_cli_installed()
+        ok, _msg = _check_aws_cli_installed()
         assert ok is True
 
     @patch("mcpbr.infrastructure.aws.subprocess.run")
     def test_check_aws_cli_installed_missing(self, mock_run: MagicMock) -> None:
         """Test AWS CLI check when not installed."""
         mock_run.return_value = Mock(returncode=1, stdout="")
-        ok, msg = _check_aws_cli_installed()
+        ok, _msg = _check_aws_cli_installed()
         assert ok is False
 
     @patch("mcpbr.infrastructure.aws.subprocess.run")
@@ -335,7 +335,7 @@ class TestHealthCheckHelpers:
     def test_check_aws_authenticated_failure(self, mock_run: MagicMock) -> None:
         """Test AWS auth check when not authenticated."""
         mock_run.return_value = Mock(returncode=1, stdout="", stderr="not configured")
-        ok, msg = _check_aws_authenticated()
+        ok, _msg = _check_aws_authenticated()
         assert ok is False
 
     @patch("mcpbr.infrastructure.aws.subprocess.run")
@@ -345,7 +345,7 @@ class TestHealthCheckHelpers:
             returncode=0,
             stdout='{"InstanceTypeOfferings": [{"InstanceType": "t3.large"}]}',
         )
-        ok, msg = _check_instance_type_available("us-east-1", "t3.large")
+        ok, _msg = _check_instance_type_available("us-east-1", "t3.large")
         assert ok is True
 
     @patch("mcpbr.infrastructure.aws.subprocess.run")
@@ -355,7 +355,7 @@ class TestHealthCheckHelpers:
             returncode=0,
             stdout='{"InstanceTypeOfferings": []}',
         )
-        ok, msg = _check_instance_type_available("us-east-1", "p4d.24xlarge")
+        ok, _msg = _check_instance_type_available("us-east-1", "p4d.24xlarge")
         assert ok is False
 
 
@@ -643,20 +643,24 @@ class TestSSHCIDRSafety:
     def test_get_ssh_cidr_never_returns_open(self) -> None:
         """_get_ssh_cidr must never return 0.0.0.0/0."""
         # Simulate ifconfig.me failure
-        with patch(
-            "mcpbr.infrastructure.aws.subprocess.run", side_effect=Exception("network error")
+        with (
+            patch(
+                "mcpbr.infrastructure.aws.subprocess.run", side_effect=Exception("network error")
+            ),
+            pytest.raises(RuntimeError, match="Could not determine"),
         ):
-            with pytest.raises(RuntimeError, match="Could not determine"):
-                AWSProvider._get_ssh_cidr()
+            AWSProvider._get_ssh_cidr()
 
     def test_get_ssh_cidr_validates_ip_format(self) -> None:
         """_get_ssh_cidr must validate that the response is an IP address."""
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "not-an-ip-address\n"
-        with patch("mcpbr.infrastructure.aws.subprocess.run", return_value=mock_result):
-            with pytest.raises(RuntimeError, match="Could not determine"):
-                AWSProvider._get_ssh_cidr()
+        with (
+            patch("mcpbr.infrastructure.aws.subprocess.run", return_value=mock_result),
+            pytest.raises(RuntimeError, match="Could not determine"),
+        ):
+            AWSProvider._get_ssh_cidr()
 
     def test_get_ssh_cidr_with_valid_ip(self) -> None:
         """_get_ssh_cidr should work with a valid IP response."""
@@ -695,7 +699,7 @@ class TestArtifactDownloadSafety:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise IOError("Transient SFTP failure")
+                raise OSError("Transient SFTP failure")
             (local_dir / "results.json").write_text("{}")
 
         aws_provider._recursive_download = mock_recursive_download
@@ -719,7 +723,7 @@ class TestArtifactDownloadSafety:
         aws_provider._remote_output_dir = "/home/ubuntu/.mcpbr_run_12345"
 
         def mock_recursive_download(_sftp: Any, _remote_dir: str, _local_dir: Path) -> None:
-            raise IOError("Persistent failure")
+            raise OSError("Persistent failure")
 
         aws_provider._recursive_download = mock_recursive_download
 
@@ -727,9 +731,11 @@ class TestArtifactDownloadSafety:
         mock_client.open_sftp.return_value = mock_sftp
 
         output_dir = tmp_path / "artifacts"
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with pytest.raises(RuntimeError, match="Failed to download artifacts"):
-                await aws_provider.collect_artifacts(output_dir)
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(RuntimeError, match="Failed to download artifacts"),
+        ):
+            await aws_provider.collect_artifacts(output_dir)
 
         assert aws_provider._artifacts_collected is False
 

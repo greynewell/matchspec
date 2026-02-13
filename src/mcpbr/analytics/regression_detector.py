@@ -345,9 +345,12 @@ class RegressionDetector:
         # -- Overall status --
         if score_regression_detected:
             overall_status = "fail"
-        elif cost_regression_detected or latency_regression_detected or token_regression_detected:
-            overall_status = "warning"
-        elif len(task_regressions) > 0:
+        elif (
+            cost_regression_detected
+            or latency_regression_detected
+            or token_regression_detected
+            or len(task_regressions) > 0
+        ):
             overall_status = "warning"
         else:
             overall_status = "pass"

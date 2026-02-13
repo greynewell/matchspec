@@ -310,7 +310,7 @@ class ChunkedLoader:
             builder = load_dataset_builder(self.dataset_name, **load_kwargs)
             info = builder.info
             if info.splits and self.split in info.splits:
-                return info.splits[self.split].num_examples
+                return int(info.splits[self.split].num_examples)
         except Exception:
             logger.debug(
                 "Could not determine total items for %s/%s",

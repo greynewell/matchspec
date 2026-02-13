@@ -341,9 +341,7 @@ class TestLoggingPriority:
         # 2. Else if config.disable_logs is true, logging is disabled
         # 3. Else if neither --log-dir nor --log-file is set, enable default logging
         # 4. Else use the explicitly specified logging options
-        pass
 
     def test_explicit_log_dir_overrides_all(self) -> None:
         """Test that explicit --log-dir overrides both config and defaults."""
         # This is tested in TestCLIDefaultLogging
-        pass

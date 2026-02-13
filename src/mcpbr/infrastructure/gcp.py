@@ -45,6 +45,8 @@ class GCPProvider(InfrastructureProvider):
             config: Harness configuration with GCP settings.
         """
         self.config = config
+        if config.infrastructure.gcp is None:
+            raise ValueError("GCP configuration is required for GCPProvider")
         self.gcp_config = config.infrastructure.gcp
         self.instance_name: str | None = None
         self.instance_ip: str | None = None
@@ -302,19 +304,22 @@ class GCPProvider(InfrastructureProvider):
         Raises:
             RuntimeError: If IP retrieval fails.
         """
+        assert self.instance_name is not None
+        describe_cmd = [
+            "gcloud",
+            "compute",
+            "instances",
+            "describe",
+            self.instance_name,
+            "--zone",
+            self.gcp_config.zone,
+            "--format",
+            "json(networkInterfaces[0].accessConfigs[0].natIP)",
+        ]
+        if self.gcp_config.project_id:
+            describe_cmd.extend(["--project", self.gcp_config.project_id])
         result = subprocess.run(
-            [
-                "gcloud",
-                "compute",
-                "instances",
-                "describe",
-                self.instance_name,
-                "--zone",
-                self.gcp_config.zone,
-                "--format",
-                "json(networkInterfaces[0].accessConfigs[0].natIP)",
-            ]
-            + (["--project", self.gcp_config.project_id] if self.gcp_config.project_id else []),
+            describe_cmd,
             capture_output=True,
             text=True,
             check=False,
@@ -324,7 +329,7 @@ class GCPProvider(InfrastructureProvider):
 
         try:
             data = json.loads(result.stdout)
-            ip = data["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
+            ip: str = data["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
             return ip
         except (json.JSONDecodeError, KeyError, IndexError) as e:
             raise RuntimeError(f"Failed to parse instance IP from response: {e}") from e
@@ -356,6 +361,7 @@ class GCPProvider(InfrastructureProvider):
                 # automated provisioning where MITM risk is low, but enterprise
                 # deployments may want to use RejectPolicy with pre-seeded keys.
                 self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                assert self.instance_ip is not None
                 self.ssh_client.connect(
                     self.instance_ip,
                     username=self._ssh_user,
@@ -489,6 +495,7 @@ class GCPProvider(InfrastructureProvider):
         sftp = None
         try:
             # Upload via SFTP
+            assert self.ssh_client is not None
             sftp = self.ssh_client.open_sftp()
             remote_home = f"/home/{self._ssh_user}"
             sftp.put(temp_config_path, f"{remote_home}/config.yaml")
@@ -566,7 +573,7 @@ class GCPProvider(InfrastructureProvider):
         console.print("[green]  Test task passed - setup validated[/green]")
 
     @staticmethod
-    def get_run_status(state: "RunState") -> dict:
+    def get_run_status(state: "RunState") -> dict[str, Any]:
         """Get the status of a GCE instance run.
 
         Args:
@@ -594,7 +601,8 @@ class GCPProvider(InfrastructureProvider):
         )
         if result.returncode != 0:
             return {"error": result.stderr.strip(), "status": "unknown"}
-        return json.loads(result.stdout)
+        result_dict: dict[str, Any] = json.loads(result.stdout)
+        return result_dict
 
     @staticmethod
     def get_ssh_command(state: "RunState") -> str:
@@ -679,6 +687,8 @@ class GCPProvider(InfrastructureProvider):
             # Save run state for monitoring
             from datetime import datetime
 
+            assert self.instance_name is not None
+            assert self.instance_ip is not None
             run_state = RunState(
                 vm_name=self.instance_name,
                 vm_ip=self.instance_ip,
@@ -735,6 +745,7 @@ class GCPProvider(InfrastructureProvider):
         # Wrap with bash login shell + docker group access.
         # No per-read timeout: evaluations can run for hours.
         cmd = self._wrap_cmd(raw_cmd)
+        assert self.ssh_client is not None
         _stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
         stdout.channel.settimeout(None)
 
@@ -788,6 +799,7 @@ class GCPProvider(InfrastructureProvider):
         results_path = f"{remote_output_dir}/results.json"
 
         # Download results.json
+        assert self.ssh_client is not None
         sftp = self.ssh_client.open_sftp()
 
         with tempfile.NamedTemporaryFile(mode="r", suffix=".json", delete=False) as f:
@@ -846,6 +858,7 @@ class GCPProvider(InfrastructureProvider):
         for attempt in range(max_attempts):
             sftp = None
             try:
+                assert self.ssh_client is not None
                 sftp = self.ssh_client.open_sftp()
                 await asyncio.to_thread(
                     self._recursive_download, sftp, remote_output_dir, local_archive_dir

@@ -75,7 +75,7 @@ class TestExecCommandUserParam:
 
         env = _make_task_env(container)
 
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, stdout, _stderr = await env.exec_command(
             "echo hello",
             timeout=5,
             user="mcpbr",
@@ -307,8 +307,7 @@ class TestWorkspaceVerification:
         assert len(find_calls) == 1
 
     @pytest.mark.asyncio
-    @patch("asyncio.sleep", return_value=None)
-    async def test_copy_repo_raises_on_empty_workspace(self, _mock_sleep):
+    async def test_copy_repo_raises_on_empty_workspace(self):
         """If workspace is empty after all retries, a RuntimeError should be raised."""
         container = MagicMock()
 
@@ -331,7 +330,10 @@ class TestWorkspaceVerification:
 
         manager = DockerEnvironmentManager.__new__(DockerEnvironmentManager)
 
-        with pytest.raises(RuntimeError, match="appears empty after copy"):
+        with (
+            patch("asyncio.sleep", return_value=None),
+            pytest.raises(RuntimeError, match="appears empty after copy"),
+        ):
             await manager._copy_repo_to_workspace(env)
 
     @pytest.mark.asyncio

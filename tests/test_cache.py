@@ -1,7 +1,7 @@
 """Tests for the result caching system."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -322,7 +322,7 @@ def test_cache_prune_by_age(
     # Make first file "old" by modifying its timestamp in the JSON
     with open(cache_files[0]) as f:
         data = json.load(f)
-    old_timestamp = datetime.now(timezone.utc) - timedelta(days=31)
+    old_timestamp = datetime.now(UTC) - timedelta(days=31)
     data["timestamp"] = old_timestamp.isoformat()
     with open(cache_files[0], "w") as f:
         json.dump(data, f)
@@ -370,7 +370,7 @@ def test_cached_result_serialization():
         instance_id="test-task",
         cache_key="abc123",
         result={"resolved": True, "cost": 0.05},
-        timestamp=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+        timestamp=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
         config_hash="def456",
     )
 

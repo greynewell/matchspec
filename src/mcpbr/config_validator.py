@@ -95,7 +95,7 @@ class ConfigValidator:
             if hasattr(e, "problem_mark"):
                 mark = e.problem_mark
                 line_num = mark.line + 1 if mark else None
-                error_msg = f"YAML syntax error at line {line_num}: {e.problem}"
+                error_msg = f"YAML syntax error at line {line_num}: {getattr(e, 'problem', str(e))}"
 
             self.errors.append(
                 ConfigValidationError(
@@ -150,10 +150,10 @@ class ConfigValidator:
             except ImportError:
                 try:
                     import tomli as tomllib  # type: ignore
-                except ImportError:
+                except ImportError as e:
                     raise ImportError(
                         "TOML support requires tomli package. Install with: pip install tomli"
-                    )
+                    ) from e
             return tomllib.loads(content)
         else:
             raise ValueError(f"Unsupported file format: {suffix}")
@@ -274,15 +274,18 @@ class ConfigValidator:
 
         # Validate agent_prompt placeholder
         agent_prompt = config.get("agent_prompt")
-        if agent_prompt and isinstance(agent_prompt, str):
-            if "{problem_statement}" not in agent_prompt:
-                self.warnings.append(
-                    ConfigValidationError(
-                        field="agent_prompt",
-                        error="agent_prompt doesn't contain {problem_statement} placeholder",
-                        suggestion="Include {problem_statement} placeholder to inject the task description",
-                    )
+        if (
+            agent_prompt
+            and isinstance(agent_prompt, str)
+            and "{problem_statement}" not in agent_prompt
+        ):
+            self.warnings.append(
+                ConfigValidationError(
+                    field="agent_prompt",
+                    error="agent_prompt doesn't contain {problem_statement} placeholder",
+                    suggestion="Include {problem_statement} placeholder to inject the task description",
                 )
+            )
 
     def _validate_mcp_server(self, mcp_server: Any) -> None:
         """Validate MCP server configuration.
@@ -486,7 +489,7 @@ class ConfigValidator:
                 error_msg = error["msg"]
 
                 # Try to provide helpful suggestions based on error type
-                suggestion = self._get_pydantic_error_suggestion(error)
+                suggestion = self._get_pydantic_error_suggestion(dict(error))
 
                 self.errors.append(
                     ConfigValidationError(

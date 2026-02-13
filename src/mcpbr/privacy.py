@@ -8,7 +8,7 @@ no redaction to strict PII scrubbing with custom patterns.
 import hashlib
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -215,12 +215,12 @@ class DataRetentionPolicy:
         if self._retention_days is None:
             return False
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=self._retention_days)
         ts = datetime.fromisoformat(timestamp)
 
         # Ensure timezone-aware comparison
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
 
         return ts < cutoff
 
@@ -233,7 +233,7 @@ class DataRetentionPolicy:
         if self._retention_days is None:
             return None
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=self._retention_days)
         return cutoff.isoformat()
 
 

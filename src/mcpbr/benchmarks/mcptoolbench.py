@@ -101,7 +101,7 @@ class MCPToolBenchmark:
         if filter_category:
             # Filter by category field
             filtered = []
-            category_set = set(cat.lower() for cat in filter_category)
+            category_set = {cat.lower() for cat in filter_category}
             for task in tasks:
                 task_category = task.get("category", "").lower()
                 if task_category in category_set:
@@ -243,7 +243,7 @@ class MCPToolBenchmark:
 
         # Install common dependencies
         install_cmd = "apt-get update -qq && apt-get install -y -qq curl wget jq"
-        exit_code, stdout, stderr = await env.exec_command(
+        _exit_code, _stdout, _stderr = await env.exec_command(
             install_cmd,
             timeout=300,
         )
@@ -394,7 +394,9 @@ class MCPToolBenchmark:
         # Check sequence match (exact order and tools)
         sequence_match = len(agent_calls) == len(ground_truth)
         if sequence_match:
-            for i, (agent_call, gt_call) in enumerate(zip(agent_calls, ground_truth)):
+            for _i, (agent_call, gt_call) in enumerate(
+                zip(agent_calls, ground_truth, strict=False)
+            ):
                 if agent_call.get("name", "") != gt_call.get("name", ""):
                     sequence_match = False
                     break

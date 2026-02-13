@@ -422,7 +422,7 @@ class TestMergeResults:
 class TestDistributedCoordinatorInit:
     """Tests for DistributedCoordinator construction and properties."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def minimal_config(self) -> HarnessConfig:
         """Create a minimal HarnessConfig for testing."""
         return HarnessConfig(
@@ -494,7 +494,7 @@ class TestDistributedCoordinatorInit:
 class TestDistributedCoordinatorRun:
     """Tests for DistributedCoordinator.run with edge cases."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def minimal_config(self) -> HarnessConfig:
         """Create a minimal HarnessConfig for testing."""
         return HarnessConfig(
@@ -521,7 +521,7 @@ class TestDistributedCoordinatorRun:
 class TestWorkerTimeout:
     """Tests for worker timeout handling in DistributedCoordinator."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def minimal_config(self) -> HarnessConfig:
         """Create a minimal HarnessConfig for testing."""
         return HarnessConfig(
@@ -550,7 +550,7 @@ class TestWorkerTimeout:
 
         # The result should contain timeout error info
         assert len(result.metadata["worker_errors"]) == 1
-        assert "timed out" in list(result.metadata["worker_errors"].values())[0]
+        assert "timed out" in next(iter(result.metadata["worker_errors"].values()))
         # No task results because worker was cancelled
         assert result.tasks == []
 
@@ -666,7 +666,7 @@ class TestWorkerTimeout:
 class TestSharedStateSafety:
     """Tests for concurrent access safety in DistributedCoordinator."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def minimal_config(self) -> HarnessConfig:
         """Create a minimal HarnessConfig for testing."""
         return HarnessConfig(
@@ -758,7 +758,7 @@ class TestSharedStateSafety:
 class TestErrorPropagation:
     """Tests for worker error propagation in DistributedCoordinator."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def minimal_config(self) -> HarnessConfig:
         """Create a minimal HarnessConfig for testing."""
         return HarnessConfig(

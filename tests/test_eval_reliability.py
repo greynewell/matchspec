@@ -6,7 +6,6 @@ Covers:
 - MCP prompt should include workdir (#385)
 """
 
-import asyncio
 import uuid
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -152,7 +151,7 @@ class TestEvalTimeoutCatching:
 
         mock_env = AsyncMock()
         # Simulate asyncio.TimeoutError from exec_command (Python <3.11 compat)
-        mock_env.exec_command = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_env.exec_command = AsyncMock(side_effect=TimeoutError())
 
         result = await run_tests(
             env=mock_env,
@@ -259,7 +258,7 @@ class TestEvalTimeoutInHarness:
         mock_env.cleanup = AsyncMock()
         benchmark.create_environment = AsyncMock(return_value=mock_env)
         # Make evaluate take too long — should be caught by eval_timeout
-        benchmark.evaluate = AsyncMock(side_effect=asyncio.TimeoutError())
+        benchmark.evaluate = AsyncMock(side_effect=TimeoutError())
 
         docker_manager = Mock()
 

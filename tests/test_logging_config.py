@@ -485,10 +485,9 @@ class TestLogContext:
 
         logger = get_logger("exc_safe")
 
-        with pytest.raises(RuntimeError):
-            with LogContext(logger, task_id="error-task"):
-                logger.info("Before error")
-                raise RuntimeError("test exception")
+        with pytest.raises(RuntimeError), LogContext(logger, task_id="error-task"):
+            logger.info("Before error")
+            raise RuntimeError("test exception")
 
         # After exception, context should be cleaned up
         logger.info("After error")

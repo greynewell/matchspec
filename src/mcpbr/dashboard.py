@@ -418,7 +418,7 @@ def _check_dependencies() -> None:
         )
 
 
-def create_app(state: DashboardState) -> "FastAPI":
+def create_app(state: DashboardState) -> FastAPI:
     """Build and return a configured FastAPI application.
 
     Args:

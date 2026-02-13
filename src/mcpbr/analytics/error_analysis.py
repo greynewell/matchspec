@@ -167,7 +167,7 @@ class ErrorPatternAnalyzer:
             List of error message strings found in the result.
         """
         errors: list[str] = []
-        if "error" in result and result["error"]:
+        if result.get("error"):
             errors.append(str(result["error"]))
         if "errors" in result and isinstance(result["errors"], list):
             errors.extend(str(e) for e in result["errors"] if e)

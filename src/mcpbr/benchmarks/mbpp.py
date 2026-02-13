@@ -75,7 +75,7 @@ class MBPPBenchmark:
         if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
-        augmented_tasks = []
+        augmented_tasks: list[dict[str, Any]] = []
         for task in tasks:
             augmented = dict(task)
             task_id = str(task.get("task_id", len(augmented_tasks)))

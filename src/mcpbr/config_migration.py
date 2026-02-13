@@ -308,10 +308,7 @@ class MigrationChain:
         # Convert dataset to benchmark if present
         if "dataset" in result:
             dataset_val = result.pop("dataset")
-            if dataset_val in dataset_to_benchmark:
-                result["benchmark"] = dataset_to_benchmark[dataset_val]
-            else:
-                result["benchmark"] = "swe-bench-verified"
+            result["benchmark"] = dataset_to_benchmark.get(dataset_val, "swe-bench-verified")
 
         # Add benchmark default if not present
         if "benchmark" not in result:

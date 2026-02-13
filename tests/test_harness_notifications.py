@@ -39,13 +39,13 @@ class TestBuildNotifyConfig:
         config.notify_slack_webhook = "https://hooks.slack.com/test"
         config.notify_discord_webhook = "https://discord.com/api/webhooks/test"
         config.notify_email = None
-        config.slack_bot_token = "xoxb-token"  # noqa: S105
+        config.slack_bot_token = "xoxb-token"
         config.slack_channel = "#evals"
         config.github_token = None
         result = _build_notify_config(config)
         assert result["slack_webhook"] == "https://hooks.slack.com/test"
         assert result["discord_webhook"] == "https://discord.com/api/webhooks/test"
-        assert result["slack_bot_token"] == "xoxb-token"  # noqa: S105
+        assert result["slack_bot_token"] == "xoxb-token"
         assert result["slack_channel"] == "#evals"
 
 

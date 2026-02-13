@@ -15,7 +15,6 @@ class StorageBackend(ABC):
     @abstractmethod
     async def initialize(self) -> None:
         """Initialize the storage backend (create tables, etc.)."""
-        pass
 
     @abstractmethod
     async def store_run(
@@ -36,7 +35,6 @@ class StorageBackend(ABC):
         Returns:
             The run_id of the stored run.
         """
-        pass
 
     @abstractmethod
     async def get_run(self, run_id: str) -> dict[str, Any] | None:
@@ -48,7 +46,6 @@ class StorageBackend(ABC):
         Returns:
             Run data dictionary, or None if not found.
         """
-        pass
 
     @abstractmethod
     async def list_runs(
@@ -69,7 +66,6 @@ class StorageBackend(ABC):
         Returns:
             List of run summary dictionaries.
         """
-        pass
 
     @abstractmethod
     async def store_task_result(
@@ -85,7 +81,6 @@ class StorageBackend(ABC):
             task_id: Task instance identifier.
             result: Task result data.
         """
-        pass
 
     @abstractmethod
     async def get_task_results(
@@ -102,7 +97,6 @@ class StorageBackend(ABC):
         Returns:
             List of task result dictionaries.
         """
-        pass
 
     @abstractmethod
     async def delete_run(self, run_id: str) -> bool:
@@ -114,7 +108,6 @@ class StorageBackend(ABC):
         Returns:
             True if run was deleted, False if not found.
         """
-        pass
 
     @abstractmethod
     async def get_stats(self, benchmark: str | None = None) -> dict[str, Any]:
@@ -126,9 +119,7 @@ class StorageBackend(ABC):
         Returns:
             Dictionary with aggregate statistics (total runs, avg pass rate, etc.).
         """
-        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Close the storage backend and release resources."""
-        pass

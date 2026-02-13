@@ -131,12 +131,11 @@ def normalize_path_for_docker(path: Path) -> str:
         Path string suitable for Docker volume mounts.
     """
     path_str = str(path.resolve())
-    if is_windows():
+    if is_windows() and len(path_str) >= 2 and path_str[1] == ":":
         # Convert C:\Users\... to /c/Users/...
-        if len(path_str) >= 2 and path_str[1] == ":":
-            drive = path_str[0].lower()
-            rest = path_str[2:].replace("\\", "/")
-            return f"/{drive}{rest}"
+        drive = path_str[0].lower()
+        rest = path_str[2:].replace("\\", "/")
+        return f"/{drive}{rest}"
     return path_str
 
 

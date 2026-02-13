@@ -650,7 +650,7 @@ class TestValidateStep:
             validation="command_runs:this_command_definitely_does_not_exist_12345",
             action="check",
         )
-        success, msg = engine.validate_step(step)
+        success, _msg = engine.validate_step(step)
         assert success is False
 
     def test_unknown_validation_type(self) -> None:
@@ -675,7 +675,7 @@ class TestValidateStep:
             content="X",
             validation=f"file_exists:{tmp_path}",
         )
-        success, msg = engine.validate_step(step)
+        success, _msg = engine.validate_step(step)
         assert success is True
 
     def test_command_runs_echo(self) -> None:
@@ -688,7 +688,7 @@ class TestValidateStep:
             validation="command_runs:echo hello",
             action="check",
         )
-        success, msg = engine.validate_step(step)
+        success, _msg = engine.validate_step(step)
         assert success is True
 
 

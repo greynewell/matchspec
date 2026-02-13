@@ -16,14 +16,14 @@ class TestCostExtraction:
 """
 
         (
-            total_tool_calls,
-            tool_usage,
-            tool_failures,
-            tool_errors,
+            _total_tool_calls,
+            _tool_usage,
+            _tool_failures,
+            _tool_errors,
             num_turns,
             tokens_in,
             tokens_out,
-            result_subtype,
+            _result_subtype,
             cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
@@ -41,14 +41,14 @@ class TestCostExtraction:
 """
 
         (
-            total_tool_calls,
-            tool_usage,
-            tool_failures,
-            tool_errors,
+            _total_tool_calls,
+            _tool_usage,
+            _tool_failures,
+            _tool_errors,
             num_turns,
-            tokens_in,
-            tokens_out,
-            result_subtype,
+            _tokens_in,
+            _tokens_out,
+            _result_subtype,
             cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
@@ -77,7 +77,7 @@ class TestCostExtraction:
             _,
             _,
             _,
-            num_turns,
+            _num_turns,
             tokens_in,
             tokens_out,
             _,
@@ -235,12 +235,12 @@ class TestEndToEndCost:
         (
             total_tool_calls,
             tool_usage,
-            tool_failures,
-            tool_errors,
+            _tool_failures,
+            _tool_errors,
             num_turns,
             tokens_in,
             tokens_out,
-            result_subtype,
+            _result_subtype,
             cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
@@ -282,10 +282,10 @@ class TestEndToEndCost:
         # Parse stream (should return None for cost)
         (
             _,
-            tool_usage,
+            _tool_usage,
             _,
             _,
-            num_turns,
+            _num_turns,
             tokens_in,
             tokens_out,
             _,

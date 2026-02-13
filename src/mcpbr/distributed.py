@@ -328,7 +328,7 @@ class DistributedCoordinator:
                     run_mcp=run_mcp,
                     run_baseline=run_baseline,
                 )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = time.monotonic() - start
             error_msg = (
                 f"Worker {worker_id} timed out after {self.worker_timeout}s "

@@ -93,7 +93,7 @@ class LeetCodeBenchmark:
         if sample_size is not None and len(tasks) > sample_size:
             tasks = tasks[:sample_size]
 
-        augmented_tasks = []
+        augmented_tasks: list[dict[str, Any]] = []
         for task in tasks:
             augmented = dict(task)
             task_id = task.get("id", str(len(augmented_tasks)))

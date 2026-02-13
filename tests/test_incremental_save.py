@@ -207,8 +207,8 @@ class TestIncrementalSave:
         assert jsonl_file.exists()
 
         # Loading should work with either path
-        metadata1, results1 = load_incremental_results(output_file)
-        metadata2, results2 = load_incremental_results(jsonl_file)
+        _metadata1, results1 = load_incremental_results(output_file)
+        _metadata2, results2 = load_incremental_results(jsonl_file)
 
         assert results1 == results2
 

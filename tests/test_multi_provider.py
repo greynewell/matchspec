@@ -60,7 +60,7 @@ def _reset_mock_modules():
     _mock_openai_module.OpenAI.reset_mock()
     _mock_google_generativeai.configure.reset_mock()
     _mock_google_generativeai.GenerativeModel.reset_mock()
-    yield
+    return
 
 
 # ---------------------------------------------------------------------------

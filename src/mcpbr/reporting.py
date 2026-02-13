@@ -4,7 +4,7 @@ import json
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from rich.console import Console
@@ -66,7 +66,7 @@ class ToolCoverageReport:
         # Track all tools that were used (for when available_tools not provided)
         self.available_tools.update(tool_usage.keys())
 
-    def get_coverage_metrics(self) -> dict[str, int | float | list[str]]:
+    def get_coverage_metrics(self) -> dict[str, Any]:
         """Calculate coverage metrics.
 
         Returns:
@@ -98,7 +98,7 @@ class ToolCoverageReport:
             "least_used": least_used,
         }
 
-    def to_dict(self) -> dict[str, int | float | list[str] | dict[str, int]]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert coverage report to dictionary format.
 
         Returns:
@@ -118,7 +118,7 @@ class ToolCoverageReport:
 
 def calculate_tool_coverage(
     results: "EvaluationResults", available_tools: list[str] | None = None
-) -> dict[str, int | float | list[str] | dict[str, int]]:
+) -> dict[str, Any]:
     """Calculate tool coverage from evaluation results.
 
     Args:
@@ -882,14 +882,14 @@ def save_json_results(results: "EvaluationResults", output_path: Path) -> None:
         results: Evaluation results.
         output_path: Path to save the JSON file.
     """
-    data = {
+    data: dict[str, Any] = {
         "metadata": results.metadata,
         "summary": results.summary,
         "tasks": [],
     }
 
     for task in results.tasks:
-        task_data = {
+        task_data: dict[str, Any] = {
             "instance_id": task.instance_id,
         }
         if task.mcp:
@@ -914,14 +914,14 @@ def save_yaml_results(results: "EvaluationResults", output_path: Path) -> None:
         results: Evaluation results.
         output_path: Path to save the YAML file.
     """
-    data = {
+    data: dict[str, Any] = {
         "metadata": results.metadata,
         "summary": results.summary,
         "tasks": [],
     }
 
     for task in results.tasks:
-        task_data = {
+        task_data: dict[str, Any] = {
             "instance_id": task.instance_id,
         }
         if task.mcp:

@@ -223,17 +223,15 @@ class TestDetectColorSupport:
 
     def test_tty_detection(self) -> None:
         """Returns True when stdout.isatty() reports True."""
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("sys.stdout") as mock_stdout:
-                mock_stdout.isatty.return_value = True
-                assert detect_color_support() is True
+        with patch.dict(os.environ, {}, clear=True), patch("sys.stdout") as mock_stdout:
+            mock_stdout.isatty.return_value = True
+            assert detect_color_support() is True
 
     def test_non_tty_detection(self) -> None:
         """Returns False when stdout.isatty() reports False."""
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("sys.stdout") as mock_stdout:
-                mock_stdout.isatty.return_value = False
-                assert detect_color_support() is False
+        with patch.dict(os.environ, {}, clear=True), patch("sys.stdout") as mock_stdout:
+            mock_stdout.isatty.return_value = False
+            assert detect_color_support() is False
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +467,7 @@ class TestOutputFormatterFormat:
         """PLAIN theme format strings have no markup."""
         fmt = OutputFormatter(theme=Theme.PLAIN, force_color=True)
         result = fmt.format_success("ok")
-        assert "[ok] ok" == result
+        assert result == "[ok] ok"
 
 
 # ---------------------------------------------------------------------------

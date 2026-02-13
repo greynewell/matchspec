@@ -21,7 +21,7 @@ def mock_docker_client():
 
 
 @pytest.fixture
-def mock_env(mock_docker_client, tmp_path):  # noqa: ARG001
+def mock_env(mock_docker_client, tmp_path):
     """Create a mock TaskEnvironment with repo metadata."""
     from mcpbr.docker_env import DockerEnvironmentManager
 
@@ -66,7 +66,7 @@ class TestMCPBREnvVarsInSetupCommand:
         written_content = {}
 
         async def mock_exec(cmd, **_kwargs):
-            if isinstance(cmd, str) and "cat > /tmp/.mcpbr_env.sh" in cmd:  # noqa: S108
+            if isinstance(cmd, str) and "cat > /tmp/.mcpbr_env.sh" in cmd:
                 written_content["env_file"] = cmd
             return (0, "", "")
 
@@ -122,20 +122,22 @@ class TestMCPBREnvVarsInMCPJson:
         mock_env.exec_command_streaming = AsyncMock(return_value=(0, "", ""))
 
         # Need ANTHROPIC_API_KEY to be set
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
-            with contextlib.suppress(Exception):
-                await harness._solve_in_docker(
-                    task={
-                        "problem_statement": "test",
-                        "instance_id": "django__django-12345",
-                        "repo": "django/django",
-                        "base_commit": "abc123def",
-                    },
-                    env=mock_env,
-                    timeout=10,
-                    verbose=False,
-                    task_id="django__django-12345",
-                )
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}),
+            contextlib.suppress(Exception),
+        ):
+            await harness._solve_in_docker(
+                task={
+                    "problem_statement": "test",
+                    "instance_id": "django__django-12345",
+                    "repo": "django/django",
+                    "base_commit": "abc123def",
+                },
+                env=mock_env,
+                timeout=10,
+                verbose=False,
+                task_id="django__django-12345",
+            )
 
         if "config" in written_mcp_json:
             mcp_config_data = written_mcp_json["config"]

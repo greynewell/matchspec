@@ -79,7 +79,7 @@ class TestGetTemplate:
 
     def test_get_all_templates(self) -> None:
         """Test getting each template by ID."""
-        for template_id in TEMPLATES.keys():
+        for template_id in TEMPLATES:
             template = get_template(template_id)
             assert template is not None
             assert template.id == template_id
@@ -234,7 +234,7 @@ class TestGenerateConfigYaml:
 
     def test_all_templates_generate_valid_yaml(self) -> None:
         """Test that all templates can generate valid YAML."""
-        for template_id in TEMPLATES.keys():
+        for template_id in TEMPLATES:
             template = get_template(template_id)
             assert template is not None
 

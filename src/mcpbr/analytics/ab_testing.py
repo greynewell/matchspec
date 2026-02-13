@@ -340,7 +340,7 @@ class ABTest:
         if self._analysis is None:
             self.analyze()
 
-        assert self._analysis is not None  # for type checker
+        assert self._analysis is not None
         a = self._analysis
 
         ctrl = a["control"]

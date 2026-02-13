@@ -136,14 +136,14 @@ Please analyze the problem and provide a unified diff patch to fix it.
         """Gather repository context for the baseline agent."""
         context_parts = []
 
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, stdout, _stderr = await env.exec_command(
             "find . -type f -name '*.py' | head -50",
             timeout=30,
         )
         if exit_code == 0 and stdout:
             context_parts.append(f"Python files in repository:\n{stdout}")
 
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, stdout, _stderr = await env.exec_command(
             "ls -la",
             timeout=10,
         )
@@ -154,7 +154,7 @@ Please analyze the problem and provide a unified diff patch to fix it.
         keywords = self._extract_keywords(problem)
 
         for keyword in keywords[:3]:
-            exit_code, stdout, stderr = await env.exec_command(
+            exit_code, stdout, _stderr = await env.exec_command(
                 f"grep -rl '{keyword}' --include='*.py' . 2>/dev/null | head -5",
                 timeout=30,
             )
@@ -181,7 +181,6 @@ Please analyze the problem and provide a unified diff patch to fix it.
                 and word
                 not in {"this", "that", "with", "from", "have", "when", "should", "would", "could"}
                 and not word.isupper()
-            ):
-                if word not in keywords:
-                    keywords.append(word)
+            ) and word not in keywords:
+                keywords.append(word)
         return keywords[:10]

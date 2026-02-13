@@ -162,7 +162,7 @@ class SmokeTestRunner:
 
             # Make a minimal API call to test connectivity
             response = await asyncio.to_thread(
-                client.messages.create,
+                client.messages.create,  # type: ignore[arg-type]
                 model="claude-3-5-haiku-20241022",  # Use fastest/cheapest model
                 max_tokens=10,
                 messages=[{"role": "user", "content": "test"}],
@@ -359,7 +359,7 @@ async def run_smoke_test(config_path: Path) -> bool:
     console.print()
 
     summary = runner.get_summary()
-    return summary["all_passed"]
+    return bool(summary["all_passed"])
 
 
 async def run_mcp_preflight_check(

@@ -16,6 +16,15 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run --extra dev mypy src/mcpbr/
+        language: system
+        pass_filenames: false
+        types: [python]
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

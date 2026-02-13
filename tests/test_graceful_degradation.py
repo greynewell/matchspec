@@ -1,7 +1,5 @@
 """Tests for graceful degradation module."""
 
-# ruff: noqa: N801
-
 import asyncio
 import json
 import tempfile
@@ -110,7 +108,7 @@ class TestClassifyFailure:
 
     def test_asyncio_timeout_is_transient(self) -> None:
         """Test that asyncio.TimeoutError is classified as transient."""
-        error = asyncio.TimeoutError()
+        error = TimeoutError()
         result = classify_failure(error)
         assert result == FailureType.TRANSIENT
 

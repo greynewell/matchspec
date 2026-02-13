@@ -11,11 +11,13 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from .audit import AuditLogger
     from .sandbox import SandboxProfile
+
+import contextlib
 
 from docker.models.containers import Container
 from docker.models.networks import Network
@@ -49,10 +51,8 @@ class ContainerDiedError(RuntimeError):
 def _cleanup_on_exit() -> None:
     """Clean up all active managers on process exit."""
     for manager in _active_managers:
-        try:
+        with contextlib.suppress(Exception):
             manager.cleanup_all_sync()
-        except Exception:
-            pass
 
 
 atexit.register(_cleanup_on_exit)
@@ -233,7 +233,8 @@ class TaskEnvironment:
         def _exec_streaming() -> tuple[int, str, str]:
             try:
                 # Create the exec instance
-                exec_id = self.container.client.api.exec_create(
+                assert self.container.client is not None
+                exec_id: Any = self.container.client.api.exec_create(
                     self.container.id,
                     command,
                     workdir=wd,
@@ -259,7 +260,9 @@ class TaskEnvironment:
             stdout_lines: list[str] = []
             stderr_lines: list[str] = []
 
-            for stdout_chunk, stderr_chunk in output_gen:
+            for stdout_chunk, stderr_chunk in cast(
+                "list[tuple[bytes | None, bytes | None]]", output_gen
+            ):
                 if stdout_chunk:
                     decoded = stdout_chunk.decode("utf-8", errors="replace")
                     stdout_lines.append(decoded)
@@ -368,17 +371,13 @@ class TaskEnvironment:
         # Remove from manager's container list on success so cleanup_all_sync
         # doesn't retry. On failure, keep in list so it gets retried at exit.
         if _cleanup_succeeded and self._manager is not None:
-            try:
+            with contextlib.suppress(ValueError):
                 self._manager._containers.remove(self.container)
-            except ValueError:
-                pass  # Signal handler may have already cleared the list
 
         # Clean up temp directory immediately
         if self._temp_dir is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._temp_dir.cleanup()
-            except Exception:
-                pass
 
             # Remove from manager's list to avoid double cleanup
             if self._manager is not None and self._temp_dir in self._manager._temp_dirs:
@@ -420,7 +419,7 @@ class DockerEnvironmentManager:
         self._volumes: list[Volume] = []
         self._networks: list[Network] = []
         self._session_id = uuid.uuid4().hex[:8]
-        self._session_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        self._session_timestamp = datetime.datetime.now(datetime.UTC).isoformat()
         _active_managers.append(self)
 
     async def _try_pull_prebuilt(self, instance_id: str) -> str | None:
@@ -635,8 +634,8 @@ CMD ["/bin/bash"]
                         try:
                             stale = self.client.containers.get(container_name)
                             stale.remove(force=True)
-                        except Exception:
-                            pass  # Container may already be gone
+                        except Exception:  # noqa: S110 -- best-effort cleanup; container may already be gone
+                            pass
                         time.sleep(1)
                         continue
 
@@ -652,6 +651,9 @@ CMD ["/bin/bash"]
 
                     # Re-raise for unrecoverable errors or after max retries
                     raise
+
+            # Unreachable: the loop always returns or raises
+            raise RuntimeError("Container creation failed after all retries")
 
         loop = asyncio.get_event_loop()
         container = await loop.run_in_executor(None, _create_container)
@@ -750,7 +752,7 @@ CMD ["/bin/bash"]
             env: Task environment with pre-built image.
         """
         # --- Phase 1: initial copy + verify ---
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, _stdout, stderr = await env.exec_command(
             "cp -r /testbed/. /workspace/",
             timeout=120,
         )
@@ -870,10 +872,10 @@ CMD ["/bin/bash"]
                 raise RuntimeError(f"Cannot reach container: {e}") from e
 
             try:
-                exit_code, stdout, stderr = await env.exec_command(
+                exit_code, _stdout, stderr = await env.exec_command(
                     install_node_cmd,
                     timeout=300,
-                    workdir="/tmp",
+                    workdir="/tmp",  # noqa: S108 -- Docker container temp directory
                 )
             except Exception as e:
                 # exec itself failed (container died mid-command)
@@ -907,10 +909,10 @@ CMD ["/bin/bash"]
         last_error = ""
         for attempt in range(3):
             try:
-                exit_code, stdout, stderr = await env.exec_command(
+                exit_code, _stdout, stderr = await env.exec_command(
                     f"npm install -g {claude_pkg}",
                     timeout=120,
-                    workdir="/tmp",
+                    workdir="/tmp",  # noqa: S108 -- Docker container temp directory
                 )
             except Exception as e:
                 last_error = f"exec failed: {e}"
@@ -946,10 +948,10 @@ CMD ["/bin/bash"]
             "chown -R mcpbr:mcpbr /workspace && "
             f"chown -R mcpbr:mcpbr {env.workdir}"
         )
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, _stdout, stderr = await env.exec_command(
             create_user_cmd,
             timeout=30,
-            workdir="/tmp",
+            workdir="/tmp",  # noqa: S108 -- Docker container temp directory
         )
         if exit_code != 0:
             raise RuntimeError(f"Failed to create non-root user: {stderr}")
@@ -977,19 +979,19 @@ CMD ["/bin/bash"]
         """Clone the repository at the specified commit (fallback path)."""
         repo_url = f"https://github.com/{repo}.git"
 
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, _stdout, stderr = await env.exec_command(
             f"git clone --depth 100 {repo_url} .",
             timeout=120,
         )
         if exit_code != 0:
             raise RuntimeError(f"Failed to clone {repo}: {stderr}")
 
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, _stdout, stderr = await env.exec_command(
             f"git fetch --depth 100 origin {base_commit}",
             timeout=60,
         )
 
-        exit_code, stdout, stderr = await env.exec_command(
+        exit_code, _stdout, stderr = await env.exec_command(
             f"git checkout {base_commit}",
             timeout=30,
         )
@@ -1042,7 +1044,7 @@ CMD ["/bin/bash"]
         # Clean up networks
         for network in self._networks:
             try:
-                network_name = network.name
+                network_name = network.name or ""
                 network.remove()
                 cleanup_report.networks_removed.append(network_name)
             except Exception as e:
@@ -1062,10 +1064,8 @@ CMD ["/bin/bash"]
             _active_managers.remove(self)
 
         # Close the Docker client to release background threads/connections
-        try:
+        with contextlib.suppress(Exception):
             self.client.close()
-        except Exception:
-            pass
 
         if report and cleanup_report.total_removed > 0:
             logger.info(str(cleanup_report))
@@ -1153,7 +1153,7 @@ def cleanup_orphaned_containers(
         filters={"label": f"{MCPBR_LABEL}=true"},
     )
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
 
     for container in containers:
         name = container.name or container.short_id
@@ -1231,7 +1231,7 @@ def cleanup_orphaned_networks(dry_run: bool = False) -> list[str]:
         return removed
 
     for network in networks:
-        network_name = network.name
+        network_name = network.name or ""
         # Skip default networks
         if network_name in ("bridge", "host", "none"):
             continue

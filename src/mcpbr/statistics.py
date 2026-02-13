@@ -344,7 +344,7 @@ def _calculate_tool_stats(results: list[TaskResult]) -> ToolStatistics:
     stats = ToolStatistics()
     tool_usage_counter: Counter[str] = Counter()
     tool_failure_counter: Counter[str] = Counter()
-    per_tool_stats: dict[str, dict[str, int]] = {}
+    per_tool_stats: dict[str, dict[str, int | float]] = {}
     task_count = 0
 
     for task in results:

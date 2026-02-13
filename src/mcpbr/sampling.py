@@ -101,7 +101,7 @@ def _sample_random(
     Returns:
         Randomly selected tasks.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 -- not used for cryptographic purposes; deterministic sampling
     return rng.sample(tasks, sample_size)
 
 
@@ -147,7 +147,7 @@ def _sample_stratified(
         )
 
     total_tasks = len(tasks)
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 -- not used for cryptographic purposes; deterministic sampling
 
     # Sort group keys for deterministic ordering
     sorted_keys = sorted(groups.keys())

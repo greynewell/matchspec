@@ -1,6 +1,6 @@
 """Tests for privacy controls module."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from mcpbr.privacy import (
     DataRetentionPolicy,
@@ -287,13 +287,13 @@ class TestDataRetentionPolicy:
     def test_recent_not_expired(self) -> None:
         """Test that a timestamp from 1 day ago is not expired with 30-day retention."""
         policy = DataRetentionPolicy(retention_days=30)
-        recent = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        recent = (datetime.now(UTC) - timedelta(days=1)).isoformat()
         assert policy.is_expired(recent) is False
 
     def test_old_is_expired(self) -> None:
         """Test that a timestamp from 60 days ago is expired with 30-day retention."""
         policy = DataRetentionPolicy(retention_days=30)
-        old = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        old = (datetime.now(UTC) - timedelta(days=60)).isoformat()
         assert policy.is_expired(old) is True
 
     def test_get_expiry_date_with_retention(self) -> None:
@@ -314,14 +314,14 @@ class TestDataRetentionPolicy:
         """Test that a timestamp exactly at the retention boundary is not expired."""
         policy = DataRetentionPolicy(retention_days=30)
         # Use a timestamp just barely within the retention window
-        just_within = (datetime.now(timezone.utc) - timedelta(days=29, hours=23)).isoformat()
+        just_within = (datetime.now(UTC) - timedelta(days=29, hours=23)).isoformat()
         assert policy.is_expired(just_within) is False
 
     def test_naive_timestamp_treated_as_utc(self) -> None:
         """Test that a naive timestamp (no timezone) is treated as UTC."""
         policy = DataRetentionPolicy(retention_days=30)
         # Create a naive ISO timestamp from 60 days ago
-        old_naive = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%S")
+        old_naive = (datetime.now(UTC) - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%S")
         assert policy.is_expired(old_naive) is True
 
 

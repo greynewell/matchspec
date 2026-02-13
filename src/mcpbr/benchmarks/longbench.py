@@ -157,7 +157,7 @@ class LongBenchBenchmark:
                     task["_subset"] = subset_name
                     task["_original_index"] = idx
                     all_tasks.append(task)
-            except Exception:
+            except Exception:  # noqa: S112 -- intentionally skip unavailable dataset subsets and continue loading others
                 # Skip subsets that fail to load (e.g., unavailable configs)
                 continue
 

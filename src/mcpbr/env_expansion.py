@@ -102,7 +102,7 @@ def _expand_string(text: str, required_vars: set[str]) -> str:
             return env_value
         elif default_value is not None:
             # Default value provided, use it
-            return default_value
+            return str(default_value)
         else:
             # Required variable missing
             required_vars.add(var_name)
@@ -136,20 +136,16 @@ def validate_config_security(config_dict: dict[str, Any]) -> list[str]:
             # Check if the key name suggests sensitive data
             key_lower = key.lower()
 
-            # Check for API keys (more specific patterns first)
-            if any(keyword in key_lower for keyword in ["api_key", "api-key", "apikey"]):
-                if len(value) > 5:  # Avoid warning on short values
-                    warnings.append(
-                        f"Possible API key hardcoded at '{path}'. "
-                        f"Consider using environment variables: ${{API_KEY}}"
-                    )
-            # Check for generic "key" last to avoid false positives
-            elif key_lower.endswith("key") and not key_lower.endswith("_key"):
-                if len(value) > 10:  # Higher threshold for generic "key"
-                    warnings.append(
-                        f"Possible API key hardcoded at '{path}'. "
-                        f"Consider using environment variables: ${{API_KEY}}"
-                    )
+            # Check for API keys (specific patterns with lower threshold,
+            # generic "key" suffix with higher threshold to avoid false positives)
+            if (
+                any(keyword in key_lower for keyword in ["api_key", "api-key", "apikey"])
+                and len(value) > 5
+            ) or (key_lower.endswith("key") and not key_lower.endswith("_key") and len(value) > 10):
+                warnings.append(
+                    f"Possible API key hardcoded at '{path}'. "
+                    f"Consider using environment variables: ${{API_KEY}}"
+                )
 
             # Check for tokens in key name
             if "token" in key_lower and len(value) > 10:

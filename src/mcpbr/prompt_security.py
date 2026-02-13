@@ -8,13 +8,13 @@ for custom patterns and allowlists.
 import logging
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class SecurityAction(str, Enum):
+class SecurityAction(StrEnum):
     """Action to take when a security finding is detected."""
 
     AUDIT = "audit"
@@ -22,7 +22,7 @@ class SecurityAction(str, Enum):
     BLOCK = "block"
 
 
-class FindingSeverity(str, Enum):
+class FindingSeverity(StrEnum):
     """Severity level of a security finding."""
 
     LOW = "low"
@@ -330,10 +330,7 @@ class PromptSecurityScanner:
         Returns:
             True if the text matches an allowlist pattern.
         """
-        for allowlist_re in self._compiled_allowlist:
-            if allowlist_re.search(text):
-                return True
-        return False
+        return any(allowlist_re.search(text) for allowlist_re in self._compiled_allowlist)
 
 
 def parse_prompt_security_config(config_dict: dict[str, Any]) -> PromptSecurityConfig:

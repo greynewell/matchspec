@@ -9,7 +9,7 @@ This module provides detailed performance profiling including:
 
 import statistics
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -90,11 +90,11 @@ class PerformanceProfiler:
 
     def start_task(self) -> None:
         """Mark the start of a task."""
-        self.task_start = datetime.now(timezone.utc)
+        self.task_start = datetime.now(UTC)
 
     def end_task(self) -> None:
         """Mark the end of a task."""
-        self.task_end = datetime.now(timezone.utc)
+        self.task_end = datetime.now(UTC)
 
     def record_tool_call(
         self,
@@ -144,7 +144,7 @@ class PerformanceProfiler:
             memory_info = process.memory_info()
 
             sample = MemorySample(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 rss_mb=memory_info.rss / 1024 / 1024,
                 vms_mb=memory_info.vms / 1024 / 1024,
             )
@@ -152,7 +152,7 @@ class PerformanceProfiler:
         except ImportError:
             # psutil not available, disable memory profiling
             self.enable_memory_profiling = False
-        except Exception:
+        except Exception:  # noqa: S110 -- best-effort memory sampling; non-critical telemetry
             # Failed to sample memory, skip silently
             pass
 
@@ -444,14 +444,14 @@ def merge_profiling_reports(reports: list[dict[str, Any]]) -> dict[str, Any]:
         aggregated["avg_time_to_first_tool_seconds"] = statistics.mean(time_to_first_tools)
 
     # Aggregate infrastructure overhead
-    docker_startups = [
-        r.get("docker_startup_seconds") for r in reports if r.get("docker_startup_seconds")
+    docker_startups: list[float] = [
+        r["docker_startup_seconds"] for r in reports if r.get("docker_startup_seconds")
     ]
     if docker_startups:
         aggregated["avg_docker_startup_seconds"] = statistics.mean(docker_startups)
 
-    mcp_startups = [
-        r.get("mcp_server_startup_seconds") for r in reports if r.get("mcp_server_startup_seconds")
+    mcp_startups: list[float] = [
+        r["mcp_server_startup_seconds"] for r in reports if r.get("mcp_server_startup_seconds")
     ]
     if mcp_startups:
         aggregated["avg_mcp_server_startup_seconds"] = statistics.mean(mcp_startups)

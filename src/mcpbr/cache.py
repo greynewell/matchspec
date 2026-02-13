@@ -8,7 +8,7 @@ and prompt to ensure cache hits only occur for truly identical evaluations.
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +27,7 @@ class CacheStats:
 
     def format_size(self) -> str:
         """Format cache size in human-readable format."""
-        size = self.total_size_bytes
+        size: float = float(self.total_size_bytes)
         for unit in ["B", "KB", "MB", "GB"]:
             if size < 1024.0:
                 return f"{size:.1f} {unit}"
@@ -128,7 +128,7 @@ class ResultCache:
         }
 
         # Add MCP server config if this is MCP agent
-        if is_mcp:
+        if is_mcp and config.mcp_server is not None:
             key_parts["mcp_server"] = {
                 "command": config.mcp_server.command,
                 "args": config.mcp_server.args,
@@ -230,7 +230,7 @@ class ResultCache:
             instance_id=task.get("instance_id", "unknown"),
             cache_key=cache_key,
             result=result,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             config_hash=config_hash,
         )
 
@@ -366,7 +366,7 @@ class ResultCache:
 
         # Remove by age
         if max_age_days is not None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             for cache_file in cache_files:
                 try:
                     with open(cache_file) as f:

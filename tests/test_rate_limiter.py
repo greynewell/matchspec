@@ -1,7 +1,5 @@
 """Tests for rate limiting module."""
 
-# ruff: noqa: N801
-
 import asyncio
 import time
 

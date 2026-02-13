@@ -167,7 +167,7 @@ class MMMUBenchmark:
                     elif isinstance(image, str):
                         # Already base64 or a path - store as-is
                         images.append(image)
-                except Exception:
+                except Exception:  # noqa: S112 -- intentionally skip unreadable images and continue processing others
                     # Skip images that cannot be encoded
                     continue
         return images
@@ -323,7 +323,7 @@ class MMMUBenchmark:
         # Pattern 4: Standalone letter (last single A-D found as a word boundary)
         matches = re.findall(r"\b([A-D])\b", text_upper)
         if matches:
-            return matches[-1]
+            return str(matches[-1])
 
         return None
 

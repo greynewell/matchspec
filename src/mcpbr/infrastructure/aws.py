@@ -74,6 +74,8 @@ class AWSProvider(InfrastructureProvider):
             config: Harness configuration with AWS settings.
         """
         self.config = config
+        if config.infrastructure.aws is None:
+            raise ValueError("AWS configuration is required for AWSProvider")
         self.aws_config = config.infrastructure.aws
         self.instance_id: str | None = None
         self.instance_ip: str | None = None
@@ -157,7 +159,7 @@ class AWSProvider(InfrastructureProvider):
         console = Console()
 
         # Generate or use existing SSH key
-        ssh_key_name = self.aws_config.key_name
+        ssh_key_name: str | None = getattr(self.aws_config, "key_name", None)
         ssh_key_path = self.aws_config.ssh_key_path
         if not ssh_key_path:
             ssh_key_path = Path.home() / ".ssh" / "mcpbr_aws"
@@ -219,7 +221,7 @@ class AWSProvider(InfrastructureProvider):
                 console.print(f"[dim]Key pair {ssh_key_name} already exists, reusing[/dim]")
 
         # Determine AMI (default to Ubuntu 22.04 in the specified region)
-        ami_id = self.aws_config.ami_id
+        ami_id = self.aws_config.ami
         if not ami_id:
             console.print("[cyan]Looking up latest Ubuntu 22.04 AMI...[/cyan]")
             result = subprocess.run(
@@ -360,10 +362,8 @@ class AWSProvider(InfrastructureProvider):
         if self.aws_config.subnet_id:
             run_cmd.extend(["--subnet-id", self.aws_config.subnet_id])
 
-        if self.aws_config.iam_instance_profile:
-            run_cmd.extend(
-                ["--iam-instance-profile", f"Name={self.aws_config.iam_instance_profile}"]
-            )
+        if self.aws_config.iam_role:
+            run_cmd.extend(["--iam-instance-profile", f"Name={self.aws_config.iam_role}"])
 
         result = subprocess.run(
             run_cmd,
@@ -414,6 +414,7 @@ class AWSProvider(InfrastructureProvider):
         Raises:
             RuntimeError: If IP retrieval fails.
         """
+        assert self.instance_id is not None
         result = subprocess.run(
             [
                 "aws",
@@ -436,7 +437,7 @@ class AWSProvider(InfrastructureProvider):
         if result.returncode != 0:
             raise RuntimeError(f"Failed to get instance IP: {result.stderr}")
 
-        ip = result.stdout.strip()
+        ip: str = result.stdout.strip()
         if not ip or ip == "None":
             raise RuntimeError(
                 f"Instance {self.instance_id} has no public IP. "
@@ -472,6 +473,7 @@ class AWSProvider(InfrastructureProvider):
                 # automated provisioning where MITM risk is low, but enterprise
                 # deployments may want to use RejectPolicy with pre-seeded keys.
                 self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                assert self.instance_ip is not None
                 self.ssh_client.connect(
                     self.instance_ip,
                     username="ubuntu",
@@ -602,6 +604,7 @@ class AWSProvider(InfrastructureProvider):
         sftp = None
         try:
             # Upload via SFTP
+            assert self.ssh_client is not None
             sftp = self.ssh_client.open_sftp()
             sftp.put(temp_config_path, "/home/ubuntu/config.yaml")
             console.print("[green]Configuration transferred[/green]")
@@ -765,6 +768,7 @@ class AWSProvider(InfrastructureProvider):
         # Wrap with bash login shell + docker group access.
         # No per-read timeout: evaluations can run for hours.
         cmd = self._wrap_cmd(raw_cmd)
+        assert self.ssh_client is not None
         _stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
         stdout.channel.settimeout(None)
 
@@ -818,6 +822,7 @@ class AWSProvider(InfrastructureProvider):
         results_path = f"{remote_output_dir}/results.json"
 
         # Download results.json
+        assert self.ssh_client is not None
         sftp = self.ssh_client.open_sftp()
 
         with tempfile.NamedTemporaryFile(mode="r", suffix=".json", delete=False) as f:
@@ -876,6 +881,7 @@ class AWSProvider(InfrastructureProvider):
         for attempt in range(max_attempts):
             sftp = None
             try:
+                assert self.ssh_client is not None
                 sftp = self.ssh_client.open_sftp()
                 await asyncio.to_thread(
                     self._recursive_download, sftp, remote_output_dir, local_archive_dir

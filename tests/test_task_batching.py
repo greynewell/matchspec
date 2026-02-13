@@ -255,7 +255,7 @@ class TestTaskBatcherInit:
 
     def test_min_exceeds_max_raises(self) -> None:
         """Test that min_batch_size > max_batch_size raises ValueError."""
-        with pytest.raises(ValueError, match="min_batch_size.*must be <= max_batch_size"):
+        with pytest.raises(ValueError, match=r"min_batch_size.*must be <= max_batch_size"):
             TaskBatcher(max_batch_size=3, min_batch_size=5)
 
     def test_min_equals_max_ok(self) -> None:

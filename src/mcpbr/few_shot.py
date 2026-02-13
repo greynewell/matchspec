@@ -211,7 +211,7 @@ def _select_random(
     Returns:
         Randomly selected examples.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 -- not used for cryptographic purposes; deterministic sampling
     return rng.sample(pool, num)
 
 
@@ -240,7 +240,7 @@ def _select_similar(
         Examples sorted by descending similarity, with ties broken
         deterministically when *seed* is provided.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 -- not used for cryptographic purposes; deterministic sampling
 
     scored: list[tuple[float, int, dict[str, Any]]] = []
     for idx, example in enumerate(pool):
@@ -328,7 +328,7 @@ def _select_diverse(
     Returns:
         Diverse selection of examples from different categories.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 -- not used for cryptographic purposes; deterministic sampling
 
     # Group by category
     categories: dict[str, list[dict[str, Any]]] = {}
@@ -346,7 +346,7 @@ def _select_diverse(
     sorted_cats = sorted(categories.keys())
 
     # Track current index within each category's shuffled list
-    cat_indices: dict[str, int] = {cat: 0 for cat in sorted_cats}
+    cat_indices: dict[str, int] = dict.fromkeys(sorted_cats, 0)
 
     result: list[dict[str, Any]] = []
     while len(result) < num:

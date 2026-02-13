@@ -264,7 +264,7 @@ class TestTemplateIntegration:
         """Test that all templates create valid, parseable configs."""
         runner = CliRunner()
 
-        for template_id in TEMPLATES.keys():
+        for template_id in TEMPLATES:
             with tempfile.TemporaryDirectory() as tmpdir:
                 output_path = Path(tmpdir) / f"{template_id}.yaml"
 

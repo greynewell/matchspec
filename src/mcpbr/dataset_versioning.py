@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -66,7 +66,7 @@ def pin_dataset_version(
         checksum_data += ":" + ",".join(file_names)
     checksum = hashlib.sha256(checksum_data.encode()).hexdigest()
 
-    download_date = datetime.now(timezone.utc).isoformat()
+    download_date = datetime.now(UTC).isoformat()
 
     version = DatasetVersion(
         dataset_id=dataset_id,
@@ -133,7 +133,7 @@ def save_version_manifest(
     """
     manifest: dict[str, Any] = {
         "format_version": "1.0",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "datasets": {},
     }
 
@@ -212,7 +212,7 @@ def get_dataset_info(dataset_id: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "dataset_id": dataset_id,
         "latest_revision": info.sha,
-        "description": info.description or "",
+        "description": getattr(info, "description", "") or "",
         "tags": list(info.tags) if info.tags else [],
         "downloads": info.downloads if info.downloads is not None else 0,
         "last_modified": info.last_modified.isoformat() if info.last_modified else None,

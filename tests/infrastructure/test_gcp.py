@@ -104,9 +104,11 @@ class TestGCPSSHFirewallSafety:
                 raise Exception("network error")
             return Mock(returncode=0, stdout="", stderr="")
 
-        with patch("mcpbr.infrastructure.gcp.subprocess.run", side_effect=mock_run_side_effects):
-            with pytest.raises(RuntimeError, match="Could not determine"):
-                await provider._ensure_ssh_firewall_rule()
+        with (
+            patch("mcpbr.infrastructure.gcp.subprocess.run", side_effect=mock_run_side_effects),
+            pytest.raises(RuntimeError, match="Could not determine"),
+        ):
+            await provider._ensure_ssh_firewall_rule()
 
     async def test_firewall_rule_validates_ip_format(self, mock_config: MagicMock) -> None:
         """Firewall rule creation should validate the IP address format."""
@@ -122,9 +124,11 @@ class TestGCPSSHFirewallSafety:
                 return Mock(returncode=0, stdout="not-an-ip\n")
             return Mock(returncode=0, stdout="", stderr="")
 
-        with patch("mcpbr.infrastructure.gcp.subprocess.run", side_effect=mock_run_side_effects):
-            with pytest.raises(RuntimeError, match="Could not determine"):
-                await provider._ensure_ssh_firewall_rule()
+        with (
+            patch("mcpbr.infrastructure.gcp.subprocess.run", side_effect=mock_run_side_effects),
+            pytest.raises(RuntimeError, match="Could not determine"),
+        ):
+            await provider._ensure_ssh_firewall_rule()
 
     async def test_firewall_rule_with_valid_ip(self, mock_config: MagicMock) -> None:
         """Firewall rule should work with a valid IP response."""
@@ -211,7 +215,7 @@ class TestArtifactDownloadSafety:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise IOError("Transient SFTP failure")
+                raise OSError("Transient SFTP failure")
             (local_dir / "results.json").write_text("{}")
 
         provider._recursive_download = mock_recursive_download
@@ -238,7 +242,7 @@ class TestArtifactDownloadSafety:
         provider._remote_output_dir = "/home/user/.mcpbr_run_12345"
 
         def mock_recursive_download(_sftp: Any, _remote_dir: str, _local_dir: Path) -> None:
-            raise IOError("Persistent failure")
+            raise OSError("Persistent failure")
 
         provider._recursive_download = mock_recursive_download
 
@@ -246,9 +250,11 @@ class TestArtifactDownloadSafety:
         mock_client.open_sftp.return_value = mock_sftp
 
         output_dir = tmp_path / "artifacts"
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with pytest.raises(RuntimeError, match="Failed to download artifacts"):
-                await provider.collect_artifacts(output_dir)
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(RuntimeError, match="Failed to download artifacts"),
+        ):
+            await provider.collect_artifacts(output_dir)
 
         assert provider._artifacts_collected is False
 

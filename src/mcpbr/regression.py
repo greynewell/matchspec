@@ -66,9 +66,10 @@ def load_baseline_results(baseline_path: Path) -> dict[str, Any]:
 
     try:
         with open(baseline_path) as f:
-            return json.load(f)
+            data: dict[str, Any] = json.load(f)
+            return data
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in baseline file: {e}")
+        raise ValueError(f"Invalid JSON in baseline file: {e}") from e
 
 
 def detect_regressions(
@@ -94,7 +95,7 @@ def detect_regressions(
     improvements = []
 
     # Compare tasks present in both runs
-    for instance_id in baseline_map.keys():
+    for instance_id in baseline_map:
         if instance_id not in current_map:
             continue
 

@@ -13,23 +13,18 @@ class ConcreteProvider(InfrastructureProvider):
 
     async def setup(self) -> None:
         """Test implementation."""
-        pass
 
     async def run_evaluation(self, config: Any, run_mcp: bool, run_baseline: bool) -> Any:
         """Test implementation."""
-        pass
 
     async def collect_artifacts(self, output_dir: Path) -> Path:
         """Test implementation."""
-        pass
 
     async def cleanup(self, force: bool = False) -> None:
         """Test implementation."""
-        pass
 
     async def health_check(self, **kwargs: Any) -> dict[str, Any]:
         """Test implementation."""
-        pass
 
 
 class IncompleteProvider(InfrastructureProvider):
@@ -37,7 +32,6 @@ class IncompleteProvider(InfrastructureProvider):
 
     async def setup(self) -> None:
         """Test implementation."""
-        pass
 
 
 class TestInfrastructureProvider:

@@ -57,7 +57,34 @@ jobs:
           pip install pre-commit
 
       - name: Run pre-commit hooks
-        run: pre-commit run --all-files --show-diff-on-failure
+        # Skip mypy in pre-commit; the dedicated type-check job runs it
+        # with full project dependencies installed.
+        run: SKIP=mypy pre-commit run --all-files --show-diff-on-failure
+
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Cache mypy
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: mypy-${{ hashFiles('pyproject.toml') }}
+          restore-keys: mypy-
+
+      - name: Run mypy
+        run: mypy src/mcpbr/
 
   test:
     runs-on: ubuntu-latest

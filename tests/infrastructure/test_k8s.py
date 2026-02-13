@@ -350,7 +350,7 @@ class TestHealthCheckHelpers:
     ) -> None:
         """Test kubectl check when installed."""
         mock_run.return_value = Mock(returncode=0, stdout="/usr/local/bin/kubectl")
-        ok, msg = k8s_provider._check_kubectl_installed()
+        ok, _msg = k8s_provider._check_kubectl_installed()
         assert ok is True
 
     @patch("mcpbr.infrastructure.k8s.subprocess.run")
@@ -361,7 +361,7 @@ class TestHealthCheckHelpers:
     ) -> None:
         """Test kubectl check when not installed."""
         mock_run.return_value = Mock(returncode=1, stdout="")
-        ok, msg = k8s_provider._check_kubectl_installed()
+        ok, _msg = k8s_provider._check_kubectl_installed()
         assert ok is False
 
     @patch("mcpbr.infrastructure.k8s.subprocess.run")
@@ -375,7 +375,7 @@ class TestHealthCheckHelpers:
             returncode=0,
             stdout="Kubernetes control plane is running at https://127.0.0.1:6443",
         )
-        ok, msg = k8s_provider._check_cluster_access()
+        ok, _msg = k8s_provider._check_cluster_access()
         assert ok is True
 
     @patch("mcpbr.infrastructure.k8s.subprocess.run")
@@ -390,7 +390,7 @@ class TestHealthCheckHelpers:
             stdout="",
             stderr="The connection to the server was refused",
         )
-        ok, msg = k8s_provider._check_cluster_access()
+        ok, _msg = k8s_provider._check_cluster_access()
         assert ok is False
 
 

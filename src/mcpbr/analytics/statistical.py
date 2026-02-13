@@ -279,15 +279,15 @@ def bootstrap_confidence_interval(
     # Generate bootstrap resamples
     bootstrap_means = []
     for _ in range(n_bootstrap):
-        resample = random.choices(values, k=n)
+        resample = random.choices(values, k=n)  # noqa: S311 -- not used for cryptographic purposes; statistical bootstrapping
         bootstrap_means.append(statistics.mean(resample))
 
     bootstrap_means.sort()
 
     # Percentile method
     alpha = 1.0 - confidence
-    lower_idx = int(math.floor((alpha / 2) * n_bootstrap))
-    upper_idx = int(math.floor((1.0 - alpha / 2) * n_bootstrap)) - 1
+    lower_idx = math.floor((alpha / 2) * n_bootstrap)
+    upper_idx = math.floor((1.0 - alpha / 2) * n_bootstrap) - 1
 
     # Clamp indices
     lower_idx = max(0, min(lower_idx, n_bootstrap - 1))

@@ -1,5 +1,7 @@
 """Log formatting utilities for stream-json output from Claude CLI."""
 
+from __future__ import annotations
+
 import json
 import re
 from dataclasses import dataclass
@@ -30,7 +32,7 @@ class StreamEventFormatter:
         self,
         console: Console,
         config: FormatterConfig | None = None,
-        log_file: TextIO | None = None,
+        log_file: TextIO | InstanceLogWriter | None = None,
     ) -> None:
         """Initialize the formatter.
 
@@ -224,7 +226,7 @@ class StreamEventFormatter:
         Returns:
             Dictionary with error details including HTTP status codes, error messages, etc.
         """
-        error_context = {}
+        error_context: dict[str, Any] = {}
 
         # Check for HTTP error codes in content
         http_patterns = [
@@ -255,7 +257,7 @@ class StreamEventFormatter:
         if isinstance(tool_use_result, dict):
             if "error" in tool_use_result:
                 error_context["tool_error"] = tool_use_result["error"]
-            if "stderr" in tool_use_result and tool_use_result["stderr"]:
+            if tool_use_result.get("stderr"):
                 error_context["stderr"] = tool_use_result["stderr"]
 
         return error_context
@@ -338,8 +340,8 @@ class StreamEventFormatter:
             return "\n".join(error_parts)
 
         # For non-errors, use original logic
-        if not isinstance(tool_use_result, dict):
-            return str(tool_use_result)[:200] if tool_use_result else ""
+        if not isinstance(tool_use_result, dict):  # type: ignore[unreachable]
+            return str(tool_use_result)[:200] if tool_use_result else ""  # type: ignore[unreachable]
         mode = tool_use_result.get("mode", "")
 
         if mode == "files_with_matches":
@@ -383,7 +385,7 @@ class StreamEventFormatter:
                 return "(empty response - check if MCP tool succeeded)"
             return content[:200]
 
-        return "(no output)"
+        return "(no output)"  # type: ignore[unreachable]
 
     def _shorten_path(self, text: str) -> str:
         """Replace long temp directory paths with $WORKDIR."""
@@ -504,7 +506,7 @@ def create_formatter(
     log_file: TextIO | None = None
     if log_file_path:
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
-        log_file = open(log_file_path, "w")
+        log_file = open(log_file_path, "w")  # noqa: SIM115 - caller closes the file handle
 
     config = FormatterConfig(
         verbosity=verbosity,
@@ -564,7 +566,6 @@ class InstanceLogWriter:
 
     def flush(self) -> None:
         """Flush is a no-op; events are written on close."""
-        pass
 
     def close(self) -> None:
         """Write the collected events to a formatted JSON file."""
@@ -588,7 +589,7 @@ class InstanceLogWriter:
         with open(output_path, "w") as f:
             json.dump(output_data, f, indent=2)
 
-    def __enter__(self) -> "InstanceLogWriter":
+    def __enter__(self) -> InstanceLogWriter:
         """Context manager entry."""
         return self
 

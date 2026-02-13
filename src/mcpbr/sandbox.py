@@ -15,7 +15,7 @@ Security layers:
 import json
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from .resource_limits import ContainerResourceConfig, ResourceLimits
@@ -23,7 +23,7 @@ from .resource_limits import ContainerResourceConfig, ResourceLimits
 logger = logging.getLogger(__name__)
 
 
-class SecurityLevel(str, Enum):
+class SecurityLevel(StrEnum):
     """Predefined security levels for sandbox profiles.
 
     Each level provides progressively stricter isolation:
@@ -494,11 +494,11 @@ def create_profile(level: SecurityLevel | str) -> SandboxProfile:
     if isinstance(level, str):
         try:
             level = SecurityLevel(level)
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
                 f"Unknown security level: {level}. "
                 f"Valid levels: {', '.join(s.value for s in SecurityLevel)}"
-            )
+            ) from e
 
     if level == SecurityLevel.PERMISSIVE:
         return SandboxProfile(
@@ -543,8 +543,8 @@ def create_profile(level: SecurityLevel | str) -> SandboxProfile:
             ),
             read_only_rootfs=True,
             tmpfs_mounts={
-                "/tmp": "size=512m",
-                "/var/tmp": "size=256m",
+                "/tmp": "size=512m",  # noqa: S108 -- Docker container tmpfs mount for sandbox scratch space
+                "/var/tmp": "size=256m",  # noqa: S108 -- Docker container tmpfs mount for sandbox scratch space
                 "/run": "size=64m",
             },
             no_new_privileges=True,
@@ -665,11 +665,13 @@ def validate_sandbox(
 
     # Check security_opt for no-new-privileges
     actual_security_opt = container_attrs.get("SecurityOpt") or []
-    if profile.no_new_privileges:
-        if "no-new-privileges:true" not in actual_security_opt:
-            # Docker may also store it as "no-new-privileges"
-            if "no-new-privileges" not in actual_security_opt:
-                mismatches.append("no_new_privileges expected but not found in SecurityOpt")
+    if (
+        profile.no_new_privileges
+        and "no-new-privileges:true" not in actual_security_opt
+        # Docker may also store it as "no-new-privileges"
+        and "no-new-privileges" not in actual_security_opt
+    ):
+        mismatches.append("no_new_privileges expected but not found in SecurityOpt")
 
     # Check userns_mode
     actual_userns = container_attrs.get("UsernsMode", "")

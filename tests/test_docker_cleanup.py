@@ -38,7 +38,7 @@ def mock_container():
     container.labels = {
         MCPBR_LABEL: "true",
         MCPBR_SESSION_LABEL: "test-session",
-        MCPBR_TIMESTAMP_LABEL: datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        MCPBR_TIMESTAMP_LABEL: datetime.datetime.now(datetime.UTC).isoformat(),
     }
     return container
 
@@ -154,11 +154,11 @@ class TestCleanupOrphanedContainers:
         recent_container.name = "recent-container"
         recent_container.labels = {
             MCPBR_LABEL: "true",
-            MCPBR_TIMESTAMP_LABEL: datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            MCPBR_TIMESTAMP_LABEL: datetime.datetime.now(datetime.UTC).isoformat(),
         }
 
         # Create an old container (48 hours ago)
-        old_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=48)
+        old_time = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=48)
         old_container = MagicMock()
         old_container.name = "old-container"
         old_container.labels = {
@@ -422,7 +422,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",  # noqa: S108
+            host_workdir="/tmp/test",
             instance_id="test-instance",
             _temp_dir=mock_temp_dir,
             _manager=manager,
@@ -448,7 +448,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",  # noqa: S108
+            host_workdir="/tmp/test",
             instance_id="test-instance",
             _temp_dir=None,
             _manager=None,
@@ -475,7 +475,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",  # noqa: S108
+            host_workdir="/tmp/test",
             instance_id="test-instance",
             _temp_dir=mock_temp_dir,
             _manager=manager,
@@ -504,7 +504,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",  # noqa: S108
+            host_workdir="/tmp/test",
             instance_id="test-instance",
             _temp_dir=mock_temp_dir1,
             _manager=manager,

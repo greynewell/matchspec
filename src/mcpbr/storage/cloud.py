@@ -59,8 +59,6 @@ _AUTH_ERROR_PATTERNS = (
 class CloudStorageError(RuntimeError):
     """Raised when a cloud storage operation fails."""
 
-    pass
-
 
 def _is_transient_error(error: subprocess.CalledProcessError) -> bool:
     """Check if a subprocess error is transient and should be retried.
@@ -77,10 +75,7 @@ def _is_transient_error(error: subprocess.CalledProcessError) -> bool:
         if pattern in stderr:
             return False
     # Check for transient patterns
-    for pattern in _TRANSIENT_ERROR_PATTERNS:
-        if pattern in stderr:
-            return True
-    return False
+    return any(pattern in stderr for pattern in _TRANSIENT_ERROR_PATTERNS)
 
 
 def _run_with_retry(

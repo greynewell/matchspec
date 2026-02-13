@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import time
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -98,8 +98,8 @@ class KubernetesProvider(InfrastructureProvider):
         """
         if self.k8s_config is None:
             return default
-        if isinstance(self.k8s_config, dict):
-            return self.k8s_config.get(key, default)
+        if isinstance(self.k8s_config, dict):  # type: ignore[unreachable]
+            return self.k8s_config.get(key, default)  # type: ignore[unreachable]
         return getattr(self.k8s_config, key, default)
 
     def _kubectl_base(self) -> list[str]:
@@ -544,6 +544,7 @@ class KubernetesProvider(InfrastructureProvider):
             RuntimeError: If job monitoring encounters an unrecoverable error.
         """
         self._console.print(f"[cyan]Monitoring Job '{self.job_name}'...[/cyan]")
+        assert self.job_name is not None
         tracked_pods: set[str] = set()
         log_tasks: list[asyncio.Task[None]] = []
 
@@ -654,7 +655,8 @@ class KubernetesProvider(InfrastructureProvider):
             await asyncio.sleep(LOG_POLL_INTERVAL_SECONDS)
 
         # Stream logs via subprocess
-        kubectl_cmd = self._kubectl_base() + [
+        kubectl_cmd = [
+            *self._kubectl_base(),
             "logs",
             "-f",
             pod_name,
@@ -816,7 +818,8 @@ class KubernetesProvider(InfrastructureProvider):
 
         if json_buffer:
             try:
-                return json.loads("\n".join(json_buffer))
+                parsed: dict[str, Any] = json.loads("\n".join(json_buffer))
+                return parsed
             except json.JSONDecodeError:
                 return None
         return None
@@ -953,7 +956,7 @@ class KubernetesProvider(InfrastructureProvider):
                 manifest_file.write_text(result.stdout, encoding="utf-8")
 
         # Create ZIP archive
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         archive_path = output_dir.parent / f"k8s_artifacts_{timestamp}.zip"
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for file_path in output_dir.rglob("*"):

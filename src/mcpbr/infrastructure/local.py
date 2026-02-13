@@ -1,7 +1,7 @@
 """Local infrastructure provider implementation."""
 
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +27,6 @@ class LocalProvider(InfrastructureProvider):
             None
         """
         # No-op: already on local machine
-        pass
 
     async def run_evaluation(self, config: Any, run_mcp: bool, run_baseline: bool) -> Any:
         """Execute evaluation on the local infrastructure.
@@ -65,7 +64,7 @@ class LocalProvider(InfrastructureProvider):
             Exception: If artifact collection fails.
         """
         # Create ZIP archive with timestamp
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         zip_path = output_dir.parent / f"artifacts_{timestamp}.zip"
 
         # Create ZIP file
@@ -92,7 +91,6 @@ class LocalProvider(InfrastructureProvider):
             None
         """
         # No-op: no infrastructure to tear down for local execution
-        pass
 
     async def health_check(self, **kwargs: Any) -> dict[str, Any]:
         """Run pre-flight validation checks.

@@ -96,21 +96,21 @@ class TestYAMLParsing:
         """Test that missing 'name' raises ValueError."""
         defn = _minimal_definition()
         del defn["name"]
-        with pytest.raises(ValueError, match="missing required fields.*name"):
+        with pytest.raises(ValueError, match=r"missing required fields.*name"):
             CustomBenchmark(**defn)
 
     def test_missing_required_field_dataset(self) -> None:
         """Test that missing 'dataset' raises ValueError."""
         defn = _minimal_definition()
         del defn["dataset"]
-        with pytest.raises(ValueError, match="missing required fields.*dataset"):
+        with pytest.raises(ValueError, match=r"missing required fields.*dataset"):
             CustomBenchmark(**defn)
 
     def test_missing_required_field_evaluation_type(self) -> None:
         """Test that missing 'evaluation_type' raises ValueError."""
         defn = _minimal_definition()
         del defn["evaluation_type"]
-        with pytest.raises(ValueError, match="missing required fields.*evaluation_type"):
+        with pytest.raises(ValueError, match=r"missing required fields.*evaluation_type"):
             CustomBenchmark(**defn)
 
     def test_invalid_evaluation_type(self) -> None:

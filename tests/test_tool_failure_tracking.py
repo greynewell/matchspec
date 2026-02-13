@@ -29,8 +29,8 @@ class TestToolFailureTracking:
             num_turns,
             tokens_in,
             tokens_out,
-            result_subtype,
-            cost_usd,
+            _result_subtype,
+            _cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         # Verify successful calls
@@ -61,11 +61,11 @@ class TestToolFailureTracking:
             tool_usage,
             tool_failures,
             tool_errors,
-            num_turns,
-            tokens_in,
-            tokens_out,
-            result_subtype,
-            cost_usd,
+            _num_turns,
+            _tokens_in,
+            _tokens_out,
+            _result_subtype,
+            _cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert total_calls == 1
@@ -90,11 +90,11 @@ class TestToolFailureTracking:
             tool_usage,
             tool_failures,
             tool_errors,
-            num_turns,
-            tokens_in,
-            tokens_out,
-            result_subtype,
-            cost_usd,
+            _num_turns,
+            _tokens_in,
+            _tokens_out,
+            _result_subtype,
+            _cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert total_calls == 3
@@ -195,15 +195,15 @@ class TestToolFailureTracking:
         """
 
         (
-            total_calls,
-            tool_usage,
+            _total_calls,
+            _tool_usage,
             tool_failures,
             tool_errors,
-            num_turns,
-            tokens_in,
-            tokens_out,
-            result_subtype,
-            cost_usd,
+            _num_turns,
+            _tokens_in,
+            _tokens_out,
+            _result_subtype,
+            _cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert tool_failures == {"Read": 1}
@@ -220,15 +220,15 @@ class TestToolFailureTracking:
         """
 
         (
-            total_calls,
-            tool_usage,
+            _total_calls,
+            _tool_usage,
             tool_failures,
             tool_errors,
-            num_turns,
-            tokens_in,
-            tokens_out,
-            result_subtype,
-            cost_usd,
+            _num_turns,
+            _tokens_in,
+            _tokens_out,
+            _result_subtype,
+            _cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert tool_failures == {"Read": 1}
@@ -274,15 +274,15 @@ class TestToolFailureTracking:
         stream_output = "\n".join(events)
 
         (
-            total_calls,
-            tool_usage,
+            _total_calls,
+            _tool_usage,
             tool_failures,
             tool_errors,
-            num_turns,
-            tokens_in,
-            tokens_out,
-            result_subtype,
-            cost_usd,
+            _num_turns,
+            _tokens_in,
+            _tokens_out,
+            _result_subtype,
+            _cost_usd,
         ) = _parse_tool_usage_from_stream(stream_output)
 
         assert tool_failures == {"Bash": 6}

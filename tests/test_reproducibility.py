@@ -1,12 +1,10 @@
 """Tests for reproducibility module."""
 
-# ruff: noqa: N801
-
 import json
 import os
 import random
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -251,9 +249,9 @@ class TestCaptureEnvironment:
 
     def test_timestamp_is_recent(self) -> None:
         """Test that the timestamp is close to the current time."""
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         snapshot = capture_environment(mcpbr_version="0.5.0")
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         parsed = datetime.fromisoformat(snapshot.timestamp)
         assert before <= parsed <= after
 

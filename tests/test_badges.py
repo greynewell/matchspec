@@ -63,7 +63,7 @@ class TestGenerateBadgesFromResults:
         }
         badges = generate_badges_from_results(results)
         # High resolution (80%) should have green badge
-        resolution_badge = [b for b in badges if "Resolution" in b or "80" in b][0]
+        resolution_badge = next(b for b in badges if "Resolution" in b or "80" in b)
         assert "brightgreen" in resolution_badge
 
     def test_reads_from_json_file(self):

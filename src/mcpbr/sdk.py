@@ -235,7 +235,7 @@ def list_providers() -> list[str]:
     return list(VALID_PROVIDERS)
 
 
-def list_models() -> list[dict[str, str]]:
+def list_models() -> list[dict[str, str | int | bool]]:
     """List all supported models with their metadata.
 
     Returns:

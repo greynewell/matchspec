@@ -8,8 +8,9 @@ Supports parallel pulling, progress reporting, and local cache detection.
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import docker.errors
 from rich.console import Console
@@ -126,7 +127,7 @@ def check_cached_images(images: list[str]) -> dict[str, bool]:
         client = docker.from_env()
     except docker.errors.DockerException:
         logger.warning("Could not connect to Docker daemon for cache check")
-        return {image: False for image in images}
+        return dict.fromkeys(images, False)
 
     for image in images:
         try:
@@ -251,7 +252,7 @@ async def prewarm_images(
     newly_pulled = 0
     failed: list[str] = []
     for result in results:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             logger.error("Unexpected error during image pull: %s", result)
             failed.append(str(result))
         else:

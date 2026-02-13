@@ -1,7 +1,7 @@
 """Tests for Docker image cache management."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -42,7 +42,7 @@ def cache_config(temp_cache_dir: Path) -> CacheConfig:
 @pytest.fixture
 def sample_entry() -> CacheEntry:
     """Create a sample cache entry."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return CacheEntry(
         image_tag="ghcr.io/epoch-research/swe-bench.eval.x86_64.astropy__astropy-12907",
         size_mb=1500.0,
@@ -100,9 +100,9 @@ class TestCacheEntry:
         data = {
             "image_tag": "test:latest",
             "size_mb": 100.0,
-            "last_used": datetime.now(timezone.utc).isoformat(),
+            "last_used": datetime.now(UTC).isoformat(),
             "use_count": 0,
-            "created": datetime.now(timezone.utc).isoformat(),
+            "created": datetime.now(UTC).isoformat(),
         }
         entry = CacheEntry.from_dict(data)
         assert entry.layers == []
@@ -331,7 +331,7 @@ class TestImageCacheScan:
     def test_scan_removes_stale_entries(self, image_cache: ImageCache, mock_docker_client):
         """Test that scan removes entries for images no longer present locally."""
         # Pre-populate with an entry
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._entries["old-swe-bench-image"] = CacheEntry(
             image_tag="old-swe-bench-image",
             size_mb=500.0,
@@ -352,7 +352,7 @@ class TestImageCacheScan:
     def test_scan_preserves_use_count(self, image_cache: ImageCache, mock_docker_client):
         """Test that scan preserves existing use_count for known images."""
         tag = "ghcr.io/epoch-research/swe-bench.eval.x86_64.sympy__sympy-20154"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._entries[tag] = CacheEntry(
             image_tag=tag,
             size_mb=1000.0,
@@ -526,7 +526,7 @@ class TestImageCacheEvictLru:
 
     def test_evict_by_size(self, image_cache: ImageCache, mock_docker_client):
         """Test LRU eviction when total size exceeds target."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Each image is ~5 GB (5120 MB) to exceed 10 GB limit with 3 images
         image_cache._entries = {
             "img:old": self._make_entry("img:old", 5120.0, now - timedelta(hours=3)),
@@ -542,7 +542,7 @@ class TestImageCacheEvictLru:
 
     def test_evict_by_count(self, image_cache: ImageCache, mock_docker_client):
         """Test LRU eviction when image count exceeds max_images."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Config max_images=5, add 7 small images
         for i in range(7):
             tag = f"mcpbr-img:{i}"
@@ -558,7 +558,7 @@ class TestImageCacheEvictLru:
 
     def test_evict_nothing_when_within_limits(self, image_cache: ImageCache, mock_docker_client):
         """Test that no eviction occurs when cache is within limits."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._entries = {
             "img:a": self._make_entry("img:a", 500.0, now),
             "img:b": self._make_entry("img:b", 500.0, now),
@@ -570,7 +570,7 @@ class TestImageCacheEvictLru:
 
     def test_evict_uses_default_target(self, image_cache: ImageCache, mock_docker_client):
         """Test that evict_lru uses config max_size_gb when target is None."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Within 10 GB limit
         image_cache._entries = {
             "img:a": self._make_entry("img:a", 1024.0, now),
@@ -582,7 +582,7 @@ class TestImageCacheEvictLru:
 
     def test_evict_removes_docker_images(self, image_cache: ImageCache, mock_docker_client):
         """Test that eviction calls Docker to remove images."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._entries = {
             "img:old": self._make_entry("img:old", 5120.0, now - timedelta(hours=2)),
             "img:new": self._make_entry("img:new", 5120.0, now),
@@ -597,7 +597,7 @@ class TestImageCacheEvictLru:
 
     def test_evict_saves_metadata(self, image_cache: ImageCache, mock_docker_client):
         """Test that eviction persists updated metadata."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._config.max_images = 1
         image_cache._entries = {
             "img:old": self._make_entry("img:old", 100.0, now - timedelta(hours=2)),
@@ -631,7 +631,7 @@ class TestImageCacheGetStats:
 
     def test_stats_with_entries(self, image_cache: ImageCache):
         """Test stats reflect cached entries."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._entries = {
             "img:a": CacheEntry("img:a", 1024.0, now, 10, ["sha256:x"], now),
             "img:b": CacheEntry("img:b", 2048.0, now, 5, ["sha256:y"], now),
@@ -663,7 +663,7 @@ class TestImageCacheGetStats:
 
     def test_potential_savings_with_shared_layers(self, image_cache: ImageCache):
         """Test potential savings estimation with shared layers."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         shared = "sha256:shared"
         image_cache._entries = {
             "img:a": CacheEntry("img:a", 1024.0, now, 1, [shared, "sha256:a1"], now),
@@ -677,7 +677,7 @@ class TestImageCacheGetStats:
 
     def test_no_savings_without_shared_layers(self, image_cache: ImageCache):
         """Test zero savings when no layers are shared."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._entries = {
             "img:a": CacheEntry("img:a", 1024.0, now, 1, ["sha256:a1"], now),
             "img:b": CacheEntry("img:b", 1024.0, now, 1, ["sha256:b1"], now),
@@ -689,7 +689,7 @@ class TestImageCacheGetStats:
 
     def test_most_used_limited_to_five(self, image_cache: ImageCache):
         """Test that most_used and least_used are capped at 5."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for i in range(10):
             tag = f"img:{i}"
             image_cache._entries[tag] = CacheEntry(tag, 100.0, now, i, [], now)
@@ -709,7 +709,7 @@ class TestImageCacheRecommendWarmup:
             "swe-bench-lite": ["img:django", "img:astropy", "img:sympy"],
         }
         # Only django is currently cached
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._entries = {
             "img:django": CacheEntry("img:django", 1000.0, now, 5, [], now),
         }
@@ -728,7 +728,7 @@ class TestImageCacheRecommendWarmup:
 
     def test_no_recommendations_when_all_cached(self, image_cache: ImageCache):
         """Test that no recommendations are made when everything is cached."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._benchmark_history = {
             "swe-bench-lite": ["img:django"],
         }
@@ -804,7 +804,7 @@ class TestImageCacheMetadataPersistence:
 
         # First instance records some state
         cache1 = ImageCache(config=config)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cache1._entries["img:test"] = CacheEntry("img:test", 500.0, now, 3, [], now)
         cache1._hits = 5
         cache1._misses = 1
@@ -838,7 +838,7 @@ class TestImageCacheEdgeCases:
         """Test that eviction continues even if Docker removal fails."""
         mock_docker_client.images.remove.side_effect = Exception("Permission denied")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         image_cache._config.max_images = 1
         image_cache._entries = {
             "img:old": CacheEntry("img:old", 100.0, now - timedelta(hours=2), 0, [], now),

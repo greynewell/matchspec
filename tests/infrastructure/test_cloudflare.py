@@ -287,7 +287,7 @@ class TestHealthCheckHelpers:
     def test_check_wrangler_installed_not_found(self, mock_run: MagicMock) -> None:
         """Test wrangler check when not installed."""
         mock_run.side_effect = FileNotFoundError("npx not found")
-        ok, msg = CloudflareProvider._check_wrangler_installed()
+        ok, _msg = CloudflareProvider._check_wrangler_installed()
         assert ok is False
 
     @patch("mcpbr.infrastructure.cloudflare.subprocess.run")
@@ -297,7 +297,7 @@ class TestHealthCheckHelpers:
             returncode=0,
             stdout="Getting accounts...\naccount: test@example.com\n",
         )
-        ok, msg = CloudflareProvider._check_wrangler_authenticated()
+        ok, _msg = CloudflareProvider._check_wrangler_authenticated()
         assert ok is True
 
     @patch("mcpbr.infrastructure.cloudflare.subprocess.run")
@@ -308,7 +308,7 @@ class TestHealthCheckHelpers:
             stdout="",
             stderr="Not authenticated",
         )
-        ok, msg = CloudflareProvider._check_wrangler_authenticated()
+        ok, _msg = CloudflareProvider._check_wrangler_authenticated()
         assert ok is False
 
     @patch("mcpbr.infrastructure.cloudflare.subprocess.run")
@@ -323,7 +323,7 @@ class TestHealthCheckHelpers:
     def test_check_node_installed_not_found(self, mock_run: MagicMock) -> None:
         """Test Node.js check when not installed."""
         mock_run.side_effect = FileNotFoundError("node not found")
-        ok, msg = CloudflareProvider._check_node_installed()
+        ok, _msg = CloudflareProvider._check_node_installed()
         assert ok is False
 
 
