@@ -137,7 +137,14 @@ async def test_run_mcp_evaluation_timeout_fallback():
 
     benchmark = Mock()
     benchmark.get_prompt_template.return_value = "Test prompt"
-    benchmark.create_environment = AsyncMock()
+    # Docker container methods (kill, remove) are synchronous in docker-py
+    mock_container = Mock()
+    mock_container.kill = Mock()
+    mock_container.remove = Mock()
+    mock_env = AsyncMock()
+    mock_env.container = mock_container
+    mock_env.cleanup = AsyncMock()
+    benchmark.create_environment = AsyncMock(return_value=mock_env)
 
     docker_manager = Mock()
 

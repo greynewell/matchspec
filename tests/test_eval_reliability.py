@@ -250,7 +250,14 @@ class TestEvalTimeoutInHarness:
 
         benchmark = Mock()
         benchmark.get_prompt_template.return_value = "Test prompt"
-        benchmark.create_environment = AsyncMock()
+        # Docker container methods (kill, remove) are synchronous in docker-py
+        mock_container = Mock()
+        mock_container.kill = Mock()
+        mock_container.remove = Mock()
+        mock_env = AsyncMock()
+        mock_env.container = mock_container
+        mock_env.cleanup = AsyncMock()
+        benchmark.create_environment = AsyncMock(return_value=mock_env)
         # Make evaluate take too long — should be caught by eval_timeout
         benchmark.evaluate = AsyncMock(side_effect=asyncio.TimeoutError())
 
