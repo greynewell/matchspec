@@ -720,8 +720,10 @@ def run(
         # Config setting
         final_output_dir = Path(config.output_dir)
     else:
-        # Default: timestamped directory
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Default: timestamped directory with microseconds for uniqueness.
+        # Second-level precision causes collisions when multiple runs launch
+        # simultaneously, corrupting shared state and results.
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         final_output_dir = Path(f".mcpbr_run_{timestamp}")
 
     # Override state_dir to use output directory if not explicitly set
