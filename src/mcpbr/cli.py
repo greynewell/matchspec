@@ -777,7 +777,8 @@ To archive:
                 console.print(f"[red]Error: {error_msg}[/red]")
                 sys.exit(1)
 
-    # Determine which tasks to run based on incremental flags
+    # Determine which tasks to run based on incremental flags.
+    # CLI --task/-t flags take precedence over config file task_ids.
     selected_task_ids: list[str] | None = None
     if use_incremental and state_tracker:
         if retry_failed:
@@ -793,8 +794,12 @@ To archive:
             selected_task_ids = None  # Let run_evaluation handle the from_task logic
         elif task_ids:
             selected_task_ids = list(task_ids)
+        elif config.task_ids:
+            selected_task_ids = list(config.task_ids)
     elif task_ids:
         selected_task_ids = list(task_ids)
+    elif config.task_ids:
+        selected_task_ids = list(config.task_ids)
 
     run_mcp = not baseline_only
     run_baseline = not mcp_only

@@ -541,6 +541,8 @@ CMD ["/bin/bash"]
                         volumes=volumes_dict,
                         working_dir=container_workdir,
                         remove=False,
+                        mem_limit="4g",
+                        memswap_limit="6g",
                         labels={
                             MCPBR_LABEL: "true",
                             MCPBR_INSTANCE_LABEL: str(instance_id),

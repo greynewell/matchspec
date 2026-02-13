@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -1530,6 +1531,45 @@ async def run_evaluation(
 
     progress_console = Console(force_terminal=True)
 
+    # Plain-text logging for non-TTY consumers (e.g. CI, background tasks).
+    # Emits structured [START]/[DONE]/[ERROR]/[SKIP] lines to stderr so
+    # automation tools can parse progress without decoding ANSI escape codes.
+    _plain_log = not sys.stderr.isatty()
+
+    def _log_plain(msg: str) -> None:
+        """Emit a plain-text line to stderr for non-TTY consumers."""
+        if _plain_log:
+            print(msg, file=sys.stderr, flush=True)
+
+    def _summarize_result(result: TaskResult) -> str:
+        """One-line summary of a task result."""
+        parts = []
+        # Support both standard mode (mcp/baseline) and comparison mode (server_a/server_b)
+        arms: list[tuple[str, dict[str, Any] | None]] = [
+            ("mcp", result.mcp),
+            ("base", result.baseline),
+        ]
+        if hasattr(result, "mcp_server_a") and result.mcp_server_a is not None:
+            arms.append(("server_a", result.mcp_server_a))
+        if hasattr(result, "mcp_server_b") and result.mcp_server_b is not None:
+            arms.append(("server_b", result.mcp_server_b))
+        for label, arm in arms:
+            if arm is None:
+                continue
+            if arm.get("error"):
+                parts.append(f"{label}=ERROR")
+            elif arm.get("resolved"):
+                tc = arm.get("tool_calls", 0)
+                it = arm.get("iterations", 0)
+                tc_iter = f"{tc / it:.1f}" if it else "0"
+                parts.append(f"{label}=PASS tc/iter={tc_iter}")
+            else:
+                tc = arm.get("tool_calls", 0)
+                it = arm.get("iterations", 0)
+                tc_iter = f"{tc / it:.1f}" if it else "0"
+                parts.append(f"{label}=FAIL tc/iter={tc_iter}")
+        return " | ".join(parts)
+
     # Track currently running tasks with progress indicators
     task_progress_items: dict[str, Any] = {}
 
@@ -1538,6 +1578,7 @@ async def run_evaluation(
     ) -> TaskResult | None:
         """Run a task with progress tracking."""
         instance_id = task["instance_id"]
+        _log_plain(f"[START] {instance_id}")
 
         # Add progress indicator for this specific task
         task_progress = progress.add_task(
@@ -1560,12 +1601,14 @@ async def run_evaluation(
                     # Remove completed task to avoid clutter
                     progress.remove_task(task_progress_items[instance_id])
                     del task_progress_items[instance_id]
+                    _log_plain(f"[DONE]  {instance_id} | {_summarize_result(result)}")
                 else:
                     # Task was skipped (budget exceeded)
                     progress.update(
                         task_progress_items[instance_id],
                         description=f"[yellow]⊘ {instance_id} (skipped)",
                     )
+                    _log_plain(f"[SKIP]  {instance_id}")
 
             return result
         except Exception as e:
@@ -1577,6 +1620,7 @@ async def run_evaluation(
                 )
                 progress.remove_task(task_progress_items[instance_id])
                 del task_progress_items[instance_id]
+            _log_plain(f"[ERROR] {instance_id} | {str(e)[:100]}")
             raise
 
     try:
@@ -1901,6 +1945,16 @@ async def run_evaluation(
         tool_coverage = None
         comprehensive_stats = None
         mcp_tool_stats = None
+
+    # Plain-text summary for non-TTY consumers
+    if not config.comparison_mode:
+        _log_plain(
+            f"[SUMMARY] mcp={mcp_resolved}/{mcp_total} base={baseline_resolved}/{baseline_total} "
+            f"delta={improvement_str} mcp_cost=${mcp_cost:.2f} base_cost=${baseline_cost:.2f}"
+        )
+    else:
+        # Comparison mode: emit a minimal summary with task count
+        _log_plain(f"[SUMMARY] comparison_mode tasks={len(results)}")
 
     # Build metadata with incremental evaluation stats
     metadata = {
