@@ -848,18 +848,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Parameters unused for GSM8K but needed for benchmark interface consistency
   - Fixes TypeError when running GSM8K evaluations
 
-- **Supermodel Benchmark**: Multi-endpoint PR-based evaluation for Supermodel graph analysis
+- **Supermodel Benchmark**: Multi-endpoint evaluation for Supermodel graph-enhanced code analysis
   - Supports dead-code, impact, test-coverage, and circular-deps analysis types
-  - PR-based ground truth extraction from GitHub diffs
-  - Supermodel API integration with async polling and idempotency
+  - Two task modes: PR-based ground truth extraction from GitHub diffs, and corpus mode with pre-built ground truth
+  - Supermodel API integration with async polling, idempotency, and result caching
   - Condition-aware prompts: enhanced condition uses pre-computed analysis JSON, baseline does manual analysis
   - P/R/F1 set-based evaluation with configurable resolved threshold
-  - Example config for wikidatabots dead code PR
+  - TypeScript Express corpus task (102 ground truth items, 35 source files)
+  - Benchmark results: MCP Enhanced F1=89.8% (P=82.1%, R=99.0%) vs Baseline F1=88.8% (P=84.8%, R=93.1%)
+  - MCP condition is 5.8x faster and 87.4% cheaper than baseline
+  - 65 unit tests covering evaluation, endpoints, diff parsing, and benchmark class
+  - Example configs for corpus and PR-based tasks
 
 ### Changed
 
 - Made `mcp_server` optional in `HarnessConfig` (defaults to `None`) for benchmarks that don't require an MCP server
 - Added null-safety guards for `mcp_server` in state tracker, harness summary, and cache key generation
+
+### Fixed
+
+- Fixed Supermodel analysis JSON chunking error by stripping non-essential keys and reducing payload size
+- Fixed `CLAUDECODE` env var leak causing nested Claude Code sessions in subprocess agents
+- Fixed analysis JSON ENOENT by adding jq fallback for large files
+- Fixed PR path handling when `scope_prefix` is used in corpus mode
+- Fixed 3 pre-existing test failures in `test_deadcode_benchmark.py` to match corpus-only behavior
 
 ### Infrastructure
 
