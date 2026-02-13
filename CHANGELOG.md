@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.6] - $RELEASE_DATE
+
 ### Changed
 
 - Updated package author from "mcpbr Contributors" to "Grey Newell" across PyPI, npm, and Claude plugin metadata
@@ -1388,6 +1390,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--no-prebuilt` CLI flag to disable pre-built images and build from scratch
 - Network access for containers to enable API calls from within Docker
 
+[0.12.6]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.6
 [0.12.5]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.5
 [0.12.4]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.4
 [0.12.3]: https://github.com/greynewell/mcpbr/releases/tag/v0.12.3
