@@ -1252,7 +1252,10 @@ async def run_evaluation(
                     f"[cyan]Using cached results for {skipped_count} completed tasks[/cyan]"
                 )
 
-    console.print(f"[dim]Evaluating {len(tasks_to_run)} tasks[/dim]")
+    task_ids_loaded = [t["instance_id"] for t in tasks_to_run]
+    console.print(
+        f"[dim]Evaluating {len(tasks_to_run)} tasks: {', '.join(task_ids_loaded[:5])}{'...' if len(task_ids_loaded) > 5 else ''}[/dim]"
+    )
     console.print(f"[dim]Provider: {config.provider}, Harness: {config.agent_harness}[/dim]")
 
     # Initialize cache if enabled

@@ -856,6 +856,10 @@ To archive:
     if config.benchmark == "cybergym":
         console.print(f"  CyberGym Level: {config.cybergym_level}")
     console.print(f"  Sample size: {config.sample_size or 'full'}")
+    if selected_task_ids:
+        console.print(
+            f"  Task IDs: {len(selected_task_ids)} pinned ({', '.join(selected_task_ids[:3])}{'...' if len(selected_task_ids) > 3 else ''})"
+        )
     console.print(f"  Run MCP: {run_mcp}, Run Baseline: {run_baseline}")
     console.print(f"  Pre-built images: {config.use_prebuilt_images}")
     infra_mode = getattr(getattr(config, "infrastructure", None), "mode", "local")
