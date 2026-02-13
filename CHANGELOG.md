@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Updated package author from "mcpbr Contributors" to "Grey Newell" across PyPI, npm, and Claude plugin metadata
+- Changed homepage URL from GitHub to mcpbr.org in all package registries
+- Added author website URL to PyPI project URLs
+
 ## [0.12.5] - 2026-02-12
 
 ### Added
