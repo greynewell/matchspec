@@ -3,7 +3,7 @@
 A benchmark runner for evaluating MCP servers against SWE-bench tasks.
 """
 
-__version__ = "0.13.0"
+__version__ = "0.13.1"
 
 from .sdk import (
     BenchmarkResult,
