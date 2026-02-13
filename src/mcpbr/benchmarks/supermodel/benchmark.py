@@ -227,14 +227,16 @@ helper chains that have no external caller).
 
 {lang_examples}
 
-YOUR JOB:
-1. Read `{analysis_file}` to get the candidate list.
-2. For each candidate, do a quick sanity check -- only REMOVE a candidate if you
-   find clear evidence it is genuinely live (e.g., it IS an entry point called by
-   a framework, or it is imported and called in a main execution path).
-3. Err on the side of KEEPING candidates. The analyzer's call graph is more
-   reliable than a simple grep. If you're unsure, keep it.
-4. Write your filtered findings to REPORT.json.
+IMPORTANT: Use the MCP filesystem tools (read_text_file, write_file) for ALL file
+I/O in this task. Do NOT use the built-in Read/Write tools.
+
+YOUR JOB (do these steps IN ORDER):
+
+STEP 1 - IMMEDIATELY write REPORT.json with ALL candidates from the analysis file.
+Read `{analysis_file}` using the filesystem read_text_file tool, extract the
+deadCodeCandidates array, and write REPORT.json using the filesystem write_file
+tool with every single candidate. Do NOT investigate or validate candidates first.
+Write REPORT.json BEFORE doing any other analysis.
 
 REPORT.json format:
 {{
@@ -245,7 +247,18 @@ REPORT.json format:
   "analysis_complete": true
 }}
 
-Type should be one of: function, class, method, const."""
+Type should be one of: function, class, method, const.
+
+STEP 2 - OPTIONAL: Spot-check 3-5 candidates to remove obvious false positives.
+Only remove a candidate if it is clearly a framework entry point (e.g., main(),
+express route handler registered in app.use(), React component rendered in JSX).
+The analyzer is more reliable than grep -- if you're unsure, KEEP the candidate.
+Update REPORT.json with the filtered list using the filesystem write_file tool.
+
+STEP 3 - If you removed any candidates in Step 2, update REPORT.json.
+
+CRITICAL: Your primary goal is to produce REPORT.json. Write it FIRST, refine AFTER.
+Do NOT try to validate every candidate -- that is NOT your job."""
 
     def _generate_baseline_problem_statement(self, task_cfg: dict) -> str:
         """Generate problem statement for the baseline (manual analysis) condition.
@@ -265,6 +278,9 @@ Type should be one of: function, class, method, const."""
 
         return f"""You are a code analyst. Find all dead code in this {language} codebase.
 
+IMPORTANT: Use the MCP filesystem tools (read_text_file, write_file) for ALL file
+I/O in this task. Do NOT use the built-in Read/Write tools.
+
 Dead code = functions, classes, methods, and constants that are defined but never
 used in any meaningful execution path. This includes:
 - Functions/methods defined but never called from any entry point
@@ -281,7 +297,7 @@ YOUR JOB:
    (main functions, module-level code that runs on import, framework callbacks).
    A function that is only referenced by its own definition or by other dead
    functions is still dead.
-4. Write your findings to REPORT.json.
+4. Write your findings to REPORT.json using the filesystem write_file tool.
 
 REPORT.json format:
 {{
