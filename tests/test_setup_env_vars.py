@@ -1,5 +1,6 @@
 """Tests for MCPBR_* env var injection and placeholder expansion (#440)."""
 
+import contextlib
 import json
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -20,7 +21,7 @@ def mock_docker_client():
 
 
 @pytest.fixture
-def mock_env(mock_docker_client):
+def mock_env(mock_docker_client, tmp_path):  # noqa: ARG001
     """Create a mock TaskEnvironment with repo metadata."""
     from mcpbr.docker_env import DockerEnvironmentManager
 
@@ -34,7 +35,7 @@ def mock_env(mock_docker_client):
     env = TaskEnvironment(
         container=mock_container,
         workdir="/workspace",
-        host_workdir="/tmp/test",
+        host_workdir=str(tmp_path),
         instance_id="django__django-12345",
         repo="django/django",
         base_commit="abc123def",
@@ -64,8 +65,8 @@ class TestMCPBREnvVarsInSetupCommand:
         # Capture what gets written to the env file
         written_content = {}
 
-        async def mock_exec(cmd, timeout=60, user=None, workdir=None, environment=None):
-            if isinstance(cmd, str) and "cat > /tmp/.mcpbr_env.sh" in cmd:
+        async def mock_exec(cmd, **_kwargs):
+            if isinstance(cmd, str) and "cat > /tmp/.mcpbr_env.sh" in cmd:  # noqa: S108
                 written_content["env_file"] = cmd
             return (0, "", "")
 
@@ -101,7 +102,7 @@ class TestMCPBREnvVarsInMCPJson:
         # Capture what gets written to .mcp.json
         written_mcp_json = {}
 
-        async def mock_exec(cmd, timeout=60, user=None, workdir=None, environment=None):
+        async def mock_exec(cmd, **_kwargs):
             if isinstance(cmd, (str, list)):
                 cmd_str = cmd if isinstance(cmd, str) else " ".join(cmd)
                 if ".mcp.json" in cmd_str and "cat >" in cmd_str:
@@ -122,7 +123,7 @@ class TestMCPBREnvVarsInMCPJson:
 
         # Need ANTHROPIC_API_KEY to be set
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
-            try:
+            with contextlib.suppress(Exception):
                 await harness._solve_in_docker(
                     task={
                         "problem_statement": "test",
@@ -135,8 +136,6 @@ class TestMCPBREnvVarsInMCPJson:
                     verbose=False,
                     task_id="django__django-12345",
                 )
-            except Exception:
-                pass  # We just want to check what was written
 
         if "config" in written_mcp_json:
             mcp_config_data = written_mcp_json["config"]
@@ -154,7 +153,7 @@ class TestPlaceholderExpansion:
         """Test {repo_name} placeholder in args."""
         config = MCPServerConfig(
             command="python",
-            args=["-m", "server", "--cache", "/tmp/{repo_name}_cache", "{workdir}"],
+            args=["-m", "server", "--cache", "/var/cache/{repo_name}_cache", "{workdir}"],
         )
         args = config.get_args_for_workdir(
             "/workspace",
@@ -163,7 +162,7 @@ class TestPlaceholderExpansion:
             base_commit="abc123",
             instance_id="django__django-12345",
         )
-        assert args == ["-m", "server", "--cache", "/tmp/django_cache", "/workspace"]
+        assert args == ["-m", "server", "--cache", "/var/cache/django_cache", "/workspace"]
 
     def test_setup_command_expand_placeholders(self):
         """Test placeholder expansion in setup_command."""

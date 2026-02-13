@@ -926,8 +926,8 @@ CMD ["/bin/bash"]
                 container.stop(timeout=5)
             except docker.errors.NotFound:
                 pass  # Already removed (e.g., by TaskEnvironment.cleanup)
-            except Exception:
-                pass  # Best-effort stop
+            except Exception as exc:
+                logger.debug("Failed to stop container %s: %s", container_name, exc)
 
             try:
                 container.remove(force=True)
@@ -1011,8 +1011,8 @@ CMD ["/bin/bash"]
                 container.stop(timeout=5)
             except docker.errors.NotFound:
                 continue
-            except Exception:
-                pass  # Best-effort stop
+            except Exception as exc:
+                logger.debug("Failed to stop stale container %s: %s", name, exc)
 
             try:
                 container.remove(force=True)

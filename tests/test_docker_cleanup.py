@@ -422,7 +422,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir="/tmp/test",  # noqa: S108
             instance_id="test-instance",
             _temp_dir=mock_temp_dir,
             _manager=manager,
@@ -448,7 +448,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir="/tmp/test",  # noqa: S108
             instance_id="test-instance",
             _temp_dir=None,
             _manager=None,
@@ -475,7 +475,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir="/tmp/test",  # noqa: S108
             instance_id="test-instance",
             _temp_dir=mock_temp_dir,
             _manager=manager,
@@ -504,7 +504,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir="/tmp/test",  # noqa: S108
             instance_id="test-instance",
             _temp_dir=mock_temp_dir1,
             _manager=manager,
@@ -541,11 +541,12 @@ class TestSignalHandlers:
         register_signal_handlers()
 
 
+@pytest.mark.usefixtures("mock_docker_client")
 class TestTaskEnvironmentCleanupRetry:
     """Test TaskEnvironment cleanup retry, logging, and container tracking (#439)."""
 
     @pytest.mark.asyncio
-    async def test_task_environment_cleanup_logs_warning_on_failure(self, mock_docker_client):
+    async def test_task_environment_cleanup_logs_warning_on_failure(self, tmp_path):
         """Test that cleanup logs a warning when container stop fails but still succeeds."""
         manager = DockerEnvironmentManager()
         mock_container = MagicMock()
@@ -557,7 +558,7 @@ class TestTaskEnvironmentCleanupRetry:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir=str(tmp_path),
             instance_id="test-instance",
             _temp_dir=None,
             _manager=manager,
@@ -572,7 +573,7 @@ class TestTaskEnvironmentCleanupRetry:
         mock_container.remove.assert_called_once_with(force=True)
 
     @pytest.mark.asyncio
-    async def test_task_environment_cleanup_retries_remove(self, mock_docker_client):
+    async def test_task_environment_cleanup_retries_remove(self, tmp_path):
         """Test that cleanup retries container.remove up to 3 times."""
         manager = DockerEnvironmentManager()
         mock_container = MagicMock()
@@ -589,7 +590,7 @@ class TestTaskEnvironmentCleanupRetry:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir=str(tmp_path),
             instance_id="test-instance",
             _temp_dir=None,
             _manager=manager,
@@ -602,7 +603,7 @@ class TestTaskEnvironmentCleanupRetry:
         assert mock_container not in manager._containers
 
     @pytest.mark.asyncio
-    async def test_task_environment_cleanup_removes_from_containers_list(self, mock_docker_client):
+    async def test_task_environment_cleanup_removes_from_containers_list(self, tmp_path):
         """Test that successful cleanup removes container from manager._containers."""
         manager = DockerEnvironmentManager()
         mock_container = MagicMock()
@@ -614,7 +615,7 @@ class TestTaskEnvironmentCleanupRetry:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir=str(tmp_path),
             instance_id="test-instance",
             _temp_dir=None,
             _manager=manager,
@@ -625,7 +626,7 @@ class TestTaskEnvironmentCleanupRetry:
         assert mock_container not in manager._containers
 
     @pytest.mark.asyncio
-    async def test_task_environment_cleanup_keeps_in_list_on_failure(self, mock_docker_client):
+    async def test_task_environment_cleanup_keeps_in_list_on_failure(self, tmp_path):
         """Test that failed cleanup keeps container in manager._containers for retry at exit."""
         manager = DockerEnvironmentManager()
         mock_container = MagicMock()
@@ -638,7 +639,7 @@ class TestTaskEnvironmentCleanupRetry:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir=str(tmp_path),
             instance_id="test-instance",
             _temp_dir=None,
             _manager=manager,
@@ -689,7 +690,7 @@ class TestTaskEnvironmentCleanupRetry:
         current_container.stop.assert_not_called()
         current_container.remove.assert_not_called()
 
-    def test_cleanup_all_sync_handles_not_found(self, mock_docker_client):
+    def test_cleanup_all_sync_handles_not_found(self):
         """Test that cleanup_all_sync treats NotFound as success."""
         manager = DockerEnvironmentManager()
 
