@@ -109,8 +109,12 @@ async def zip_repo(
     """
     zip_target = scope_prefix if scope_prefix else "."
     base_excludes = [
-        "node_modules/*", ".git/*", "dist/*", "build/*",
-        "*.pyc", "__pycache__/*",
+        "node_modules/*",
+        ".git/*",
+        "dist/*",
+        "build/*",
+        "*.pyc",
+        "__pycache__/*",
     ]
     # Prepend scope_prefix to exclude patterns so they match archive paths
     prefixed_excludes = []
