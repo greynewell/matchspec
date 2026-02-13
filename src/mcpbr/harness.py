@@ -624,6 +624,15 @@ async def _run_mcp_evaluation(
     except asyncio.TimeoutError:
         end_time = time.time()
         runtime_seconds = end_time - start_time
+        # Force-kill the container immediately so blocking executor threads
+        # (stuck in Docker exec_run/exec_start) get unblocked.  Without this,
+        # asyncio.wait_for only cancels the Future but the underlying thread
+        # keeps reading from the Docker socket indefinitely.
+        if env:
+            try:
+                env.container.kill()
+            except Exception:
+                pass
         # Preserve agent metrics if the agent completed before the timeout
         # (timeout may have occurred during evaluation, not during agent solve)
         if agent_result is not None:
@@ -672,6 +681,7 @@ async def _run_mcp_evaluation(
                 logger.warning("Container cleanup failed for MCP task: %s", cleanup_err)
                 try:
                     if hasattr(env, "container") and env.container:
+                        env.container.kill()
                         env.container.remove(force=True)
                 except Exception:
                     pass
@@ -788,6 +798,13 @@ async def _run_baseline_evaluation(
     except asyncio.TimeoutError:
         end_time = time.time()
         runtime_seconds = end_time - start_time
+        # Force-kill the container immediately so blocking executor threads
+        # (stuck in Docker exec_run/exec_start) get unblocked.
+        if env:
+            try:
+                env.container.kill()
+            except Exception:
+                pass
         # Preserve agent metrics if the agent completed before the timeout
         # (timeout may have occurred during evaluation, not during agent solve)
         if agent_result is not None:
@@ -836,6 +853,7 @@ async def _run_baseline_evaluation(
                 logger.warning("Container cleanup failed for baseline task: %s", cleanup_err)
                 try:
                     if hasattr(env, "container") and env.container:
+                        env.container.kill()
                         env.container.remove(force=True)
                 except Exception:
                     pass
