@@ -811,6 +811,9 @@ CMD ["/bin/bash"]
         Also creates a non-root user for running Claude CLI, since it blocks
         --dangerously-skip-permissions when running as root.
 
+        Retries transient failures (network contention, container resource
+        pressure) up to 3 times with exponential backoff.
+
         Args:
             env: Task environment to install into.
         """
@@ -827,25 +830,86 @@ CMD ["/bin/bash"]
             "apt-get install -y -qq nodejs"
         )
 
-        exit_code, stdout, stderr = await env.exec_command(
-            install_node_cmd,
-            timeout=300,
-            workdir="/tmp",
-        )
-        if exit_code != 0:
-            raise RuntimeError(f"Failed to install Node.js: {stderr}")
+        last_error = ""
+        for attempt in range(3):
+            # Verify container is still running before attempting exec
+            try:
+                env.container.reload()
+                if env.container.status != "running":
+                    raise RuntimeError(
+                        f"Container stopped before Node.js install "
+                        f"(status={env.container.status}, attempt={attempt + 1})"
+                    )
+            except RuntimeError:
+                raise
+            except Exception as e:
+                raise RuntimeError(f"Cannot reach container: {e}") from e
+
+            try:
+                exit_code, stdout, stderr = await env.exec_command(
+                    install_node_cmd,
+                    timeout=300,
+                    workdir="/tmp",
+                )
+            except Exception as e:
+                # exec itself failed (container died mid-command)
+                last_error = f"exec failed: {e}"
+                if attempt < 2:
+                    await asyncio.sleep(2**attempt)
+                    continue
+                raise RuntimeError(
+                    f"Failed to install Node.js after 3 attempts: {last_error}"
+                ) from e
+
+            if exit_code == 0:
+                break
+            last_error = stderr
+            if attempt < 2:
+                logger.warning(
+                    "Node.js install attempt %d failed (exit=%d): %s",
+                    attempt + 1,
+                    exit_code,
+                    stderr[:200],
+                )
+                await asyncio.sleep(2**attempt)
+        else:
+            raise RuntimeError(f"Failed to install Node.js after 3 attempts: {last_error}")
 
         # Install Claude CLI globally (optionally pin a specific version)
         claude_pkg = "@anthropic-ai/claude-code"
         if self.claude_code_version:
             claude_pkg = f"{claude_pkg}@{self.claude_code_version}"
-        exit_code, stdout, stderr = await env.exec_command(
-            f"npm install -g {claude_pkg}",
-            timeout=120,
-            workdir="/tmp",
-        )
-        if exit_code != 0:
-            raise RuntimeError(f"Failed to install Claude CLI: {stderr}")
+
+        last_error = ""
+        for attempt in range(3):
+            try:
+                exit_code, stdout, stderr = await env.exec_command(
+                    f"npm install -g {claude_pkg}",
+                    timeout=120,
+                    workdir="/tmp",
+                )
+            except Exception as e:
+                last_error = f"exec failed: {e}"
+                if attempt < 2:
+                    await asyncio.sleep(2**attempt)
+                    continue
+                raise RuntimeError(
+                    f"Failed to install Claude CLI after 3 attempts: {last_error}"
+                ) from e
+
+            if exit_code == 0:
+                break
+            last_error = stderr
+            if attempt < 2:
+                logger.warning(
+                    "Claude CLI install attempt %d failed (exit=%d): %s",
+                    attempt + 1,
+                    exit_code,
+                    stderr[:200],
+                )
+                await asyncio.sleep(2**attempt)
+        else:
+            raise RuntimeError(f"Failed to install Claude CLI after 3 attempts: {last_error}")
 
         # Create a non-root user for running Claude CLI
         # Claude CLI blocks --dangerously-skip-permissions when running as root
