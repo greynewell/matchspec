@@ -133,10 +133,17 @@ class TaskEnvironment:
     workdir: str
     host_workdir: str
     instance_id: str
+    repo: str = ""
+    base_commit: str = ""
     uses_prebuilt: bool = field(default=False)
     claude_cli_installed: bool = field(default=False)
     _temp_dir: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
     _manager: "DockerEnvironmentManager | None" = field(default=None, repr=False)
+
+    @property
+    def repo_name(self) -> str:
+        """Short repository name (e.g., 'django' from 'django/django')."""
+        return self.repo.split("/")[-1] if self.repo else ""
 
     async def exec_command(
         self,
@@ -297,12 +304,50 @@ class TaskEnvironment:
         This aggressively cleans up resources immediately after task completion
         to prevent disk space exhaustion when running many tasks.
         """
-        # Stop and remove container
+        _cleanup_succeeded = False
+
+        # Stop container
         try:
             self.container.stop(timeout=5)
-            self.container.remove(force=True)
-        except Exception:
-            pass
+        except docker.errors.NotFound:
+            pass  # Already gone
+        except Exception as e:
+            logger.warning("Failed to stop container %s: %s", self.instance_id, e)
+
+        # Remove container with retry
+        for attempt in range(3):
+            try:
+                self.container.remove(force=True)
+                _cleanup_succeeded = True
+                break
+            except docker.errors.NotFound:
+                _cleanup_succeeded = True
+                break
+            except Exception as e:
+                if attempt < 2:
+                    delay = [1, 2][attempt]
+                    logger.warning(
+                        "Failed to remove container %s (attempt %d/3): %s. Retrying in %ds...",
+                        self.instance_id,
+                        attempt + 1,
+                        e,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.warning(
+                        "Failed to remove container %s after 3 attempts: %s",
+                        self.instance_id,
+                        e,
+                    )
+
+        # Remove from manager's container list on success so cleanup_all_sync
+        # doesn't retry. On failure, keep in list so it gets retried at exit.
+        if _cleanup_succeeded and self._manager is not None:
+            try:
+                self._manager._containers.remove(self.container)
+            except ValueError:
+                pass  # Signal handler may have already cleared the list
 
         # Clean up temp directory immediately
         if self._temp_dir is not None:
@@ -634,6 +679,8 @@ CMD ["/bin/bash"]
             workdir=container_workdir,
             host_workdir=host_workdir,
             instance_id=instance_id,
+            repo=repo,
+            base_commit=base_commit,
             uses_prebuilt=uses_prebuilt,
             claude_cli_installed=False,
             _temp_dir=temp_dir,
@@ -876,13 +923,22 @@ CMD ["/bin/bash"]
 
         # Clean up containers
         for container in self._containers:
+            container_name = container.name or container.short_id
             try:
-                container_name = container.name or container.short_id
                 container.stop(timeout=5)
+            except docker.errors.NotFound:
+                pass  # Already removed (e.g., by TaskEnvironment.cleanup)
+            except Exception as exc:
+                logger.debug("Failed to stop container %s: %s", container_name, exc)
+
+            try:
                 container.remove(force=True)
                 cleanup_report.containers_removed.append(container_name)
+            except docker.errors.NotFound:
+                # Already removed — count as success
+                cleanup_report.containers_removed.append(container_name)
             except Exception as e:
-                cleanup_report.errors.append(f"Failed to remove container: {e}")
+                cleanup_report.errors.append(f"Failed to remove container {container_name}: {e}")
         self._containers.clear()
 
         # Clean up volumes
@@ -927,6 +983,49 @@ CMD ["/bin/bash"]
             logger.info(str(cleanup_report))
 
         return cleanup_report
+
+    def cleanup_stale_session_containers(self) -> int:
+        """Remove containers from previous mcpbr sessions.
+
+        Finds containers with the mcpbr label whose session ID doesn't match
+        the current session and removes them. Called once at startup.
+
+        Returns:
+            Number of stale containers removed.
+        """
+        removed = 0
+        try:
+            containers = self.client.containers.list(
+                all=True,
+                filters={"label": f"{MCPBR_LABEL}=true"},
+            )
+        except Exception as e:
+            logger.warning("Failed to list containers for stale cleanup: %s", e)
+            return 0
+
+        for container in containers:
+            session = container.labels.get(MCPBR_SESSION_LABEL, "")
+            if session == self._session_id:
+                continue  # Current session — keep
+
+            name = container.name or container.short_id
+            try:
+                container.stop(timeout=5)
+            except docker.errors.NotFound:
+                continue
+            except Exception as exc:
+                logger.debug("Failed to stop stale container %s: %s", name, exc)
+
+            try:
+                container.remove(force=True)
+                removed += 1
+                logger.info("Removed stale container %s (session=%s)", name, session)
+            except docker.errors.NotFound:
+                removed += 1  # Already gone
+            except Exception as e:
+                logger.warning("Failed to remove stale container %s: %s", name, e)
+
+        return removed
 
     async def cleanup_all(self, report: bool = False) -> CleanupReport:
         """Clean up all containers and temporary directories.

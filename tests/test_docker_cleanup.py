@@ -3,6 +3,7 @@
 import datetime
 from unittest.mock import MagicMock, patch
 
+import docker.errors
 import pytest
 
 from mcpbr.docker_env import (
@@ -11,6 +12,7 @@ from mcpbr.docker_env import (
     MCPBR_TIMESTAMP_LABEL,
     CleanupReport,
     DockerEnvironmentManager,
+    TaskEnvironment,
     cleanup_all_resources,
     cleanup_orphaned_containers,
     cleanup_orphaned_networks,
@@ -372,10 +374,11 @@ class TestDockerEnvironmentManager:
         """Test manager cleanup handles errors gracefully."""
         manager = DockerEnvironmentManager()
 
-        # Add mock container that fails to stop
+        # Add mock container that fails to both stop AND remove
         mock_container = MagicMock()
         mock_container.name = "failing-container"
         mock_container.stop.side_effect = Exception("Stop failed")
+        mock_container.remove.side_effect = Exception("Remove failed")
         manager._containers = [mock_container]
 
         report = manager.cleanup_all_sync(report=True)
@@ -419,7 +422,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir="/tmp/test",  # noqa: S108
             instance_id="test-instance",
             _temp_dir=mock_temp_dir,
             _manager=manager,
@@ -445,7 +448,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir="/tmp/test",  # noqa: S108
             instance_id="test-instance",
             _temp_dir=None,
             _manager=None,
@@ -472,7 +475,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir="/tmp/test",  # noqa: S108
             instance_id="test-instance",
             _temp_dir=mock_temp_dir,
             _manager=manager,
@@ -501,7 +504,7 @@ class TestTaskEnvironmentCleanup:
         env = TaskEnvironment(
             container=mock_container,
             workdir="/workspace",
-            host_workdir="/tmp/test",
+            host_workdir="/tmp/test",  # noqa: S108
             instance_id="test-instance",
             _temp_dir=mock_temp_dir1,
             _manager=manager,
@@ -536,3 +539,169 @@ class TestSignalHandlers:
 
         # Calling again should be idempotent
         register_signal_handlers()
+
+
+@pytest.mark.usefixtures("mock_docker_client")
+class TestTaskEnvironmentCleanupRetry:
+    """Test TaskEnvironment cleanup retry, logging, and container tracking (#439)."""
+
+    @pytest.mark.asyncio
+    async def test_task_environment_cleanup_logs_warning_on_failure(self, tmp_path):
+        """Test that cleanup logs a warning when container stop fails but still succeeds."""
+        manager = DockerEnvironmentManager()
+        mock_container = MagicMock()
+        mock_container.name = "test-container"
+        mock_container.stop.side_effect = Exception("stop timed out")
+        mock_container.remove.return_value = None
+        manager._containers = [mock_container]
+
+        env = TaskEnvironment(
+            container=mock_container,
+            workdir="/workspace",
+            host_workdir=str(tmp_path),
+            instance_id="test-instance",
+            _temp_dir=None,
+            _manager=manager,
+        )
+
+        # Should not raise despite stop failure
+        await env.cleanup()
+
+        # Stop failed but remove succeeded, so container is removed from list
+        assert mock_container not in manager._containers
+        # Remove was still called despite stop failure
+        mock_container.remove.assert_called_once_with(force=True)
+
+    @pytest.mark.asyncio
+    async def test_task_environment_cleanup_retries_remove(self, tmp_path):
+        """Test that cleanup retries container.remove up to 3 times."""
+        manager = DockerEnvironmentManager()
+        mock_container = MagicMock()
+        mock_container.name = "test-container"
+        mock_container.stop.return_value = None
+        # Fail twice, succeed on third attempt
+        mock_container.remove.side_effect = [
+            Exception("busy"),
+            Exception("busy"),
+            None,
+        ]
+        manager._containers = [mock_container]
+
+        env = TaskEnvironment(
+            container=mock_container,
+            workdir="/workspace",
+            host_workdir=str(tmp_path),
+            instance_id="test-instance",
+            _temp_dir=None,
+            _manager=manager,
+        )
+
+        await env.cleanup()
+
+        assert mock_container.remove.call_count == 3
+        # On success, container should be removed from manager's list
+        assert mock_container not in manager._containers
+
+    @pytest.mark.asyncio
+    async def test_task_environment_cleanup_removes_from_containers_list(self, tmp_path):
+        """Test that successful cleanup removes container from manager._containers."""
+        manager = DockerEnvironmentManager()
+        mock_container = MagicMock()
+        mock_container.name = "test-container"
+        mock_container.stop.return_value = None
+        mock_container.remove.return_value = None
+        manager._containers = [mock_container]
+
+        env = TaskEnvironment(
+            container=mock_container,
+            workdir="/workspace",
+            host_workdir=str(tmp_path),
+            instance_id="test-instance",
+            _temp_dir=None,
+            _manager=manager,
+        )
+
+        await env.cleanup()
+
+        assert mock_container not in manager._containers
+
+    @pytest.mark.asyncio
+    async def test_task_environment_cleanup_keeps_in_list_on_failure(self, tmp_path):
+        """Test that failed cleanup keeps container in manager._containers for retry at exit."""
+        manager = DockerEnvironmentManager()
+        mock_container = MagicMock()
+        mock_container.name = "test-container"
+        mock_container.stop.return_value = None
+        # Fail all 3 attempts
+        mock_container.remove.side_effect = Exception("permission denied")
+        manager._containers = [mock_container]
+
+        env = TaskEnvironment(
+            container=mock_container,
+            workdir="/workspace",
+            host_workdir=str(tmp_path),
+            instance_id="test-instance",
+            _temp_dir=None,
+            _manager=manager,
+        )
+
+        await env.cleanup()
+
+        # Container stays in list for cleanup_all_sync to retry
+        assert mock_container in manager._containers
+
+    def test_cleanup_stale_session_containers_removes_old_sessions(self, mock_docker_client):
+        """Test that stale containers from other sessions are removed."""
+        manager = DockerEnvironmentManager()
+
+        stale_container = MagicMock()
+        stale_container.name = "mcpbr-old-session-task1"
+        stale_container.labels = {
+            MCPBR_LABEL: "true",
+            MCPBR_SESSION_LABEL: "old-session-id",
+        }
+        stale_container.stop.return_value = None
+        stale_container.remove.return_value = None
+
+        mock_docker_client.containers.list.return_value = [stale_container]
+
+        removed = manager.cleanup_stale_session_containers()
+
+        assert removed == 1
+        stale_container.stop.assert_called_once_with(timeout=5)
+        stale_container.remove.assert_called_once_with(force=True)
+
+    def test_cleanup_stale_session_containers_preserves_current_session(self, mock_docker_client):
+        """Test that containers from the current session are preserved."""
+        manager = DockerEnvironmentManager()
+
+        current_container = MagicMock()
+        current_container.name = "mcpbr-current-task1"
+        current_container.labels = {
+            MCPBR_LABEL: "true",
+            MCPBR_SESSION_LABEL: manager._session_id,
+        }
+
+        mock_docker_client.containers.list.return_value = [current_container]
+
+        removed = manager.cleanup_stale_session_containers()
+
+        assert removed == 0
+        current_container.stop.assert_not_called()
+        current_container.remove.assert_not_called()
+
+    def test_cleanup_all_sync_handles_not_found(self):
+        """Test that cleanup_all_sync treats NotFound as success."""
+        manager = DockerEnvironmentManager()
+
+        mock_container = MagicMock()
+        mock_container.name = "already-gone"
+        mock_container.stop.side_effect = docker.errors.NotFound("gone")
+        mock_container.remove.side_effect = docker.errors.NotFound("gone")
+        manager._containers = [mock_container]
+
+        report = manager.cleanup_all_sync(report=True)
+
+        # Should count as successfully removed, no errors
+        assert "already-gone" in report.containers_removed
+        assert len(report.errors) == 0

@@ -576,7 +576,13 @@ class ClaudeCodeHarness:
         if not self.mcp_server or not self.mcp_server.setup_command:
             return
 
-        setup_cmd = self.mcp_server.get_setup_command_for_workdir(env.workdir)
+        setup_cmd = self.mcp_server.get_setup_command_for_workdir(
+            env.workdir,
+            repo=env.repo,
+            repo_name=env.repo_name,
+            base_commit=env.base_commit,
+            instance_id=env.instance_id,
+        )
         setup_timeout = max(1, int(self.mcp_server.setup_timeout_ms / 1000))
 
         if verbose:
@@ -592,6 +598,12 @@ class ClaudeCodeHarness:
         for key, value in self.mcp_server.get_expanded_env().items():
             safe_key = key.replace("-", "_").replace(".", "_")
             env_exports += f"export {safe_key}={shlex.quote(value)}\n"
+
+        # Inject MCPBR_* env vars so setup_command can use repo metadata
+        env_exports += f"export MCPBR_REPO={shlex.quote(env.repo)}\n"
+        env_exports += f"export MCPBR_REPO_NAME={shlex.quote(env.repo_name)}\n"
+        env_exports += f"export MCPBR_BASE_COMMIT={shlex.quote(env.base_commit)}\n"
+        env_exports += f"export MCPBR_INSTANCE_ID={shlex.quote(env.instance_id)}\n"
 
         await env.exec_command(
             f"cat > {env_file} << 'MCPBR_SETUP_ENV_EOF'\n{env_exports}MCPBR_SETUP_ENV_EOF",
@@ -662,7 +674,14 @@ class ClaudeCodeHarness:
         mcp_json_path = None
         if self.mcp_server and not self.mcp_server.setup_only:
             mcp_server_name = self.mcp_server.name
-            args = self.mcp_server.get_args_for_workdir(workdir)
+            repo = task.get("repo", "")
+            args = self.mcp_server.get_args_for_workdir(
+                workdir,
+                repo=repo,
+                repo_name=repo.split("/")[-1] if repo else "",
+                base_commit=task.get("base_commit", ""),
+                instance_id=instance_id,
+            )
             mcp_env = self.mcp_server.get_expanded_env()
 
             # Write .mcp.json file for Claude Code to discover MCP tools.
@@ -894,6 +913,13 @@ class ClaudeCodeHarness:
         if self.thinking_budget is not None:
             env_exports += f"export MAX_THINKING_TOKENS={shlex.quote(str(self.thinking_budget))}\n"
 
+        # Inject MCPBR_* env vars so setup_command caches and MCP server
+        # can locate the repo by its actual name instead of basename("/workspace")
+        env_exports += f"export MCPBR_REPO={shlex.quote(env.repo)}\n"
+        env_exports += f"export MCPBR_REPO_NAME={shlex.quote(env.repo_name)}\n"
+        env_exports += f"export MCPBR_BASE_COMMIT={shlex.quote(env.base_commit)}\n"
+        env_exports += f"export MCPBR_INSTANCE_ID={shlex.quote(env.instance_id)}\n"
+
         # Activate conda testbed environment for prebuilt SWE-bench images
         # so the agent's Bash tool has access to pytest and project dependencies.
         # This must come before the env_exports so conda PATH is set first,
@@ -915,7 +941,13 @@ class ClaudeCodeHarness:
         mcp_server_name = None
         if self.mcp_server and not self.mcp_server.setup_only:
             mcp_server_name = self.mcp_server.name
-            args = self.mcp_server.get_args_for_workdir(env.workdir)
+            args = self.mcp_server.get_args_for_workdir(
+                env.workdir,
+                repo=env.repo,
+                repo_name=env.repo_name,
+                base_commit=env.base_commit,
+                instance_id=env.instance_id,
+            )
             args_str = " ".join(args)
 
             # Log MCP server initialization
@@ -926,13 +958,21 @@ class ClaudeCodeHarness:
             # Write .mcp.json to workdir for Claude Code to discover MCP tools.
             # File-based config is more reliable than `claude mcp add` which can create
             # broken tool registrations where the server connects but tools aren't routable.
+            # Merge user-defined env with MCPBR_* vars so the MCP server
+            # process receives repo metadata directly (not only via shell env file)
+            mcp_env = self.mcp_server.get_expanded_env()
+            mcp_env["MCPBR_REPO"] = env.repo
+            mcp_env["MCPBR_REPO_NAME"] = env.repo_name
+            mcp_env["MCPBR_BASE_COMMIT"] = env.base_commit
+            mcp_env["MCPBR_INSTANCE_ID"] = env.instance_id
+
             mcp_config = {
                 "mcpServers": {
                     mcp_server_name: {
                         "type": "stdio",
                         "command": self.mcp_server.command,
                         "args": args,
-                        "env": self.mcp_server.get_expanded_env(),
+                        "env": mcp_env,
                     }
                 }
             }

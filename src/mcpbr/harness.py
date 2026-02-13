@@ -1339,6 +1339,13 @@ async def run_evaluation(
         claude_code_version=config.claude_code_version,
     )
 
+    # Clean up containers from previous sessions that may have been orphaned
+    stale_count = docker_manager.cleanup_stale_session_containers()
+    if stale_count > 0:
+        console.print(
+            f"[yellow]Cleaned up {stale_count} stale container(s) from previous run(s)[/yellow]"
+        )
+
     # Build notification config early for lifecycle events (v0.13.0)
     notify_config = _build_notify_config(config)
     eval_start_time = time.time()

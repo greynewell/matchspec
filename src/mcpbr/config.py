@@ -117,7 +117,9 @@ class MCPServerConfig(BaseModel):
         default=None,
         description="Shell command to run inside the container BEFORE the agent starts. "
         "Runs outside the task timer (does not count against timeout_seconds). "
-        "Use {workdir} as placeholder. Useful for pre-computing caches.",
+        "Placeholders: {workdir}, {repo}, {repo_name}, {base_commit}, {instance_id}. "
+        "Environment variables MCPBR_REPO, MCPBR_REPO_NAME, MCPBR_BASE_COMMIT, "
+        "MCPBR_INSTANCE_ID are also auto-injected.",
     )
     setup_timeout_ms: int = Field(
         default=900000,
@@ -151,18 +153,35 @@ class MCPServerConfig(BaseModel):
             )
         return self
 
-    def get_args_for_workdir(self, workdir: str) -> list[str]:
-        """Replace {workdir} placeholder in args with actual path."""
+    def get_args_for_workdir(self, workdir: str, **extra: str) -> list[str]:
+        """Replace placeholders in args with actual values.
+
+        Supported placeholders: {workdir}, {repo}, {repo_name},
+        {base_commit}, {instance_id}, plus any extra kwargs.
+        """
+        replacements = {"{workdir}": workdir}
+        for key, value in extra.items():
+            replacements[f"{{{key}}}"] = value
         result = []
         for arg in self.args:
-            result.append(arg.replace("{workdir}", workdir))
+            expanded = arg
+            for placeholder, value in replacements.items():
+                expanded = expanded.replace(placeholder, value)
+            result.append(expanded)
         return result
 
-    def get_setup_command_for_workdir(self, workdir: str) -> str | None:
-        """Replace {workdir} placeholder in setup_command with actual path."""
+    def get_setup_command_for_workdir(self, workdir: str, **extra: str) -> str | None:
+        """Replace placeholders in setup_command with actual values.
+
+        Supported placeholders: {workdir}, {repo}, {repo_name},
+        {base_commit}, {instance_id}, plus any extra kwargs.
+        """
         if self.setup_command is None:
             return None
-        return self.setup_command.replace("{workdir}", workdir)
+        expanded = self.setup_command.replace("{workdir}", workdir)
+        for key, value in extra.items():
+            expanded = expanded.replace(f"{{{key}}}", value)
+        return expanded
 
     def get_expanded_env(self) -> dict[str, str]:
         """Expand ${VAR} references in env values using os.environ.
