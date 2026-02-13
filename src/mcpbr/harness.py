@@ -60,33 +60,34 @@ def dict_to_namespace(data: Any) -> Any:
         return data
 
 
-# -- Cold-start mitigation helpers (#401) ------------------------------------
+# -- Cold-start mitigation helpers (#401, #465) --------------------------------
 
-# Seconds between each task launch in the first concurrent batch.
-_STAGGER_INTERVAL = 1.0
+# Seconds between each task launch within a concurrent batch.
+# Must be large enough that heavy container setup (apt-get install nodejs,
+# npm install claude-code) doesn't overlap across siblings in the same batch.
+_STAGGER_INTERVAL = 5.0
 
 
 def _stagger_delay(task_index: int, max_concurrent: int) -> float:
-    """Return the startup delay for a task to avoid cold-start contention.
+    """Return the startup delay for a task to spread container setup load.
 
-    Only the first batch (indices 0 .. max_concurrent-1) is staggered.
-    The very first task starts immediately; subsequent tasks in the batch
-    get an increasing delay so Docker image pulls and container creation
-    don't all hit at once.
+    Each task within a concurrent batch gets an increasing delay so that
+    heavy operations (apt-get install, npm install) don't all hit Docker,
+    network, and I/O simultaneously. This applies to EVERY batch, not just
+    the first one, because each batch creates fresh containers.
 
     Args:
         task_index: Zero-based index of the task in launch order.
         max_concurrent: Semaphore size / max parallelism.
 
     Returns:
-        Delay in seconds (0.0 means start immediately).
+        Delay in seconds (0.0 means first task in batch starts immediately).
     """
     if max_concurrent <= 1:
         return 0.0
-    # Only stagger the first batch
-    if task_index >= max_concurrent:
-        return 0.0
-    return task_index * _STAGGER_INTERVAL
+    # Stagger within each batch, not just the first
+    position_in_batch = task_index % max_concurrent
+    return position_in_batch * _STAGGER_INTERVAL
 
 
 def _should_retry_zero_iteration(result: dict[str, Any]) -> bool:
@@ -109,6 +110,48 @@ def _should_retry_zero_iteration(result: dict[str, Any]) -> bool:
     if tokens.get("input", -1) != 0 or tokens.get("output", -1) != 0:
         return False
     return True
+
+
+_INFRA_ERROR_PATTERNS = [
+    "container",  # "Container ... is no longer running", "container ... is not running"
+    "Failed to install Node.js",
+    "Failed to install Claude CLI",
+    "409 Client Error",
+]
+
+
+def _is_infra_failure(result: dict[str, Any]) -> bool:
+    """Check whether a task result indicates an infrastructure failure worth retrying.
+
+    Infrastructure failures are transient issues where the agent never got a
+    fair chance to run: container OOM kills, Node.js install failures under
+    resource contention, Docker API errors, etc.
+
+    Does NOT retry legitimate agent failures (agent ran but produced wrong patch)
+    or timeouts where the agent actually worked (iterations > 0).
+
+    Args:
+        result: Single-run result dict.
+
+    Returns:
+        True if the failure looks like an infrastructure issue.
+    """
+    # Already handled by _should_retry_zero_iteration
+    if _should_retry_zero_iteration(result):
+        return True
+
+    error = result.get("error", "")
+    if not error:
+        return False
+
+    # Only retry if the agent never actually ran (zero iterations, zero tokens)
+    if result.get("iterations", 0) > 0:
+        return False
+    if result.get("tool_calls", 0) > 0:
+        return False
+
+    error_lower = error.lower()
+    return any(pattern.lower() in error_lower for pattern in _INFRA_ERROR_PATTERNS)
 
 
 @dataclass
@@ -366,10 +409,12 @@ async def run_single_task(
                     mcp_server_config=config.mcp_server_a,
                     server_name="server_a",
                 )
-                # Retry once on cold-start failure (#401)
-                if result.mcp_server_a and _should_retry_zero_iteration(result.mcp_server_a):
+                # Retry once on infrastructure failure (#401, #465)
+                if result.mcp_server_a and _is_infra_failure(result.mcp_server_a):
                     logger.info(
-                        "Retrying MCP server_a task %s (zero-iteration cold-start)", instance_id
+                        "Retrying MCP server_a task %s (infra failure: %s)",
+                        instance_id,
+                        result.mcp_server_a.get("error", "")[:100],
                     )
                     result.mcp_server_a = await _run_mcp_evaluation(
                         task,
@@ -406,10 +451,12 @@ async def run_single_task(
                     mcp_server_config=config.mcp_server_b,
                     server_name="server_b",
                 )
-                # Retry once on cold-start failure (#401)
-                if result.mcp_server_b and _should_retry_zero_iteration(result.mcp_server_b):
+                # Retry once on infrastructure failure (#401, #465)
+                if result.mcp_server_b and _is_infra_failure(result.mcp_server_b):
                     logger.info(
-                        "Retrying MCP server_b task %s (zero-iteration cold-start)", instance_id
+                        "Retrying MCP server_b task %s (infra failure: %s)",
+                        instance_id,
+                        result.mcp_server_b.get("error", "")[:100],
                     )
                     result.mcp_server_b = await _run_mcp_evaluation(
                         task,
@@ -444,9 +491,13 @@ async def run_single_task(
                     cache,
                     mcp_logs_dir,
                 )
-                # Retry once on cold-start failure (#401)
-                if result.mcp and _should_retry_zero_iteration(result.mcp):
-                    logger.info("Retrying MCP task %s (zero-iteration cold-start)", instance_id)
+                # Retry once on infrastructure failure (#401, #465)
+                if result.mcp and _is_infra_failure(result.mcp):
+                    logger.info(
+                        "Retrying MCP task %s (infra failure: %s)",
+                        instance_id,
+                        result.mcp.get("error", "")[:100],
+                    )
                     result.mcp = await _run_mcp_evaluation(
                         task,
                         config,
@@ -477,9 +528,13 @@ async def run_single_task(
                 baseline_log_writer if baseline_log_writer else log_file,
                 cache,
             )
-            # Retry once on cold-start failure (#401)
-            if result.baseline and _should_retry_zero_iteration(result.baseline):
-                logger.info("Retrying baseline task %s (zero-iteration cold-start)", instance_id)
+            # Retry once on infrastructure failure (#401, #465)
+            if result.baseline and _is_infra_failure(result.baseline):
+                logger.info(
+                    "Retrying baseline task %s (infra failure: %s)",
+                    instance_id,
+                    result.baseline.get("error", "")[:100],
+                )
                 result.baseline = await _run_baseline_evaluation(
                     task,
                     config,
@@ -1252,7 +1307,10 @@ async def run_evaluation(
                     f"[cyan]Using cached results for {skipped_count} completed tasks[/cyan]"
                 )
 
-    console.print(f"[dim]Evaluating {len(tasks_to_run)} tasks[/dim]")
+    task_ids_loaded = [t["instance_id"] for t in tasks_to_run]
+    console.print(
+        f"[dim]Evaluating {len(tasks_to_run)} tasks: {', '.join(task_ids_loaded[:5])}{'...' if len(task_ids_loaded) > 5 else ''}[/dim]"
+    )
     console.print(f"[dim]Provider: {config.provider}, Harness: {config.agent_harness}[/dim]")
 
     # Initialize cache if enabled
