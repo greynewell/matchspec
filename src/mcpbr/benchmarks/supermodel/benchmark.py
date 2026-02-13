@@ -193,26 +193,12 @@ class SupermodelBenchmark:
         """Generate problem statement for the enhanced (graph-assisted) condition.
 
         The agent gets a pre-computed analysis JSON from a call graph analyzer.
-        The analyzer has already done reachability analysis -- these ARE dead code.
-        The agent should do light validation and filter obvious false positives.
+        Its job is to faithfully transcribe ALL candidates into REPORT.json.
         """
         language = task_cfg.get("language", "typescript")
         analysis_file = self._endpoint.analysis_filename
 
         ext = ".ts" if language == "typescript" else ".py"
-        if language == "python":
-            lang_examples = """IMPORTANT DISTINCTIONS:
-- A function listed in __all__ but never actually imported/called = DEAD
-- Two functions that only call each other but nothing calls either = DEAD cluster
-- A cleanup function registered with atexit but whose state is never populated = DEAD
-- A constant that is only referenced in its own module's dead functions = DEAD"""
-        else:
-            lang_examples = """IMPORTANT DISTINCTIONS:
-- An exported function that is never imported or called by any other module = DEAD
-- Two functions that only call each other but nothing calls either = DEAD cluster
-- A method on a class where the class itself is never instantiated = DEAD
-- A constant that is only referenced in its own module's dead functions = DEAD
-- Middleware or handlers that are defined but never registered with the router = DEAD"""
 
         return f"""You are a code analyst. Find all dead code in this {language} codebase.
 
@@ -221,22 +207,17 @@ candidates. The results are in `{analysis_file}`.
 
 The analyzer uses full call graph reachability -- it traces which functions are
 actually called from entry points, not just whether a name appears in the code.
-This means its candidates ARE unreachable code, even if the name appears elsewhere
-(e.g., in self-recursive calls, re-exports that are never consumed, or internal
-helper chains that have no external caller).
-
-{lang_examples}
+This means its candidates ARE unreachable code. Trust the analyzer.
 
 IMPORTANT: Use the MCP filesystem tools (read_text_file, write_file) for ALL file
 I/O in this task. Do NOT use the built-in Read/Write tools.
 
-YOUR JOB (do these steps IN ORDER):
+YOUR ONLY JOB:
 
-STEP 1 - IMMEDIATELY write REPORT.json with ALL candidates from the analysis file.
-Read `{analysis_file}` using the filesystem read_text_file tool, extract the
-deadCodeCandidates array, and write REPORT.json using the filesystem write_file
-tool with every single candidate. Do NOT investigate or validate candidates first.
-Write REPORT.json BEFORE doing any other analysis.
+1. Read `{analysis_file}` using the filesystem read_text_file tool.
+2. Extract the deadCodeCandidates array.
+3. Write REPORT.json using the filesystem write_file tool with EVERY candidate.
+   Do NOT filter, validate, or remove any candidates. Include ALL of them.
 
 REPORT.json format:
 {{
@@ -249,16 +230,12 @@ REPORT.json format:
 
 Type should be one of: function, class, method, const.
 
-STEP 2 - OPTIONAL: Spot-check 3-5 candidates to remove obvious false positives.
-Only remove a candidate if it is clearly a framework entry point (e.g., main(),
-express route handler registered in app.use(), React component rendered in JSX).
-The analyzer is more reliable than grep -- if you're unsure, KEEP the candidate.
-Update REPORT.json with the filtered list using the filesystem write_file tool.
-
-STEP 3 - If you removed any candidates in Step 2, update REPORT.json.
-
-CRITICAL: Your primary goal is to produce REPORT.json. Write it FIRST, refine AFTER.
-Do NOT try to validate every candidate -- that is NOT your job."""
+CRITICAL RULES:
+- Include EVERY candidate from the analysis file. Do NOT skip any.
+- Do NOT investigate or validate candidates by reading source files.
+- Do NOT filter candidates based on your own judgment.
+- Your ONLY job is to faithfully transcribe candidates into REPORT.json.
+- Once REPORT.json is written, you are DONE. Stop immediately."""
 
     def _generate_baseline_problem_statement(self, task_cfg: dict) -> str:
         """Generate problem statement for the baseline (manual analysis) condition.
@@ -412,30 +389,24 @@ are better than false negatives for this analysis."""
                 else:
                     exclude_patterns = task.get("zip_exclude", [])
                     analysis_json = await self._get_analysis(
-                        repo_dir, instance_id, scope_prefix, exclude_patterns,
+                        repo_dir,
+                        instance_id,
+                        scope_prefix,
+                        exclude_patterns,
                         strip_prefix=is_corpus,
                     )
 
                 # Slim down the analysis for agent consumption:
-                # 1. Strip verbose fields (code snippets, descriptions) — agent
-                #    only needs file/name/type to do validation
-                # 2. Cap at 150 candidates to stay within tool result size limits
-                #    (Claude Code's Read tool caps at 25K tokens; 200 produced
-                #    28K tokens on TypeScript, so 150 keeps us safely under)
+                # Strip verbose fields (code snippets, descriptions) — agent
+                # only needs file/name/type. With just these fields, even 1000+
+                # candidates stay under 100KB which is well within read limits.
                 keep_fields = {"file", "name", "type", "reason", "confidence"}
-                max_candidates = 150
                 for key in ("deadCodeCandidates", "candidates", "items"):
                     if key in analysis_json:
                         items = analysis_json[key]
-                        # Strip to essential fields
                         items = [
                             {k: v for k, v in item.items() if k in keep_fields} for item in items
                         ]
-                        # Truncate
-                        if len(items) > max_candidates:
-                            total = len(items)
-                            items = items[:max_candidates]
-                            logger.warning(f"Truncated {key} from {total} to {max_candidates}")
                         analysis_json[key] = items
 
                 # Strip top-level keys the agent doesn't need.

@@ -2,20 +2,42 @@
 #
 # Usage:
 #   uv run mcpbr run --config config/supermodel-deadcode-pr.yaml
-#   uv run mcpbr run --config config/supermodel-deadcode-pr.yaml --mcp-only -t prisma_pr28485
+#   uv run mcpbr run --config config/supermodel-deadcode-pr.yaml --mcp-only -t tyr_pr258
 #   uv run mcpbr run --config config/supermodel-deadcode-pr.yaml --baseline-only -n 1
+#
+# Task quality notes:
+#   - tyr_pr258: 95.5% API recall (21/22 GT items detected). Best test case.
+#   - gemini_cli_pr18681: Genuine ts-prune cleanup, well-documented.
+#   - prisma_pr28485: 0% recall — GT items only referenced by tests (API gap).
+#   - n8n_pr23572: 0% recall — GT items are live code (feature removal, not dead code).
+#   - typescript_pr56817: Staging API cannot complete (too large). Needs cached_analysis.
 
 benchmark: "supermodel"
 analysis_type: "dead-code"
 
 tasks:
+  - id: tyr_pr258
+    repo: uncovering-world/track-your-regions
+    pr_number: 258
+    merge_commit: "6f480121e4641b5551e6af092283a5d161490e5f"
+    language: typescript
+    description: "Remove dead code and unused exports — 22 functions/interfaces across backend+frontend"
+
+  - id: gemini_cli_pr18681
+    repo: google-gemini/gemini-cli
+    pr_number: 18681
+    merge_commit: "14219bb57d7d865b284047b05a9e93d70f61af9b"
+    language: typescript
+    scope_prefix: "packages"
+    description: "Remove unused exports and redundant hook files (ts-prune verified)"
+
   - id: prisma_pr28485
     repo: prisma/prisma
     pr_number: 28485
     merge_commit: "e12307364896b8ab9b47ac0b9941820ba5070ec6"
     language: typescript
     scope_prefix: "packages"
-    description: "Remove dead code from generators"
+    description: "Remove dead code from generators (API recall limited by test-import gap)"
 
   - id: typescript_pr56817
     repo: microsoft/TypeScript
@@ -23,7 +45,7 @@ tasks:
     merge_commit: "752135eb4046fc820006b41b2f621242f77b6c3e"
     language: typescript
     scope_prefix: "src"
-    description: "Remove unused exports via Knip -- 30+ exported functions"
+    description: "Remove unused exports via Knip — 122 items (staging API too slow, needs cached_analysis)"
     zip_exclude: ["loc/*", "lib/*", "harness/*", "testRunner/*", "*.lcl", "*.d.ts"]
 
   - id: n8n_pr23572
@@ -32,7 +54,7 @@ tasks:
     merge_commit: "ea889bee8990d50fcafa989669288bff549750c4"
     language: typescript
     scope_prefix: "packages"
-    description: "Remove Pyodide -- exported functions/classes for Python sandboxing"
+    description: "Remove Pyodide — feature removal, not dead code (API correctly sees as alive)"
 
 supermodel_api_base: "https://staging.api.supermodeltools.com"
 supermodel_api_key: null  # Set via SUPERMODEL_API_KEY env var
