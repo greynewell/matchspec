@@ -25,8 +25,10 @@ from mcpbr.analytics.statistical import (
     chi_squared_test,
     compare_resolution_rates,
     effect_size_cohens_d,
+    interpret_effect_size,
     mann_whitney_u,
     permutation_test,
+    wilson_score_interval,
 )
 from mcpbr.analytics.trends import (
     calculate_moving_average,
@@ -1257,3 +1259,70 @@ class TestFormatComparisonTable:
         """format_comparison_table handles a comparison with empty summary_table."""
         output = format_comparison_table({"summary_table": [], "unique_wins": {}, "rankings": {}})
         assert "MULTI-MODEL COMPARISON" in output
+
+
+class TestWilsonScoreInterval:
+    """Tests for wilson_score_interval()."""
+
+    def test_basic_interval(self) -> None:
+        """Basic 50% success rate with moderate sample."""
+        result = wilson_score_interval(successes=50, total=100)
+        assert result["proportion"] == pytest.approx(0.5)
+        assert result["ci_lower"] < 0.5
+        assert result["ci_upper"] > 0.5
+        # 95% CI for 50/100 should be roughly [0.40, 0.60]
+        assert 0.35 < result["ci_lower"] < 0.45
+        assert 0.55 < result["ci_upper"] < 0.65
+
+    def test_zero_successes(self) -> None:
+        """0% success rate should have ci_lower = 0."""
+        result = wilson_score_interval(successes=0, total=20)
+        assert result["proportion"] == pytest.approx(0.0)
+        assert result["ci_lower"] == pytest.approx(0.0)
+        assert result["ci_upper"] > 0.0
+
+    def test_all_successes(self) -> None:
+        """100% success rate should have ci_upper = 1."""
+        result = wilson_score_interval(successes=20, total=20)
+        assert result["proportion"] == pytest.approx(1.0)
+        assert result["ci_upper"] == pytest.approx(1.0)
+        assert result["ci_lower"] < 1.0
+
+    def test_small_vs_large_sample(self) -> None:
+        """Larger sample should produce narrower CI."""
+        small = wilson_score_interval(successes=5, total=10)
+        large = wilson_score_interval(successes=50, total=100)
+        small_width = small["ci_upper"] - small["ci_lower"]
+        large_width = large["ci_upper"] - large["ci_lower"]
+        assert large_width < small_width
+
+    def test_invalid_total_raises(self) -> None:
+        with pytest.raises(ValueError, match="Total must be a positive"):
+            wilson_score_interval(successes=0, total=0)
+
+    def test_negative_successes_raises(self) -> None:
+        with pytest.raises(ValueError, match="Successes must be non-negative"):
+            wilson_score_interval(successes=-1, total=10)
+
+    def test_successes_exceed_total_raises(self) -> None:
+        with pytest.raises(ValueError, match="Successes cannot exceed total"):
+            wilson_score_interval(successes=15, total=10)
+
+
+class TestInterpretEffectSize:
+    """Tests for interpret_effect_size()."""
+
+    def test_negligible(self) -> None:
+        assert interpret_effect_size(0.05) == "negligible"
+
+    def test_small(self) -> None:
+        assert interpret_effect_size(0.2) == "small"
+
+    def test_medium(self) -> None:
+        assert interpret_effect_size(0.4) == "medium"
+
+    def test_large(self) -> None:
+        assert interpret_effect_size(0.6) == "large"
+
+    def test_negative_uses_absolute_value(self) -> None:
+        assert interpret_effect_size(-0.4) == "medium"

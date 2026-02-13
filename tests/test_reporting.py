@@ -796,3 +796,92 @@ class TestToolCoverageInReports:
             assert "### Unused Tools" in content
             assert "Write" in content
             assert "Edit" in content
+
+
+class TestStatisticalSignificanceOutput:
+    """Tests for statistical significance in reporting output."""
+
+    @pytest.fixture
+    def results_with_significance(self) -> EvaluationResults:
+        """Create evaluation results with significance data."""
+        return EvaluationResults(
+            metadata={
+                "timestamp": "2026-01-20T12:00:00Z",
+                "config": {
+                    "model": "claude-sonnet-4-5-20250929",
+                    "provider": "anthropic",
+                    "agent_harness": "claude-code",
+                    "benchmark": "swe-bench-lite",
+                    "dataset": "SWE-bench/SWE-bench_Lite",
+                    "sample_size": 20,
+                    "timeout_seconds": 300,
+                    "max_iterations": 10,
+                },
+                "mcp_server": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "{workdir}"],
+                },
+            },
+            summary={
+                "mcp": {"resolved": 12, "total": 20, "rate": 0.6},
+                "baseline": {"resolved": 6, "total": 20, "rate": 0.3},
+                "improvement": "+100.0%",
+                "significance": {
+                    "group_a_ci": {"proportion": 0.6, "ci_lower": 0.386, "ci_upper": 0.781},
+                    "group_b_ci": {"proportion": 0.3, "ci_lower": 0.148, "ci_upper": 0.500},
+                    "chi2": 3.636,
+                    "p_value": 0.0565,
+                    "significant": False,
+                    "effect_size": 0.302,
+                    "effect_interpretation": "medium",
+                    "small_sample": True,
+                    "n_a": 20,
+                    "n_b": 20,
+                },
+            },
+            tasks=[
+                TaskResult(
+                    instance_id="test-task-1",
+                    mcp={"resolved": True},
+                    baseline={"resolved": False},
+                ),
+            ],
+        )
+
+    def test_print_summary_renders_significance(
+        self, results_with_significance: EvaluationResults
+    ) -> None:
+        """Test that print_summary renders statistical significance section."""
+        console = Console(file=__import__("io").StringIO(), force_terminal=True)
+        print_summary(results_with_significance, console)
+        output = console.file.getvalue()
+        assert "Statistical Significance" in output
+
+    def test_print_summary_no_significance_graceful(
+        self, sample_results: EvaluationResults
+    ) -> None:
+        """Test that print_summary handles missing significance data gracefully."""
+        console = Console(file=__import__("io").StringIO(), force_terminal=True)
+        # sample_results fixture has no significance data -- should not crash
+        print_summary(sample_results, console)
+        output = console.file.getvalue()
+        assert "Statistical Significance" not in output
+
+    def test_small_sample_warning(self, results_with_significance: EvaluationResults) -> None:
+        """Test that small sample warning is shown."""
+        console = Console(file=__import__("io").StringIO(), force_terminal=True)
+        print_summary(results_with_significance, console)
+        output = console.file.getvalue()
+        assert "Small sample size" in output
+
+    def test_markdown_report_includes_significance(
+        self, results_with_significance: EvaluationResults
+    ) -> None:
+        """Test that markdown report includes significance section."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "report.md"
+            save_markdown_report(results_with_significance, output_path)
+            content = output_path.read_text()
+            assert "## Statistical Significance" in content
+            assert "MCP Agent rate" in content
+            assert "Baseline rate" in content

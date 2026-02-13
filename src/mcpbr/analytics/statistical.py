@@ -74,6 +74,102 @@ def _normal_cdf(z: float) -> float:
     return 1.0 - p
 
 
+def _z_score_for_confidence(confidence: float) -> float:
+    """Get z-score for a given confidence level.
+
+    Uses a lookup table for common values and Abramowitz & Stegun
+    rational approximation as fallback.
+
+    Args:
+        confidence: Confidence level (e.g., 0.90, 0.95, 0.99).
+
+    Returns:
+        The z-score corresponding to the confidence level.
+    """
+    # Lookup table for common confidence levels
+    lookup = {0.90: 1.6449, 0.95: 1.9600, 0.99: 2.5758}
+    if confidence in lookup:
+        return lookup[confidence]
+
+    # Abramowitz & Stegun rational approximation for inverse normal
+    # Compute z such that P(Z <= z) = (1 + confidence) / 2
+    p = (1.0 + confidence) / 2.0
+    # Rational approximation for 0.5 < p < 1
+    t = math.sqrt(-2.0 * math.log(1.0 - p))
+    c0, c1, c2 = 2.515517, 0.802853, 0.010328
+    d1, d2, d3 = 1.432788, 0.189269, 0.001308
+    return t - (c0 + c1 * t + c2 * t * t) / (1.0 + d1 * t + d2 * t * t + d3 * t * t * t)
+
+
+def wilson_score_interval(
+    successes: int,
+    total: int,
+    confidence: float = 0.95,
+) -> dict[str, float]:
+    """Wilson score interval for a binomial proportion.
+
+    Provides a confidence interval for a proportion (e.g., resolution rate)
+    that handles edge cases (0% and 100%) correctly and works well for
+    small sample sizes, unlike the normal approximation.
+
+    Args:
+        successes: Number of successes (e.g., resolved tasks).
+        total: Total number of trials.
+        confidence: Confidence level (default 0.95 for 95% CI).
+
+    Returns:
+        Dictionary with keys:
+            - proportion: Point estimate (successes / total).
+            - ci_lower: Lower bound of the confidence interval.
+            - ci_upper: Upper bound of the confidence interval.
+
+    Raises:
+        ValueError: If total <= 0, successes < 0, or successes > total.
+    """
+    if total <= 0:
+        raise ValueError("Total must be a positive integer.")
+    if successes < 0:
+        raise ValueError("Successes must be non-negative.")
+    if successes > total:
+        raise ValueError("Successes cannot exceed total.")
+
+    p_hat = successes / total
+    z = _z_score_for_confidence(confidence)
+    z2 = z * z
+
+    denominator = 1.0 + z2 / total
+    centre = (p_hat + z2 / (2.0 * total)) / denominator
+    margin = (z / denominator) * math.sqrt(
+        p_hat * (1.0 - p_hat) / total + z2 / (4.0 * total * total)
+    )
+
+    return {
+        "proportion": p_hat,
+        "ci_lower": max(0.0, centre - margin),
+        "ci_upper": min(1.0, centre + margin),
+    }
+
+
+def interpret_effect_size(phi: float) -> str:
+    """Interpret a phi coefficient effect size per Cohen's conventions.
+
+    Args:
+        phi: Phi coefficient (absolute value is used).
+
+    Returns:
+        One of "negligible", "small", "medium", or "large".
+    """
+    abs_phi = abs(phi)
+    if abs_phi < 0.1:
+        return "negligible"
+    elif abs_phi < 0.3:
+        return "small"
+    elif abs_phi < 0.5:
+        return "medium"
+    else:
+        return "large"
+
+
 def chi_squared_test(
     success_a: int,
     total_a: int,

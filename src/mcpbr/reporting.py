@@ -382,6 +382,63 @@ def print_comprehensive_statistics(stats: "ComprehensiveStatistics", console: Co
                 console.print(f"  {category}: {count}")
 
 
+def _print_significance_section(
+    significance: dict,
+    label_a: str = "MCP Agent",
+    label_b: str = "Baseline",
+    console: Console | None = None,
+) -> None:
+    """Print statistical significance section to console.
+
+    Args:
+        significance: Dictionary with significance data from harness summary.
+        label_a: Label for group A.
+        label_b: Label for group B.
+        console: Rich console for output. Creates one if not provided.
+    """
+    if console is None:
+        console = Console()
+
+    console.print()
+    console.print("[bold]Statistical Significance[/bold]")
+    console.print()
+
+    a_ci = significance.get("group_a_ci", {})
+    b_ci = significance.get("group_b_ci", {})
+
+    a_pct = a_ci.get("proportion", 0) * 100
+    a_lo = a_ci.get("ci_lower", 0) * 100
+    a_hi = a_ci.get("ci_upper", 0) * 100
+
+    b_pct = b_ci.get("proportion", 0) * 100
+    b_lo = b_ci.get("ci_lower", 0) * 100
+    b_hi = b_ci.get("ci_upper", 0) * 100
+
+    console.print(f"  {label_a} rate: {a_pct:.1f}% [{a_lo:.1f}%, {a_hi:.1f}%] 95% CI")
+    console.print(f"  {label_b} rate: {b_pct:.1f}% [{b_lo:.1f}%, {b_hi:.1f}%] 95% CI")
+
+    p_value = significance.get("p_value", 1.0)
+    effect = significance.get("effect_size", 0.0)
+    interpretation = significance.get("effect_interpretation", "negligible")
+    is_significant = significance.get("significant", False)
+
+    if is_significant:
+        console.print(
+            f"  Difference: [green]significant[/green] (p={p_value:.4f}, effect={effect:.3f} {interpretation})"
+        )
+    else:
+        console.print(
+            f"  Difference: [dim]not significant[/dim] (p={p_value:.4f}, effect={effect:.3f} {interpretation})"
+        )
+
+    if significance.get("small_sample"):
+        n_a = significance.get("n_a", 0)
+        n_b = significance.get("n_b", 0)
+        console.print(
+            f"  [yellow]Note: Small sample size (n={n_a}, n={n_b}). Results may not generalize.[/yellow]"
+        )
+
+
 def print_comparison_summary(results: "EvaluationResults", console: Console) -> None:
     """Print side-by-side comparison summary.
 
@@ -484,6 +541,16 @@ def print_comparison_summary(results: "EvaluationResults", console: Console) -> 
         if len(comp["b_unique_wins"]) > 5:
             console.print(f"  ... and {len(comp['b_unique_wins']) - 5} more")
 
+    # Print statistical significance if available
+    significance = comp.get("significance")
+    if significance:
+        _print_significance_section(
+            significance,
+            label_a=summary["mcp_server_a"]["name"],
+            label_b=summary["mcp_server_b"]["name"],
+            console=console,
+        )
+
     console.print()
 
 
@@ -534,6 +601,11 @@ def print_summary(results: "EvaluationResults", console: Console) -> None:
     console.print(table)
     console.print()
     console.print(f"[bold]Improvement:[/bold] {results.summary['improvement']}")
+
+    # Print statistical significance if available
+    significance = results.summary.get("significance")
+    if significance:
+        _print_significance_section(significance, console=console)
 
     # Print tool coverage if available
     tool_coverage = results.summary.get("tool_coverage")
@@ -975,6 +1047,49 @@ def save_markdown_report(results: "EvaluationResults", output_path: Path) -> Non
     lines.append("")
     lines.append(f"**Improvement:** {results.summary['improvement']}")
     lines.append("")
+
+    # Add statistical significance section
+    significance = results.summary.get("significance")
+    if significance:
+        lines.append("## Statistical Significance")
+        lines.append("")
+
+        a_ci = significance.get("group_a_ci", {})
+        b_ci = significance.get("group_b_ci", {})
+
+        a_pct = a_ci.get("proportion", 0) * 100
+        a_lo = a_ci.get("ci_lower", 0) * 100
+        a_hi = a_ci.get("ci_upper", 0) * 100
+
+        b_pct = b_ci.get("proportion", 0) * 100
+        b_lo = b_ci.get("ci_lower", 0) * 100
+        b_hi = b_ci.get("ci_upper", 0) * 100
+
+        lines.append(f"- **MCP Agent rate:** {a_pct:.1f}% [{a_lo:.1f}%, {a_hi:.1f}%] 95% CI")
+        lines.append(f"- **Baseline rate:** {b_pct:.1f}% [{b_lo:.1f}%, {b_hi:.1f}%] 95% CI")
+
+        p_value = significance.get("p_value", 1.0)
+        effect = significance.get("effect_size", 0.0)
+        interpretation = significance.get("effect_interpretation", "negligible")
+        is_significant = significance.get("significant", False)
+
+        if is_significant:
+            lines.append(
+                f"- **Difference:** significant (p={p_value:.4f}, effect={effect:.3f} {interpretation})"
+            )
+        else:
+            lines.append(
+                f"- **Difference:** not significant (p={p_value:.4f}, effect={effect:.3f} {interpretation})"
+            )
+
+        if significance.get("small_sample"):
+            n_a = significance.get("n_a", 0)
+            n_b = significance.get("n_b", 0)
+            lines.append(
+                f"- **Note:** Small sample size (n={n_a}, n={n_b}). Results may not generalize."
+            )
+
+        lines.append("")
 
     # Add cost analysis
     lines.append("## Cost Analysis")

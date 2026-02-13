@@ -2046,6 +2046,37 @@ async def run_evaluation(
                 "both_fail": comparison_summary["both_fail"],
             },
         }
+
+        # Compute statistical significance for comparison mode
+        a_resolved = comparison_summary["stats_a"]["resolved"]
+        a_total = comparison_summary["stats_a"]["total"]
+        b_resolved = comparison_summary["stats_b"]["resolved"]
+        b_total = comparison_summary["stats_b"]["total"]
+        if a_total > 0 and b_total > 0:
+            from .analytics.statistical import (
+                chi_squared_test,
+                interpret_effect_size,
+                wilson_score_interval,
+            )
+
+            try:
+                chi2_result = chi_squared_test(a_resolved, a_total, b_resolved, b_total)
+                a_ci = wilson_score_interval(a_resolved, a_total)
+                b_ci = wilson_score_interval(b_resolved, b_total)
+                summary["comparison"]["significance"] = {
+                    "group_a_ci": a_ci,
+                    "group_b_ci": b_ci,
+                    "chi2": chi2_result["chi2"],
+                    "p_value": chi2_result["p_value"],
+                    "significant": chi2_result["significant"],
+                    "effect_size": chi2_result["effect_size"],
+                    "effect_interpretation": interpret_effect_size(chi2_result["effect_size"]),
+                    "small_sample": a_total < 30 or b_total < 30,
+                    "n_a": a_total,
+                    "n_b": b_total,
+                }
+            except Exception:
+                logger.debug("Statistical significance computation failed", exc_info=True)
     else:
         # Single server mode summary (original)
         summary = {
@@ -2076,6 +2107,35 @@ async def run_evaluation(
             "mcp_tool_stats": mcp_tool_stats,
             "comprehensive_stats": comprehensive_stats.to_dict(),
         }
+
+        # Compute statistical significance for standard mode
+        if baseline_total > 0:
+            from .analytics.statistical import (
+                chi_squared_test,
+                interpret_effect_size,
+                wilson_score_interval,
+            )
+
+            try:
+                chi2_result = chi_squared_test(
+                    mcp_resolved, mcp_total, baseline_resolved, baseline_total
+                )
+                mcp_ci = wilson_score_interval(mcp_resolved, mcp_total)
+                baseline_ci = wilson_score_interval(baseline_resolved, baseline_total)
+                summary["significance"] = {
+                    "group_a_ci": mcp_ci,
+                    "group_b_ci": baseline_ci,
+                    "chi2": chi2_result["chi2"],
+                    "p_value": chi2_result["p_value"],
+                    "significant": chi2_result["significant"],
+                    "effect_size": chi2_result["effect_size"],
+                    "effect_interpretation": interpret_effect_size(chi2_result["effect_size"]),
+                    "small_sample": mcp_total < 30 or baseline_total < 30,
+                    "n_a": mcp_total,
+                    "n_b": baseline_total,
+                }
+            except Exception:
+                logger.debug("Statistical significance computation failed", exc_info=True)
 
     # Fire completion notification (v0.10.0)
     try:

@@ -39,8 +39,10 @@ from .statistical import (
     chi_squared_test,
     compare_resolution_rates,
     effect_size_cohens_d,
+    interpret_effect_size,
     mann_whitney_u,
     permutation_test,
+    wilson_score_interval,
 )
 from .trends import calculate_moving_average, calculate_trends, detect_trend_direction
 
@@ -71,9 +73,11 @@ __all__ = [
     "format_comparison_table",
     "generate_leaderboard",
     "identify_flaky_tasks",
+    "interpret_effect_size",
     "mann_whitney_u",
     "pearson_correlation",
     "permutation_test",
     "run_ab_test",
     "spearman_correlation",
+    "wilson_score_interval",
 ]
