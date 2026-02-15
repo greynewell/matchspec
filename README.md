@@ -4,16 +4,15 @@ The MIST stack evaluation framework for testing and evaluating AI outputs — MC
 
 [![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![CI](https://github.com/greynewell/matchspec/actions/workflows/ci.yml/badge.svg)](https://github.com/greynewell/matchspec/actions/workflows/ci.yml)
 
 ## Overview
 
-matchspec provides a zero-dependency CLI framework and evaluation toolkit for the MIST stack. It's designed to be the standard way to test and benchmark AI system outputs across the full stack:
+matchspec runs benchmark suites against AI system outputs, compares results to baselines, and reports trace spans to TokenTrace.
 
-- **MCP servers** — evaluate tool use accuracy and performance
-- **AI agents** — benchmark reasoning and task completion
-- **RL environments** — measure reward signal quality
-- **Model training** — validate fine-tuning outcomes
+- **Suites** define evaluation tasks with expected outputs
+- **Matchers** compare responses: exact, contains, prefix, suffix
+- **Runner** executes suites against any inference function
+- **HTTP handlers** expose the MIST protocol API
 
 ## Install
 
@@ -23,64 +22,57 @@ go get github.com/greynewell/matchspec
 
 ## Usage
 
-matchspec includes a subcommand framework (`cli` package) for building evaluation tools with no external dependencies:
+### Define a suite
 
 ```go
-package main
+reg := matchspec.NewSuiteRegistry()
+reg.Register(&matchspec.Suite{
+    Name: "math",
+    Tasks: []matchspec.Task{
+        {Name: "add", Prompt: "What is 1+1?", Expected: "2", Matcher: "contains"},
+        {Name: "mul", Prompt: "What is 3*4?", Expected: "12", Matcher: "contains"},
+    },
+})
+```
 
-import (
-	"fmt"
-	"os"
+### Run evaluations
 
-	"github.com/greynewell/matchspec/cli"
-)
-
-func main() {
-	app := cli.NewApp("matchspec", "0.1.0")
-
-	eval := &cli.Command{
-		Name:  "eval",
-		Usage: "Run an evaluation suite",
-	}
-	eval.AddStringFlag("config", "matchspec.yaml", "Config file path")
-	eval.AddIntFlag("samples", 10, "Number of samples")
-	eval.Run = func(cmd *cli.Command, args []string) error {
-		fmt.Printf("Running eval with config=%s samples=%d\n",
-			cmd.GetString("config"), cmd.GetInt("samples"))
-		return nil
-	}
-	app.AddCommand(eval)
-
-	if err := app.Execute(os.Args[1:]); err != nil {
-		os.Exit(1)
-	}
+```go
+runner := matchspec.NewRunner(reg, inferFunc, reporter)
+results, err := runner.Run(ctx, protocol.EvalRun{Suite: "math"})
+for _, r := range results {
+    fmt.Printf("%s/%s: passed=%v score=%.1f\n", r.Suite, r.Task, r.Passed, r.Score)
 }
 ```
 
-### CLI Package
+### HTTP API
 
-The `cli` package provides:
-
-- **Subcommand routing** with automatic help generation
-- **Typed flag definitions** (string, int, int64, float64, bool)
-- **Per-command flag sets** with isolated parsing
-- **Zero dependencies** — only the Go standard library
-
-```bash
-matchspec eval --config my-suite.yaml --samples 50
-matchspec version
-matchspec --help
+```go
+handler := matchspec.NewHandler(runner, reg)
+http.HandleFunc("POST /mist", handler.Ingest)       // MIST protocol
+http.HandleFunc("POST /eval", handler.RunDirect)     // Direct eval
+http.HandleFunc("GET /suites", handler.Suites)       // List suites
+http.HandleFunc("GET /results", handler.Results)     // Get results
 ```
 
-## Development
+### CLI
 
 ```bash
-# Run tests
-go test ./...
-
-# Run with verbose output
-go test ./... -v
+go run ./cmd/matchspec eval --suite math
+go run ./cmd/matchspec serve --addr :8080
+go run ./cmd/matchspec version
 ```
+
+## Part of the MIST stack
+
+| Tool | Purpose |
+|------|---------|
+| **MatchSpec** | Evaluation framework (this repo) |
+| **InferMux** | Inference routing across providers |
+| **SchemaFlux** | Structured data compiler |
+| **TokenTrace** | Token-level observability |
+
+Shared foundation: [mist-go](https://github.com/greynewell/mist-go)
 
 ## License
 
