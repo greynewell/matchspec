@@ -1,18 +1,9 @@
 # matchspec
 
-The MIST stack evaluation framework for testing and evaluating AI outputs — MCP servers, AI agents, RL environments, model training, and more. The cornerstone of evaluation-driven development.
+Eval framework. Part of the [MIST stack](https://github.com/greynewell/mist-go).
 
 [![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-## Overview
-
-matchspec runs benchmark suites against AI system outputs, compares results to baselines, and reports trace spans to TokenTrace.
-
-- **Suites** define evaluation tasks with expected outputs
-- **Matchers** compare responses: exact, contains, prefix, suffix
-- **Runner** executes suites against any inference function
-- **HTTP handlers** expose the MIST protocol API
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Install
 
@@ -20,9 +11,7 @@ matchspec runs benchmark suites against AI system outputs, compares results to b
 go get github.com/greynewell/matchspec
 ```
 
-## Usage
-
-### Define a suite
+## Define a suite
 
 ```go
 reg := matchspec.NewSuiteRegistry()
@@ -35,7 +24,9 @@ reg.Register(&matchspec.Suite{
 })
 ```
 
-### Run evaluations
+Matchers: `exact`, `contains`, `prefix`, `suffix`.
+
+## Run
 
 ```go
 runner := matchspec.NewRunner(reg, inferFunc, reporter)
@@ -45,39 +36,19 @@ for _, r := range results {
 }
 ```
 
-### HTTP API
+## HTTP API
 
 ```go
 handler := matchspec.NewHandler(runner, reg)
-http.HandleFunc("POST /mist", handler.Ingest)       // MIST protocol
-http.HandleFunc("POST /eval", handler.RunDirect)     // Direct eval
-http.HandleFunc("GET /suites", handler.Suites)       // List suites
-http.HandleFunc("GET /results", handler.Results)     // Get results
+http.HandleFunc("POST /mist", handler.Ingest)
+http.HandleFunc("POST /eval", handler.RunDirect)
+http.HandleFunc("GET /suites", handler.Suites)
+http.HandleFunc("GET /results", handler.Results)
 ```
 
-### CLI
+## CLI
 
 ```bash
-go run ./cmd/matchspec eval --suite math
-go run ./cmd/matchspec serve --addr :8080
-go run ./cmd/matchspec version
+matchspec eval --suite math
+matchspec serve --addr :8080
 ```
-
-## Part of the MIST stack
-
-| Tool | Purpose |
-|------|---------|
-| **MatchSpec** | Evaluation framework (this repo) |
-| **InferMux** | Inference routing across providers |
-| **SchemaFlux** | Structured data compiler |
-| **TokenTrace** | Token-level observability |
-
-Shared foundation: [mist-go](https://github.com/greynewell/mist-go)
-
-## License
-
-MIT — see [LICENSE](LICENSE) for details.
-
----
-
-Built by [Grey Newell](https://greynewell.com) | [matchspec.dev](https://matchspec.dev)
